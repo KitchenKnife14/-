@@ -25,7 +25,7 @@ export default function OnboardingPage() {
       if (mode === 'create') {
         const { data: fam, error: fErr } = await supabase
           .from('families')
-          .insert({ name: familyName.trim() })
+          .insert({ name: familyName.trim(), created_by: session.user.id })
           .select('*')
           .single()
         if (fErr) throw fErr
@@ -106,3 +106,6 @@ export default function OnboardingPage() {
     </div>
   )
 }
+
+
+export default OnboardingPage
