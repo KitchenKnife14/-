@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO } from '../lib/dates'
