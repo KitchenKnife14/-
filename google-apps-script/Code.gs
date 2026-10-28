@@ -170,10 +170,11 @@ function query_(req,user){
       // Server owns identity and audit timestamps.
       if(table==='profiles' && r.id!==undefined && String(r.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='profiles')r.id=user.id;
-      else if(!r.id)r.id=id_();
+      if(r.id && existing.some(x=>String(x.id)===String(r.id)))throw new Error('Запись с таким ID уже существует');
+      if(!r.id)r.id=id_();
       if(TABLES[table].includes('created_at'))r.created_at=now_();
       if(TABLES[table].includes('updated_at'))r.updated_at=now_();
-      if(existing.some(x=>String(x.id)===String(r.id)) || createdIds_.has(String(r.id)))throw new Error('Запись с таким ID уже существует');
+      if(createdIds_.has(String(r.id)))throw new Error('Повторяющийся ID в запросе');
       createdIds_.add(String(r.id));
       if((table==='categories'||table==='accounts')&&r.archived===undefined)r.archived=false;
       if(table==='family_members'){
