@@ -68,16 +68,14 @@ export default function PurchasesPage() {
     if (!buying || !family || !session?.user) return
     setError(null)
     try {
-      const { data: tx, error: txErr } = await supabase.from('transactions').insert({
-        family_id: family.id, type: 'expense', amount_kopecks: buying.estimated_kopecks,
-        operation_date: todayISO(), category_id: buying.category_id, description: buying.name,
-        planned: false, created_by: session.user.id,
-      }).select('id').single()
-      if (txErr) throw txErr
-      const { error: pErr } = await supabase.from('planned_purchases').update({ status: 'bought', linked_transaction_id: tx.id }).eq('id', buying.id)
-      if (pErr) throw pErr
-      setBuying(null); load()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка') }
+      const { error: buyError } = await supabase.rpc('confirm_planned_purchase', {
+        p_purchase_id: buying.id,
+        p_operation_date: todayISO(),
+      })
+      if (buyError) throw buyError
+      setBuying(null)
+      await load()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка подтверждения покупки') }
   }
 
   return (
