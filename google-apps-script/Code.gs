@@ -164,8 +164,11 @@ function query_(req,user){
     const input=Array.isArray(req.values)?req.values:[req.values];
     const existing=rows_(table);
     const created=input.map(raw=>{
-      const r=Object.assign({},raw); if(r.family_id && !allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');
-      if(table==='profiles' && r.id!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      const r=Object.assign({},raw); if(table==='profiles' && r.id!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      if(table==='family_members'){
+        const family=rows_('families').find(f=>String(f.id)===String(r.family_id));
+        if(!family || String(family.created_by)!==user.id || String(r.user_id)!==user.id || r.role!=='owner')throw new Error('Нельзя добавлять участника напрямую');
+      } else if(r.family_id && !allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))) throw new Error('Нет доступа к этой семье');
       if(!r.id)r.id=id_(); if(!r.created_at && TABLES[table].includes('created_at'))r.created_at=now_();
       if(table==='families'){r.invite_code=r.invite_code||code_();r.currency=r.currency||'RUB';r.created_by=user.id;}
       existing.push(r);return r;
@@ -185,8 +188,10 @@ function query_(req,user){
   if(mode==='upsert'){
     const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
     input.forEach(raw=>{
+      if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());
       const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
+      if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(found)Object.assign(found,raw);else {const r=Object.assign({id:id_()},raw);if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);}
     });
     writeRows_(table,existing);return null;
