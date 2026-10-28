@@ -320,3 +320,29 @@ test('personal notifications cannot be read or reassigned by another family memb
   });
   assert.match(forged.error.message, /другого пользователя/);
 });
+
+
+test('notification upsert always scopes records to the current user', () => {
+  const h = makeHarness();
+  const owner = h.signup('notification-upsert-owner@example.com');
+  const partner = h.signup('notification-upsert-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Upsert уведомлений' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+
+  const inserted = h.call({
+    action: 'query', token: owner.token, table: 'notifications', mode: 'upsert', returning: true,
+    values: { id: 'private-upsert', family_id: family.id, kind: 'system', title: 'Только владельцу' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const ownerRows = h.call({ action: 'query', token: owner.token, table: 'notifications', mode: 'select' });
+  const partnerRows = h.call({ action: 'query', token: partner.token, table: 'notifications', mode: 'select' });
+  assert.equal(ownerRows.data.length, 1);
+  assert.equal(ownerRows.data[0].user_id, owner.user.id);
+  assert.equal(partnerRows.data.length, 0);
+
+  const forged = h.call({
+    action: 'query', token: partner.token, table: 'notifications', mode: 'upsert',
+    values: { id: 'forged-upsert', family_id: family.id, user_id: owner.user.id, kind: 'system', title: 'Подмена' }
+  });
+  assert.match(forged.error.message, /другого пользователя/);
+});
