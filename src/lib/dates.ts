@@ -30,13 +30,20 @@ export const monthKey = (iso: string): string => iso.slice(0, 7)
 export const monthLabel = (year: number, month: number): string =>
   format(new Date(year, month, 1), 'LLLL yyyy', { locale: ru })
 
-export const todayISO = (): string => new Date().toISOString().slice(0, 10)
+const localDateISO = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export const todayISO = (): string => localDateISO(new Date())
 
 export const firstDayOfMonth = (year: number, month: number): string =>
-  new Date(year, month, 1).toISOString().slice(0, 10)
+  localDateISO(new Date(year, month, 1))
 
 export const monthRange = (year: number, month: number): { start: string; end: string } => {
   const start = new Date(year, month, 1)
   const end = new Date(year, month + 1, 0)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: localDateISO(start), end: localDateISO(end) }
 }
