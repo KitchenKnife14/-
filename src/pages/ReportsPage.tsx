@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles, kopecksToRubles } from '../lib/money'
-import { monthRange } from '../lib/dates'
+import { monthRange, currentMoscowDate } from '../lib/dates'
 import { Download } from 'lucide-react'
 
 type Period = 'current' | 'prev' | '3m' | '6m' | 'year' | 'custom'
@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const [memberFilter, setMemberFilter] = useState<string>('all')
 
   const range = useMemo(() => {
-    const now = new Date()
+    const now = currentMoscowDate()
     if (period === 'current') return monthRange(now.getFullYear(), now.getMonth())
     if (period === 'prev') { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); return monthRange(d.getFullYear(), d.getMonth()) }
     if (period === '3m') { const d = new Date(now.getFullYear(), now.getMonth() - 2, 1); return { start: monthRange(d.getFullYear(), d.getMonth()).start, end: monthRange(now.getFullYear(), now.getMonth()).end } }
