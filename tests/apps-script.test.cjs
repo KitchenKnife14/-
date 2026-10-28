@@ -90,6 +90,21 @@ function makeHarness() {
   return { context, call, signup };
 }
 
+test('signup and signin return the token and user in the API data envelope', () => {
+  const h = makeHarness();
+  const signup = h.call({ action: 'signup', email: 'auth-shape@example.com', password: 'correct-horse-battery' });
+  assert.equal(signup.error, null, signup.error?.message);
+  assert.equal(typeof signup.data.token, 'string');
+  assert.equal(signup.data.user.email, 'auth-shape@example.com');
+  assert.equal(signup.data.data, undefined);
+
+  const signin = h.call({ action: 'signin', email: 'auth-shape@example.com', password: 'correct-horse-battery' });
+  assert.equal(signin.error, null, signin.error?.message);
+  assert.equal(typeof signin.data.token, 'string');
+  assert.equal(signin.data.user.id, signup.data.user.id);
+  assert.equal(signin.data.data, undefined);
+});
+
 test('family data is hidden until a user joins the family', () => {
   const h = makeHarness();
   const first = h.signup('first@example.com');
