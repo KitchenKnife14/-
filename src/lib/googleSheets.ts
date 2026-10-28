@@ -17,7 +17,7 @@ class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|nu
 }
 const listeners=new Set<(event:string,session:LocalSession|null)=>void>();function notify(event:string,s:LocalSession|null){listeners.forEach(f=>f(event,s))}
 export const supabase={
- from:(table:string)=>new QueryBuilder(table),
+ from:(table:string)=>new QueryBuilder<any>(table),
  rpc:async(name:string,params:Record<string,unknown>={})=>{try{return{data:await request({action:'rpc',name,params}),error:null}}catch(e){return{data:null,error:{message:e instanceof Error?e.message:'Ошибка RPC'}}}},
  channel:(_name:string)=>{
   let table=''; let filters:Filter[]=[]; let callback:(()=>void)|null=null; let timer:ReturnType<typeof setInterval>|null=null; let previous='';
