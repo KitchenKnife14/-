@@ -169,6 +169,9 @@ function query_(req,user){
       if(table==='family_members'){
         const family=rows_('families').find(f=>String(f.id)===String(r.family_id));
         if(!family || String(family.created_by)!==user.id || String(r.user_id)!==user.id || r.role!=='owner')throw new Error('Нельзя добавлять участника напрямую');
+      } else if(table==='goal_contributions'){
+        const goal=rows_('goals').find(g=>String(g.id)===String(r.goal_id));
+        if(!goal || !allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
       } else if(r.family_id && !allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))) throw new Error('Нет доступа к этой семье');
       if(!r.id)r.id=id_(); if(!r.created_at && TABLES[table].includes('created_at'))r.created_at=now_();
       if(table==='families'){r.invite_code=r.invite_code||code_();r.currency=r.currency||'RUB';r.created_by=user.id;}
@@ -177,6 +180,7 @@ function query_(req,user){
     writeRows_(table,existing);return req.returning?created.map(r=>strip_(r)):null;
   }
   if(mode==='update'||mode==='delete'){
+    if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');
     const keep=[],changed=[];
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
