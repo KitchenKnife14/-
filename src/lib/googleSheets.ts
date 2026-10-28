@@ -24,7 +24,7 @@ export const supabase={
   const subscription={unsubscribe:()=>{if(timer!==null)clearInterval(timer);timer=null}};
   const channel: {on:(event:string,config:unknown,cb:()=>void)=>any;subscribe:()=>{unsubscribe:()=>void}}={on:(_event:string,config:unknown,cb:()=>void)=>{
     const cfg=config as {table?:string;filter?:string};table=cfg.table||'';callback=cb;
-    const match=(cfg.filter||'').match(/^([a-zA-Z0-9_]+)=eq\\.(.+)$/);
+    const match=(cfg.filter||'').match(/^([a-zA-Z0-9_]+)=eq\.(.+)$/);
     filters=match?[{column:match[1],op:'eq',value:match[2]}]:[];
     return channel;
   },subscribe:()=>{
