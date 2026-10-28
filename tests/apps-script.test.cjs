@@ -210,3 +210,38 @@ test('purchase confirmation can retry after a partial write without duplicating 
   assert.equal(after.status, 'bought');
   assert.equal(after.linked_transaction_id, txs[0].id);
 });
+
+
+test('users cannot insert into another family or change record ownership', () => {
+  const h = makeHarness();
+  const first = h.signup('security-owner@example.com');
+  const second = h.signup('security-other@example.com');
+  const family = h.call({ action: 'createFamily', token: first.token, name: 'Приватная семья' }).data;
+  const outsiderInsert = h.call({
+    action: 'query', token: second.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 10000, operation_date: '2026-10-28', description: 'Чужая операция' }
+  });
+  assert.match(outsiderInsert.error.message, /нет доступа/i);
+
+  const ownInsert = h.call({
+    action: 'query', token: first.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 10000, operation_date: '2026-10-28', description: 'Моя операция', created_by: second.user.id }
+  });
+  assert.equal(ownInsert.error, null, ownInsert.error?.message);
+  const tx = ownInsert.data[0];
+  assert.equal(tx.created_by, first.user.id);
+
+  const ownershipChange = h.call({
+    action: 'query', token: first.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: tx.id }],
+    values: { created_by: second.user.id }
+  });
+  assert.match(ownershipChange.error.message, /автора записи/i);
+
+  const moveToOtherFamily = h.call({
+    action: 'query', token: first.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: tx.id }],
+    values: { family_id: 'not-the-same-family' }
+  });
+  assert.match(moveToOtherFamily.error.message, /переносить запись/i);
+});
