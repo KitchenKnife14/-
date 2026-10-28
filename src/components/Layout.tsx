@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Chrome as Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 
 const navItems = [
   { to: '/', label: 'Главная', icon: Home, end: true },
