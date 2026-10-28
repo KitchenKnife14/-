@@ -31,12 +31,13 @@ function doPost(e) {
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
-    if (req.action === 'signup') return json_(signup_(req));
-    if (req.action === 'signin') return json_(signin_(req));
-    if (req.action === 'signout') return json_(signout_(req));
-    const user = requireUser_(req.token);
+    // Serialize authentication too: concurrent signups must not create duplicate emails.
     lock.waitLock(20000);
     try {
+      if (req.action === 'signup') return json_(signup_(req));
+      if (req.action === 'signin') return json_(signin_(req));
+      if (req.action === 'signout') return json_(signout_(req));
+      const user = requireUser_(req.token);
       return json_({data: route_(req, user), error:null});
     } finally { lock.releaseLock(); }
   } catch (err) {
