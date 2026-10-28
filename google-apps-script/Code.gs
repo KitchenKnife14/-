@@ -181,7 +181,7 @@ function query_(req,user){
     writeRows_(table,existing);return req.returning?created.map(r=>strip_(r)):null;
   }
   if(mode==='update'||mode==='delete'){
-    if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');
+    if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');if(mode==='delete'&&(table==='families'||table==='profiles'))throw new Error('Удаление системных записей запрещено');
     const keep=[],changed=[];
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
