@@ -151,6 +151,10 @@ function route_(req,user){
 function allowedFamilyIds_(user){return rows_('family_members').filter(m=>m.user_id===user.id).map(m=>String(m.family_id));}
 function canAccessRow_(table,row,user){
   const fams=allowedFamilyIds_(user);
+  if(table==='notifications'){
+    if(!row.family_id || !fams.includes(String(row.family_id)))return false;
+    return !row.user_id || String(row.user_id)===user.id;
+  }
   if(row.family_id!==undefined && row.family_id!=='') return fams.includes(String(row.family_id));
   if(table==='profiles') return String(row.id)===user.id || fams.some(fid=>rows_('family_members').some(m=>m.family_id===fid&&m.user_id===row.id));
   if(table==='families') return String(row.created_by)===user.id || fams.includes(String(row.id));
