@@ -28,7 +28,7 @@ export const supabase={
     filters=match?[{column:match[1],op:'eq',value:match[2]}]:[];
     return channel;
   },subscribe:()=>{
-    const poll=async()=>{if(!table||!callback||!readSession())return;try{const data=await request<unknown[]>({action:'query',table,mode:'select',filters});const signature=JSON.stringify(data);if(previous&&signature!==previous)callback();previous=signature}catch{}};
+    const poll=async()=>{if(!table||!callback||!readSession())return;try{const data=await request<unknown[]>({action:'query',table,mode:'select',filters});const signature=JSON.stringify(data);if(previous&&signature!==previous)callback?.();previous=signature}catch{}};
     void poll();timer=setInterval(()=>void poll(),15000);return subscription;
   }};
   return channel;
