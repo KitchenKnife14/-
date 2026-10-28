@@ -39,6 +39,6 @@ export const supabase={
  signUp:async({email,password,options}:{email:string;password:string;options?:{data?:{display_name?:string}}})=>{try{const d=await request<{token:string;user:{id:string;email:string}}>({action:'signup',email,password,name:options?.data?.display_name});const s=saveSession(d);notify('SIGNED_IN',s);return{data:{user:s?.user??null,session:s as unknown as Session},error:null}}catch(e){return{data:{user:null,session:null},error:{message:e instanceof Error?e.message:'Ошибка регистрации'}}}},
  signInWithPassword:async({email,password}:{email:string;password:string})=>{try{const d=await request<{token:string;user:{id:string;email:string}}>({action:'signin',email,password});const s=saveSession(d);notify('SIGNED_IN',s);return{data:{user:s?.user??null,session:s as unknown as Session},error:null}}catch(e){return{data:{user:null,session:null},error:{message:e instanceof Error?e.message:'Ошибка входа'}}}},
  signOut:async()=>{try{await request({action:'signout'})}catch{}saveSession(null);notify('SIGNED_OUT',null);return{error:null}},
- onAuthStateChange:(cb:(event:string,session:Session|null)=>void)=>{const f=(e:string,s:LocalSession|null)=>cb(e,s as unknown as Session|null);listeners.add(f);return{data:{subscription:{unsubscribe:()=>listeners.delete(f)}}}}
+ onAuthStateChange:(cb:(event:string,session:Session|null)=>void)=>{const f=(e:string,s:LocalSession|null)=>cb(e,s as unknown as Session|null);listeners.add(f);return{data:{subscription:{unsubscribe:()=>{listeners.delete(f)}}}}}
  }
 };
