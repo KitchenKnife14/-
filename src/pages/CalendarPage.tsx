@@ -68,20 +68,39 @@ export default function CalendarPage() {
   const recurringByDate = useMemo(() => {
     const m = new Map<string, RecurringPayment[]>()
     for (const r of recurring) {
+      if (!r.active || (r.end_date && r.next_due_date > r.end_date)) continue
       const start = parseISO(range.start)
       const end = parseISO(range.end)
+      const advance = (date: Date): Date | null => {
+        if (r.frequency === 'daily') return addDays(date, 1)
+        if (r.frequency === 'weekly') return addDays(date, 7)
+        if (r.frequency === 'monthly') {
+          const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1)
+          const lastDay = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate()
+          return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(date.getDate(), lastDay))
+        }
+        if (r.frequency === 'yearly') {
+          const year = date.getFullYear() + 1
+          const lastDay = new Date(year, date.getMonth() + 1, 0).getDate()
+          return new Date(year, date.getMonth(), Math.min(date.getDate(), lastDay))
+        }
+        if (r.frequency === 'custom') return addDays(date, r.custom_interval_days ?? 30)
+        return null
+      }
       let d = parseISO(r.next_due_date)
-      if (d < start) d = start
-      while (d <= end) {
+      let guard = 0
+      while (d < start && guard++ < 10000) {
+        const nextDate = advance(d)
+        if (!nextDate) break
+        d = nextDate
+      }
+      while (d <= end && (!r.end_date || format(d, 'yyyy-MM-dd') <= r.end_date)) {
         const key = format(d, 'yyyy-MM-dd')
         if (!m.has(key)) m.set(key, [])
         m.get(key)!.push(r)
-        if (r.frequency === 'daily') d = addDays(d, 1)
-        else if (r.frequency === 'weekly') d = addDays(d, 7)
-        else if (r.frequency === 'monthly') d = new Date(d.getFullYear(), d.getMonth() + 1, d.getDate())
-        else if (r.frequency === 'yearly') d = new Date(d.getFullYear() + 1, d.getMonth(), d.getDate())
-        else if (r.frequency === 'custom') d = addDays(d, r.custom_interval_days ?? 30)
-        else break
+        const nextDate = advance(d)
+        if (!nextDate) break
+        d = nextDate
       }
     }
     return m
