@@ -175,7 +175,7 @@ function query_(req,user){
         if(!goal || !allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
       } else if(r.family_id && !allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))) throw new Error('Нет доступа к этой семье');
       if(!r.id)r.id=id_(); if(!r.created_at && TABLES[table].includes('created_at'))r.created_at=now_();
-      if(table==='families'){r.invite_code=r.invite_code||code_();r.currency=r.currency||'RUB';r.created_by=user.id;}
+      if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       existing.push(r);return r;
     });
     writeRows_(table,existing);return req.returning?created.map(r=>strip_(r)):null;
