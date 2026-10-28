@@ -116,7 +116,7 @@ function signin_(req){
   const u=authRows_().find(x=>x.email===email);
   if(!u || hash_(password,u.salt)!==u.hash){
     attempt.count++;
-    if(attempt.count>=LOGIN_MAX_ATTEMPTS)attempt.blockedUntil=attempt.expires;
+    if(attempt.count>=LOGIN_MAX_ATTEMPTS){attempt.blockedUntil=now+LOGIN_WINDOW_MS;attempt.expires=attempt.blockedUntil;}
     props.setProperty(attemptKey,JSON.stringify(attempt));
     throw new Error('Неверный email или пароль');
   }
