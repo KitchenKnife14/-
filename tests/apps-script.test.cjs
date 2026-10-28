@@ -245,3 +245,47 @@ test('users cannot insert into another family or change record ownership', () =>
   });
   assert.match(moveToOtherFamily.error.message, /переносить запись/i);
 });
+
+
+test('recurring payments deactivate after the configured end date', () => {
+  const h = makeHarness();
+  const user = h.signup('recurring-end@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Регулярные платежи' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 5000, description: 'Разовый последний платёж', start_date: '2026-10-28', end_date: '2026-10-28', next_due_date: '2026-10-28', frequency: 'monthly', active: true }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const recurring = created.data[0];
+  const result = h.call({ action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
+    p_recurring_id: recurring.id, p_expected_due_date: '2026-10-28', p_operation_date: '2026-10-28'
+  }});
+  assert.equal(result.error, null, result.error?.message);
+  const saved = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
+  assert.equal(saved.active, false);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 1);
+});
+
+test('deleting a goal removes its contribution history and unlinks planned purchases', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-delete@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Удаление цели' }).data;
+  const goalResult = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Удаляемая цель', target_kopecks: 100000, status: 'active' }
+  });
+  const goal = goalResult.data[0];
+  h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: goal.id, amount_kopecks: 5000, contribution_date: '2026-10-28' }
+  });
+  h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert',
+    values: { family_id: family.id, name: 'Связанная покупка', estimated_kopecks: 50000, goal_id: goal.id, status: 'planned' }
+  });
+  const deleted = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: goal.id }]
+  });
+  assert.equal(deleted.error, null, deleted.error?.message);
+  assert.equal(h.context.rows_('goal_contributions').length, 0);
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  assert.equal(purchase.goal_id, '');
+});
