@@ -188,6 +188,7 @@ function query_(req,user){
       } else if(table!=='profiles'&&table!=='families'&&(!r.family_id||(!allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))))) throw new Error('Не указана семья или нет доступа к ней');
       if(TABLES[table].includes('created_by'))r.created_by=user.id;
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
+      if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       existing.push(r);return r;
     });
@@ -206,6 +207,13 @@ function query_(req,user){
       }else keep.push(r);
     });
     writeRows_(table,keep);
+    if(table==='goals'&&mode==='delete'&&changed.length){
+      const deletedIds=new Set(changed.map(g=>String(g.id)));
+      writeRows_('goal_contributions',rows_('goal_contributions').filter(c=>!deletedIds.has(String(c.goal_id))));
+      const purchases=rows_('planned_purchases');let purchasesChanged=false;
+      purchases.forEach(p=>{if(p.goal_id&&deletedIds.has(String(p.goal_id))){p.goal_id='';purchasesChanged=true;}});
+      if(purchasesChanged)writeRows_('planned_purchases',purchases);
+    }
     if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
     return req.returning?changed.map(strip_):null;
   }
