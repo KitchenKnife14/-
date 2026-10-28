@@ -69,3 +69,9 @@ $$;
 
 REVOKE ALL ON FUNCTION public.join_family_by_invite(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.join_family_by_invite(text) TO authenticated;
+
+-- Foreign keys use ON DELETE SET NULL, so their columns must permit NULL values.
+ALTER TABLE public.transactions ALTER COLUMN created_by DROP NOT NULL;
+ALTER TABLE public.recurring_payments ALTER COLUMN created_by DROP NOT NULL;
+ALTER TABLE public.goal_contributions ALTER COLUMN created_by DROP NOT NULL;
+ALTER TABLE public.planned_purchases ALTER COLUMN created_by DROP NOT NULL;
