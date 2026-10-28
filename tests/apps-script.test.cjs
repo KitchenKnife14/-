@@ -140,3 +140,41 @@ test('recurring payment confirmation can retry after a partial write without dup
   const after = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
   assert.equal(after.next_due_date, '2026-11-28');
 });
+
+
+test('goal balances stay synchronized with contribution history', () => {
+  const h = makeHarness();
+  const user = h.signup('goals@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Цели семьи' }).data;
+  const createdGoal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Велосипед', target_kopecks: 2500000, saved_kopecks: 0, status: 'active' }
+  });
+  assert.equal(createdGoal.error, null, createdGoal.error?.message);
+  const goal = createdGoal.data[0];
+  const createdContribution = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true,
+    values: { goal_id: goal.id, amount_kopecks: 500000, contribution_date: '2026-10-28', note: 'Первый взнос' }
+  });
+  assert.equal(createdContribution.error, null, createdContribution.error?.message);
+  let savedGoal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
+  assert.equal(savedGoal.saved_kopecks, 500000);
+
+  const contribution = createdContribution.data[0];
+  const updated = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: contribution.id }],
+    values: { amount_kopecks: 700000 }
+  });
+  assert.equal(updated.error, null, updated.error?.message);
+  savedGoal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
+  assert.equal(savedGoal.saved_kopecks, 700000);
+
+  const deleted = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: contribution.id }]
+  });
+  assert.equal(deleted.error, null, deleted.error?.message);
+  savedGoal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
+  assert.equal(savedGoal.saved_kopecks, 0);
+});
