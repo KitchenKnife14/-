@@ -45,24 +45,17 @@ export default function RecurringPage() {
     if (!confirming || !family || !session?.user) return
     setError(null)
     try {
-      const { error: txErr } = await supabase.from('transactions').insert({
-        family_id: family.id, type: confirming.type, amount_kopecks: confirming.amount_kopecks,
-        operation_date: todayISO(), category_id: confirming.category_id, description: confirming.description,
-        planned: false, created_by: session.user.id, parent_recurring_id: confirming.id,
+      const { error: confirmError } = await supabase.rpc('confirm_recurring_payment', {
+        p_recurring_id: confirming.id,
+        p_expected_due_date: confirming.next_due_date,
+        p_operation_date: todayISO(),
       })
-      if (txErr) throw txErr
-      let nextDue = confirming.next_due_date
-      const d = new Date(confirming.next_due_date)
-      if (confirming.frequency === 'daily') d.setDate(d.getDate() + 1)
-      else if (confirming.frequency === 'weekly') d.setDate(d.getDate() + 7)
-      else if (confirming.frequency === 'monthly') d.setMonth(d.getMonth() + 1)
-      else if (confirming.frequency === 'yearly') d.setFullYear(d.getFullYear() + 1)
-      else if (confirming.frequency === 'custom') d.setDate(d.getDate() + (confirming.custom_interval_days ?? 30))
-      nextDue = d.toISOString().slice(0, 10)
-      const { error: upErr } = await supabase.from('recurring_payments').update({ next_due_date: nextDue }).eq('id', confirming.id)
-      if (upErr) throw upErr
-      setConfirming(null); load()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка') }
+      if (confirmError) throw confirmError
+      setConfirming(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось подтвердить платёж')
+    }
   }
 
   const toggleActive = async (r: RecurringPayment) => { const { error: err } = await supabase.from('recurring_payments').update({ active: !r.active }).eq('id', r.id); if (err) setError(err.message); load() }
