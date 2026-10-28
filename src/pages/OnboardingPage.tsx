@@ -93,5 +93,3 @@ export default function OnboardingPage() {
   )
 }
 
-
-export default OnboardingPage
