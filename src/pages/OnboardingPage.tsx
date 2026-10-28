@@ -36,25 +36,11 @@ export default function OnboardingPage() {
         await seedDefaultCategories(fam.id)
       } else {
         const code = inviteCode.trim().toUpperCase()
-        const { data: fam, error: fErr } = await supabase
-          .from('families')
-          .select('*')
-          .eq('invite_code', code)
-          .maybeSingle()
-        if (fErr) throw fErr
-        if (!fam) throw new Error('Семья с таким кодом не найдена. Проверьте код приглашения.')
-        const { data: existingMembers, error: countErr } = await supabase
-          .from('family_members')
-          .select('id')
-          .eq('family_id', fam.id)
-        if (countErr) throw countErr
-        if ((existingMembers?.length ?? 0) >= 2) {
-          throw new Error('В этой семье уже два участника. Дополнительные приглашения недоступны.')
-        }
-        const { error: mErr } = await supabase
-          .from('family_members')
-          .insert({ family_id: fam.id, user_id: session.user.id, role: 'member' })
-        if (mErr) throw mErr
+        if (!code) throw new Error('Введите код приглашения')
+        const { error: joinErr } = await supabase.rpc('join_family_by_invite', {
+          p_invite_code: code,
+        })
+        if (joinErr) throw joinErr
       }
       await refresh()
       navigate('/')
