@@ -157,7 +157,7 @@ function query_(req,user){
   });
   if(mode==='select'){
     all=all.filter(r=>matches(r)&&canAccessRow_(table,r,user));
-    if(req.order)all.sort((a,b)=>{const x=a[req.order.column],y=b[req.order.column];const cmp=String(x??'').localeCompare(String(y??''),undefined,{numeric:true});return req.order.ascending===false?-cmp:cmp;});
+    const orders=Array.isArray(req.orders)&&req.orders.length?req.orders:(req.order?[req.order]:[]);if(orders.length)all.sort((a,b)=>{for(const order of orders){const x=a[order.column],y=b[order.column];const cmp=String(x??'').localeCompare(String(y??''),undefined,{numeric:true});if(cmp)return order.ascending===false?-cmp:cmp;}return 0;});
     if(req.limit)all=all.slice(0,req.limit);
     return all.map(({__row,...r})=>r);
   }
