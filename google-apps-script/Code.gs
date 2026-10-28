@@ -165,7 +165,7 @@ function query_(req,user){
     const input=Array.isArray(req.values)?req.values:[req.values];
     const existing=rows_(table);
     const created=input.map(raw=>{
-      const r=Object.assign({},raw); if(table==='profiles' && r.id!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      const r=Object.assign({},raw);if((table==='categories'||table==='accounts')&&r.archived===undefined)r.archived=false;if(table==='profiles' && r.id!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='family_members'){
         const family=rows_('families').find(f=>String(f.id)===String(r.family_id));
         if(!family || String(family.created_by)!==user.id || String(r.user_id)!==user.id || r.role!=='owner')throw new Error('Нельзя добавлять участника напрямую');
