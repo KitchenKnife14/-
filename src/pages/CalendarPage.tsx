@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
-import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO } from '../lib/dates'
+import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO, currentMoscowDate } from '../lib/dates'
 import { ChevronLeft, ChevronRight, Calendar as CalIcon } from 'lucide-react'
 import { ru } from 'date-fns/locale'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addDays, parseISO } from 'date-fns'
@@ -20,8 +20,8 @@ export default function CalendarPage() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('month')
   const [filter, setFilter] = useState<TxFilter>('all')
-  const [cursor, setCursor] = useState(new Date())
-  const [selectedDay, setSelectedDay] = useState<Date>(new Date())
+  const [cursor, setCursor] = useState(currentMoscowDate)
+  const [selectedDay, setSelectedDay] = useState<Date>(currentMoscowDate)
 
   const range = useMemo(() => monthRange(cursor.getFullYear(), cursor.getMonth()), [cursor])
 
@@ -132,7 +132,7 @@ export default function CalendarPage() {
     const dayRecs = recurringByDate.get(dateStr) ?? []
     const sum = daySum(dateStr)
     const inMonth = isSameMonth(day, cursor)
-    const isToday = isSameDay(day, new Date())
+    const isToday = isSameDay(day, currentMoscowDate())
     return (
       <button key={dateStr} onClick={() => { setSelectedDay(day); setView('day') }}
         className={`min-h-[72px] p-1.5 rounded-lg border text-left transition-colors ${isToday ? 'border-primary-400 bg-primary-50/50' : 'border-slate-100 hover:bg-slate-50'} ${!inMonth ? 'opacity-40' : ''}`}>
