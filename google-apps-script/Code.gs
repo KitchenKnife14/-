@@ -274,11 +274,14 @@ function rpc_(req,user){
     const id=p.p_recurring_id, r=rows_('recurring_payments').find(x=>x.id===id&&canAccessRow_('recurring_payments',x,user));
     if(!r)throw new Error('Регулярный платёж не найден');
     if(r.next_due_date!==p.p_expected_due_date)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
+    if(r.end_date && r.next_due_date>r.end_date){r.active=false;writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;}
     const txs=rows_('transactions'), transactionId='recurring_'+r.id+'_'+r.next_due_date;
     // Deterministic ID makes retries safe if the transaction was written but the due date update failed.
     if(!txs.some(t=>String(t.id)===transactionId))txs.push({id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()});
     writeRows_('transactions',txs);
-    r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days);writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;
+    r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days);
+    if(r.end_date && r.next_due_date>r.end_date)r.active=false;
+    writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;
   }
   throw new Error('RPC не поддерживается: '+name);
 }
