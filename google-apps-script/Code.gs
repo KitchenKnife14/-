@@ -251,6 +251,25 @@ function syncGoalTotals_(goalIds){
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
   if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code},user);return true;}
+  if(name==='confirm_planned_purchase'){
+    const id=String(p.p_purchase_id||'');
+    const purchases=rows_('planned_purchases');
+    const purchase=purchases.find(x=>String(x.id)===id&&canAccessRow_('planned_purchases',x,user));
+    if(!purchase)throw new Error('Планируемая покупка не найдена');
+    const transactionId='purchase_'+purchase.id;
+    const txs=rows_('transactions');
+    let tx=txs.find(x=>String(x.id)===transactionId);
+    if(tx && String(tx.family_id)!==String(purchase.family_id))throw new Error('Конфликт ID операции');
+    if(!tx){
+      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
+      txs.push(tx);
+      writeRows_('transactions',txs);
+    }
+    purchase.status='bought';
+    purchase.linked_transaction_id=transactionId;
+    writeRows_('planned_purchases',purchases);
+    return {transaction_id:transactionId};
+  }
   if(name==='confirm_recurring_payment'){
     const id=p.p_recurring_id, r=rows_('recurring_payments').find(x=>x.id===id&&canAccessRow_('recurring_payments',x,user));
     if(!r)throw new Error('Регулярный платёж не найден');
