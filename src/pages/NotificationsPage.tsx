@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { AppNotification } from '../lib/types'
 import { formatDate } from '../lib/dates'
 import { Check, Trash2, Bell } from 'lucide-react'
