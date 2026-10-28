@@ -392,3 +392,10 @@ test('upsert cannot create a duplicate ID owned by another family member', () =>
   assert.equal(h.call({ action: 'query', token: owner.token, table: 'notifications', mode: 'select' }).data.length, 1);
   assert.equal(h.call({ action: 'query', token: partner.token, table: 'notifications', mode: 'select' }).data.length, 0);
 });
+
+
+test('transaction form uses the Google Sheets adapter instead of the legacy Supabase client', () => {
+  const source = fs.readFileSync('src/components/TransactionForm.tsx', 'utf8');
+  assert.match(source, /from ['"]\.\.\/lib\/googleSheets['"]/);
+  assert.doesNotMatch(source, /from ['"]\.\.\/lib\/supabase['"]/);
+});
