@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
 import type { Transaction, Category } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
-import { formatDate, monthRange, monthLabel } from '../lib/dates'
+import { formatDate, monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
 import { Plus, Search, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import TransactionForm, { type TransactionDraft } from '../components/TransactionForm'
 import Modal from '../components/Modal'
@@ -14,7 +14,7 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [cursor, setCursor] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() })
+  const [cursor, setCursor] = useState(currentMoscowMonth)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense' | 'transfer'>('all')
   const [showAdd, setShowAdd] = useState(false)
