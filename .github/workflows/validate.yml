@@ -23,4 +23,4 @@ jobs:
       - name: TypeScript and production build
         run: npm run build
       - name: Apps Script syntax check
-        run: node --check google-apps-script/Code.gs
+        run: node --check < google-apps-script/Code.gs
