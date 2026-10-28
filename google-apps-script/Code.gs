@@ -142,6 +142,7 @@ function canAccessRow_(table,row,user){
   const fams=allowedFamilyIds_(user);
   if(row.family_id!==undefined && row.family_id!=='') return fams.includes(String(row.family_id));
   if(table==='profiles') return String(row.id)===user.id || fams.some(fid=>rows_('family_members').some(m=>m.family_id===fid&&m.user_id===row.id));
+  if(table==='families') return String(row.created_by)===user.id || fams.includes(String(row.id));
   if(table==='family_members') return fams.includes(String(row.family_id));
   if(table==='goal_contributions'){const g=rows_('goals').find(g=>g.id===row.goal_id);return !!g&&fams.includes(String(g.family_id));}
   return false;
