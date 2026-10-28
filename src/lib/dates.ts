@@ -37,13 +37,30 @@ const localDateISO = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-export const todayISO = (): string => localDateISO(new Date())
+export const todayISO = (): string => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+export const currentMoscowDate = (): Date => {
+  const [year, month, day] = todayISO().split('-').map(Number)
+  return new Date(year, month - 1, day, 12)
+}
+
+export const currentMoscowMonth = (): { year: number; month: number } => {
+  const [year, month] = todayISO().split('-').map(Number)
+  return { year, month: month - 1 }
+}
 
 export const firstDayOfMonth = (year: number, month: number): string =>
-  localDateISO(new Date(year, month, 1))
+  `${year}-${String(month + 1).padStart(2, '0')}-01`
 
 export const monthRange = (year: number, month: number): { start: string; end: string } => {
-  const start = new Date(year, month, 1)
-  const end = new Date(year, month + 1, 0)
-  return { start: localDateISO(start), end: localDateISO(end) }
+  const start = firstDayOfMonth(year, month)
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  return { start, end }
 }
