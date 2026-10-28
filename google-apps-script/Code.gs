@@ -36,9 +36,9 @@ function doPost(e) {
     // Serialize authentication too: concurrent signups must not create duplicate emails.
     lock.waitLock(20000);
     try {
-      if (req.action === 'signup') return json_(signup_(req));
-      if (req.action === 'signin') return json_(signin_(req));
-      if (req.action === 'signout') return json_(signout_(req));
+      if (req.action === 'signup') return json_({data:signup_(req),error:null});
+      if (req.action === 'signin') return json_({data:signin_(req),error:null});
+      if (req.action === 'signout') return json_({data:signout_(req),error:null});
       const user = requireUser_(req.token);
       return json_({data: route_(req, user), error:null});
     } finally { lock.releaseLock(); }
@@ -104,7 +104,7 @@ function signup_(req){
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
   ensureProfile_(id,name||email.split('@')[0]);
-  return {data:{token,user:{id,email}},error:null};
+  return {token,user:{id,email}};
 }
 function signin_(req){
   pruneSessions_();
@@ -123,9 +123,9 @@ function signin_(req){
   props.deleteProperty(attemptKey);
   const token=id_()+id_();
   props.setProperty('session:'+token,JSON.stringify({userId:u.id,expires:now+SESSION_TTL*1000}));
-  return {data:{token,user:{id:u.id,email:u.email}},error:null};
+  return {token,user:{id:u.id,email:u.email}};
 }
-function signout_(req){if(req.token)PropertiesService.getScriptProperties().deleteProperty('session:'+req.token);return {data:true,error:null};}
+function signout_(req){if(req.token)PropertiesService.getScriptProperties().deleteProperty('session:'+req.token);return true;}
 function requireUser_(token){
   if(!token) throw new Error('Требуется вход');
   const p=PropertiesService.getScriptProperties(), raw=p.getProperty('session:'+token);
