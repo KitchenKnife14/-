@@ -361,3 +361,15 @@ test('notifications without an explicit recipient are hidden from all users', ()
   assert.equal(h.call({ action: 'query', token: owner.token, table: 'notifications', mode: 'select' }).data.length, 0);
   assert.equal(h.call({ action: 'query', token: partner.token, table: 'notifications', mode: 'select' }).data.length, 0);
 });
+
+
+test('repeated failed sign-ins are temporarily rate limited', () => {
+  const h = makeHarness();
+  h.signup('rate-limit@example.com');
+  for (let i = 0; i < 8; i++) {
+    const failed = h.call({ action: 'signin', email: 'rate-limit@example.com', password: 'incorrect-password' });
+    assert.match(failed.error.message, /Неверный email или пароль/);
+  }
+  const blocked = h.call({ action: 'signin', email: 'rate-limit@example.com', password: 'correct-horse-battery' });
+  assert.match(blocked.error.message, /Слишком много попыток входа/);
+});
