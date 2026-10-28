@@ -185,7 +185,7 @@ function query_(req,user){
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
         if(mode==='delete')changed.push(r);
-        else {const next=Object.assign({},r,req.values||{});delete next.__row;if(next.family_id&&!allowedFamilyIds_(user).includes(String(next.family_id)))throw new Error('Нет доступа к этой семье');keep.push(next);changed.push(next);}
+        else {const patch=req.values||{};if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);delete next.__row;if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}keep.push(next);changed.push(next);}
       }else keep.push(r);
     });
     writeRows_(table,keep);return req.returning?changed.map(strip_):null;
