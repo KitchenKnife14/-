@@ -22,6 +22,8 @@ const TABLES = {
 };
 const AUTH_SHEET = '_auth';
 const SESSION_TTL = 60 * 60 * 24 * 14;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
 
 function doGet() {
   return json_({status:'ok', message:'Сервер работает', spreadsheet:SpreadsheetApp.getActiveSpreadsheet().getName()});
@@ -82,10 +84,14 @@ function hash_(password,salt){let digest=Utilities.computeDigest(Utilities.Diges
 function pruneSessions_(){
   const props=PropertiesService.getScriptProperties(), all=props.getProperties(), now=Date.now();
   Object.keys(all).forEach(key=>{
-    if(!key.startsWith('session:'))return;
-    try{const session=JSON.parse(all[key]);if(!session.expires||session.expires<=now)props.deleteProperty(key);}
+    if(!key.startsWith('session:')&&!key.startsWith('loginfail:'))return;
+    try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=now)props.deleteProperty(key);}
     catch(_){props.deleteProperty(key);}
   });
+}
+function loginAttemptKey_(email){
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(email).toLowerCase(),Utilities.Charset.UTF_8);
+  return 'loginfail:'+Utilities.base64Encode(digest).replace(/[+/=]/g,'');
 }
 function signup_(req){
   pruneSessions_();
@@ -102,11 +108,21 @@ function signup_(req){
 }
 function signin_(req){
   pruneSessions_();
-  const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||'');
+  const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||''), props=PropertiesService.getScriptProperties(), now=Date.now();
+  const attemptKey=loginAttemptKey_(email), saved=props.getProperty(attemptKey);
+  let attempt=saved?JSON.parse(saved):null;
+  if(attempt&&attempt.expires>now&&attempt.blockedUntil>now)throw new Error('Слишком много попыток входа. Попробуйте через 15 минут');
+  if(!attempt||attempt.expires<=now)attempt={count:0,expires:now+LOGIN_WINDOW_MS,blockedUntil:0};
   const u=authRows_().find(x=>x.email===email);
-  if(!u || hash_(password,u.salt)!==u.hash) throw new Error('Неверный email или пароль');
+  if(!u || hash_(password,u.salt)!==u.hash){
+    attempt.count++;
+    if(attempt.count>=LOGIN_MAX_ATTEMPTS)attempt.blockedUntil=attempt.expires;
+    props.setProperty(attemptKey,JSON.stringify(attempt));
+    throw new Error('Неверный email или пароль');
+  }
+  props.deleteProperty(attemptKey);
   const token=id_()+id_();
-  PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:u.id,expires:Date.now()+SESSION_TTL*1000}));
+  props.setProperty('session:'+token,JSON.stringify({userId:u.id,expires:now+SESSION_TTL*1000}));
   return {data:{token,user:{id:u.id,email:u.email}},error:null};
 }
 function signout_(req){if(req.token)PropertiesService.getScriptProperties().deleteProperty('session:'+req.token);return {data:true,error:null};}
