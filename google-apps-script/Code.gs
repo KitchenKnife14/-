@@ -164,14 +164,18 @@ function query_(req,user){
   if(mode==='insert'){
     const input=Array.isArray(req.values)?req.values:[req.values];
     const existing=rows_(table);
+    const createdIds_=new Set();
     const created=input.map(raw=>{
       const r=Object.assign({},raw);
-      // Never trust client-supplied IDs or timestamps on newly created records.
-      if(r.id && existing.some(x=>String(x.id)===String(r.id)))throw new Error('Запись с таким ID уже существует');
-      if(table==='profiles' && String(r.id||user.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      // Server owns identity and audit timestamps.
+      if(table==='profiles' && r.id!==undefined && String(r.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='profiles')r.id=user.id;
+      else if(!r.id)r.id=id_();
       if(TABLES[table].includes('created_at'))r.created_at=now_();
-      if(TABLES[table].includes('updated_at'))r.updated_at=now_();if((table==='categories'||table==='accounts')&&r.archived===undefined)r.archived=false;if(table==='profiles' && r.id!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      if(TABLES[table].includes('updated_at'))r.updated_at=now_();
+      if(existing.some(x=>String(x.id)===String(r.id)) || createdIds_.has(String(r.id)))throw new Error('Запись с таким ID уже существует');
+      createdIds_.add(String(r.id));
+      if((table==='categories'||table==='accounts')&&r.archived===undefined)r.archived=false;
       if(table==='family_members'){
         const family=rows_('families').find(f=>String(f.id)===String(r.family_id));
         if(!family || String(family.created_by)!==user.id || String(r.user_id)!==user.id || r.role!=='owner')throw new Error('Нельзя добавлять участника напрямую');
@@ -180,7 +184,6 @@ function query_(req,user){
         const goal=rows_('goals').find(g=>String(g.id)===String(r.goal_id));
         if(!goal || !allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
       } else if(table!=='profiles'&&table!=='families'&&(!r.family_id||(!allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))))) throw new Error('Не указана семья или нет доступа к ней');
-      if(!r.id)r.id=id_();
       if(TABLES[table].includes('created_by'))r.created_by=user.id;
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
