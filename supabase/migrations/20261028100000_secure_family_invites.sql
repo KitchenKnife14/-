@@ -11,10 +11,6 @@ CREATE POLICY "fm_insert_creator" ON public.family_members
       WHERE f.id = family_members.family_id
         AND f.created_by = auth.uid()
     )
-    AND NOT EXISTS (
-      SELECT 1 FROM public.family_members existing
-      WHERE existing.family_id = family_members.family_id
-    )
   );
 
 -- Membership roles are not editable directly by ordinary family members.
