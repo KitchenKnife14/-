@@ -153,7 +153,7 @@ function canAccessRow_(table,row,user){
   const fams=allowedFamilyIds_(user);
   if(table==='notifications'){
     if(!row.family_id || !fams.includes(String(row.family_id)))return false;
-    return !row.user_id || String(row.user_id)===user.id;
+    return String(row.user_id||'')===user.id;
   }
   if(row.family_id!==undefined && row.family_id!=='') return fams.includes(String(row.family_id));
   if(table==='profiles') return String(row.id)===user.id || fams.some(fid=>rows_('family_members').some(m=>m.family_id===fid&&m.user_id===row.id));
@@ -242,6 +242,7 @@ function query_(req,user){
     input.forEach(raw=>{
       if(table==='goals'&&Object.prototype.hasOwnProperty.call(raw,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');
       if(table==='notifications'&&raw.user_id&&String(raw.user_id)!==user.id)throw new Error('Нельзя создавать уведомления для другого пользователя');
+      if(table==='notifications')raw.user_id=user.id;
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(raw.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}
       else if(table!=='profiles'&&(!raw.family_id||!allowedFamilyIds_(user).includes(String(raw.family_id))))throw new Error('Нет доступа к этой семье');
