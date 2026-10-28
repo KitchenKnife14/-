@@ -178,3 +178,35 @@ test('goal balances stay synchronized with contribution history', () => {
   savedGoal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
   assert.equal(savedGoal.saved_kopecks, 0);
 });
+
+
+test('purchase confirmation can retry after a partial write without duplicating the expense', () => {
+  const h = makeHarness();
+  const user = h.signup('purchases@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Покупки семьи' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Тестовый товар', estimated_kopecks: 125000, status: 'planned' }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const purchase = created.data[0];
+  const originalWrite = h.context.writeRows_;
+  let failOnce = true;
+  h.context.writeRows_ = function(name, rows) {
+    if (name === 'planned_purchases' && failOnce) { failOnce = false; throw new Error('simulated purchase status write failure'); }
+    return originalWrite(name, rows);
+  };
+  const args = { action: 'rpc', token: user.token, name: 'confirm_planned_purchase', params: {
+    p_purchase_id: purchase.id, p_operation_date: '2026-10-28'
+  }};
+  const failed = h.call(args);
+  assert.match(failed.error.message, /simulated purchase status write failure/);
+  const retried = h.call(args);
+  assert.equal(retried.error, null, retried.error?.message);
+  const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(txs.length, 1);
+  assert.equal(txs[0].id, `purchase_${purchase.id}`);
+  const after = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  assert.equal(after.status, 'bought');
+  assert.equal(after.linked_transaction_id, txs[0].id);
+});
