@@ -373,3 +373,22 @@ test('repeated failed sign-ins are temporarily rate limited', () => {
   const blocked = h.call({ action: 'signin', email: 'rate-limit@example.com', password: 'correct-horse-battery' });
   assert.match(blocked.error.message, /Слишком много попыток входа/);
 });
+
+
+test('upsert cannot create a duplicate ID owned by another family member', () => {
+  const h = makeHarness();
+  const owner = h.signup('notification-id-owner@example.com');
+  const partner = h.signup('notification-id-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Уникальность ID' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+  const own = h.call({ action: 'query', token: owner.token, table: 'notifications', mode: 'insert', returning: true,
+    values: { id: 'occupied-notification-id', family_id: family.id, kind: 'system', title: 'Личное' }
+  });
+  assert.equal(own.error, null, own.error?.message);
+  const collision = h.call({ action: 'query', token: partner.token, table: 'notifications', mode: 'upsert',
+    values: { id: 'occupied-notification-id', family_id: family.id, kind: 'system', title: 'Подмена' }
+  });
+  assert.match(collision.error.message, /ID уже существует или недоступна/);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'notifications', mode: 'select' }).data.length, 1);
+  assert.equal(h.call({ action: 'query', token: partner.token, table: 'notifications', mode: 'select' }).data.length, 0);
+});
