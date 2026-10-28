@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './googleSheets'
 import { DEFAULT_CATEGORIES } from './defaultCategories'
 
 export async function seedDefaultCategories(familyId: string): Promise<void> {
