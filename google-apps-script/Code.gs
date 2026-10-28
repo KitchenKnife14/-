@@ -70,14 +70,14 @@ function writeRows_(name, data) {
 }
 function now_(){return new Date().toISOString();}
 function id_(){return Utilities.getUuid();}
-function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,8).toUpperCase();}
+function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();}
 function authSheet_(){
   const ss=ss_(); let sh=ss.getSheetByName(AUTH_SHEET);
   if(!sh){sh=ss.insertSheet(AUTH_SHEET);sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]);sh.hideSheet();}
   return sh;
 }
 function authRows_(){const sh=authSheet_(),v=sh.getDataRange().getValues();return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
-function hash_(password,salt){return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+password,Utilities.Charset.UTF_8));}
+function hash_(password,salt){let digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+password,Utilities.Charset.UTF_8);for(let i=0;i<10000;i++)digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,digest);return Utilities.base64Encode(digest);}
 function signup_(req){
   const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||''), name=String(req.name||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Введите корректный email');
