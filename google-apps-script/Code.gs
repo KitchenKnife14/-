@@ -191,32 +191,41 @@ function query_(req,user){
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       existing.push(r);return r;
     });
-    writeRows_(table,existing);return req.returning?created.map(r=>strip_(r)):null;
+    writeRows_(table,existing);
+    if(table==='goal_contributions')syncGoalTotals_(created.map(r=>r.goal_id));
+    return req.returning?created.map(r=>strip_(r)):null;
   }
   if(mode==='update'||mode==='delete'){
     if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');if(mode==='delete'&&(table==='families'||table==='profiles'))throw new Error('Удаление системных записей запрещено');
-    const keep=[],changed=[];
+    const keep=[],changed=[],affectedGoalIds=new Set();
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
+        if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
         if(mode==='delete')changed.push(r);
-        else {const patch=req.values||{};if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}keep.push(next);changed.push(next);}
+        else {const patch=req.values||{};if(table==='goals'&&Object.prototype.hasOwnProperty.call(patch,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(table==='goal_contributions')affectedGoalIds.add(String(next.goal_id));if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}keep.push(next);changed.push(next);}
       }else keep.push(r);
     });
-    writeRows_(table,keep);return req.returning?changed.map(strip_):null;
+    writeRows_(table,keep);
+    if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
+    return req.returning?changed.map(strip_):null;
   }
   if(mode==='upsert'){
     const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
     if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
+    const affectedGoalIds=new Set();
     input.forEach(raw=>{
+      if(table==='goals'&&Object.prototype.hasOwnProperty.call(raw,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(raw.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}
       else if(table!=='profiles'&&(!raw.family_id||!allowedFamilyIds_(user).includes(String(raw.family_id))))throw new Error('Нет доступа к этой семье');
       const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());
       const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
-      if(found){if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');if(TABLES[table].includes('created_by')&&raw.created_by!==undefined&&String(raw.created_by)!==String(found.created_by))throw new Error('Нельзя менять автора записи');Object.assign(found,raw);if(TABLES[table].includes('updated_by'))found.updated_by=user.id;if(TABLES[table].includes('updated_at'))found.updated_at=now_();}else {const r=Object.assign({id:id_()},raw);if(TABLES[table].includes('created_at'))r.created_at=now_();if(TABLES[table].includes('updated_at'))r.updated_at=now_();if(TABLES[table].includes('created_by'))r.created_by=user.id;if(TABLES[table].includes('updated_by'))r.updated_by=user.id;if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);}
+      if(found){if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');if(TABLES[table].includes('created_by')&&raw.created_by!==undefined&&String(raw.created_by)!==String(found.created_by))throw new Error('Нельзя менять автора записи');Object.assign(found,raw);if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));if(TABLES[table].includes('updated_by'))found.updated_by=user.id;if(TABLES[table].includes('updated_at'))found.updated_at=now_();}else {const r=Object.assign({id:id_()},raw);if(TABLES[table].includes('created_at'))r.created_at=now_();if(TABLES[table].includes('updated_at'))r.updated_at=now_();if(TABLES[table].includes('created_by'))r.created_by=user.id;if(TABLES[table].includes('updated_by'))r.updated_by=user.id;if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));}
     });
-    writeRows_(table,existing);return null;
+    writeRows_(table,existing);
+    if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
+    return null;
   }
   throw new Error('Неизвестный режим запроса');
 }
@@ -228,6 +237,16 @@ function seedCategories_(familyId){
   const cats=rows_('categories');
   defaults.forEach(d=>cats.push({id:id_(),family_id:familyId,parent_id:null,name:d[0],kind:d[1],icon:d[2],color:d[3],archived:false,sort_order:cats.length,created_at:now_()}));
   writeRows_('categories',cats);
+}
+function syncGoalTotals_(goalIds){
+  const ids=[...new Set((goalIds||[]).filter(Boolean).map(String))];
+  if(!ids.length)return;
+  const contributions=rows_('goal_contributions'), goals=rows_('goals');
+  const totals=new Map(ids.map(id=>[id,0]));
+  contributions.forEach(c=>{const key=String(c.goal_id);if(totals.has(key))totals.set(key,totals.get(key)+Number(c.amount_kopecks||0));});
+  let changed=false;
+  goals.forEach(g=>{const key=String(g.id);if(totals.has(key)){g.saved_kopecks=totals.get(key);changed=true;}});
+  if(changed)writeRows_('goals',goals);
 }
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
