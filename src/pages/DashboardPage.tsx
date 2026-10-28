@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
 import type { Transaction, Category } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
-import { formatDateShort, monthRange, monthLabel } from '../lib/dates'
+import { formatDateShort, monthRange, monthLabel, currentMoscowDate } from '../lib/dates'
 import { Plus, TrendingUp, TrendingDown, Wallet, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import TransactionForm from '../components/TransactionForm'
@@ -12,7 +12,7 @@ export default function DashboardPage() {
   const { family, session } = useAuth()
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [now] = useState(new Date())
+  const [now] = useState(currentMoscowDate)
   const [showAdd, setShowAdd] = useState(false)
   const [newTransactionType, setNewTransactionType] = useState<'expense' | 'income' | 'transfer'>('expense')
   const [loading, setLoading] = useState(true)
