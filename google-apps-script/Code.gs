@@ -192,8 +192,11 @@ function query_(req,user){
   }
   if(mode==='upsert'){
     const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
+    if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
     input.forEach(raw=>{
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(raw.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}
+      else if(table!=='profiles'&&(!raw.family_id||!allowedFamilyIds_(user).includes(String(raw.family_id))))throw new Error('Нет доступа к этой семье');
       const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());
       const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
