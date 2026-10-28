@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [now] = useState(new Date())
   const [showAdd, setShowAdd] = useState(false)
+  const [newTransactionType, setNewTransactionType] = useState<'expense' | 'income' | 'transfer'>('expense')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -74,8 +75,8 @@ export default function DashboardPage() {
   const recent = realized.slice(0, 6)
 
   const quickActions = [
-    { label: 'Добавить расход', icon: TrendingDown, color: 'text-danger-600', action: () => setShowAdd(true) },
-    { label: 'Добавить доход', icon: TrendingUp, color: 'text-accent-600', action: () => setShowAdd(true) },
+    { label: 'Добавить расход', icon: TrendingDown, color: 'text-danger-600', action: () => { setNewTransactionType('expense'); setShowAdd(true) } },
+    { label: 'Добавить доход', icon: TrendingUp, color: 'text-accent-600', action: () => { setNewTransactionType('income'); setShowAdd(true) } },
   ]
 
   return (
@@ -85,7 +86,7 @@ export default function DashboardPage() {
           <h1 className="text-xl font-semibold text-slate-900">{monthLabel(year, month)}</h1>
           <p className="text-sm text-slate-500">Обзор семейного бюджета</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary">
+        <button onClick={() => { setNewTransactionType('expense'); setShowAdd(true) }} className="btn-primary">
           <Plus size={18} /> Операция
         </button>
       </div>
@@ -147,7 +148,7 @@ export default function DashboardPage() {
         ) : recent.length === 0 ? (
           <div className="card text-center py-8">
             <p className="text-sm text-slate-500 mb-3">Пока нет ни одной операции.</p>
-            <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <button onClick={() => { setNewTransactionType('expense'); setShowAdd(true) }} className="btn-primary">
               <Plus size={18} /> Добавить первую запись
             </button>
           </div>
@@ -173,7 +174,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <TransactionForm open={showAdd} onClose={() => setShowAdd(false)} onSaved={load} categories={categories} userId={session?.user.id ?? null} />
+      <TransactionForm open={showAdd} onClose={() => setShowAdd(false)} onSaved={load} categories={categories} userId={session?.user.id ?? null} initialType={newTransactionType} />
     </div>
   )
 }
