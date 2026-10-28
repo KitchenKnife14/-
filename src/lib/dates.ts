@@ -30,13 +30,6 @@ export const monthKey = (iso: string): string => iso.slice(0, 7)
 export const monthLabel = (year: number, month: number): string =>
   format(new Date(year, month, 1), 'LLLL yyyy', { locale: ru })
 
-const localDateISO = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 export const todayISO = (): string => {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
