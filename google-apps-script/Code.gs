@@ -169,6 +169,7 @@ function query_(req,user){
       if(table==='family_members'){
         const family=rows_('families').find(f=>String(f.id)===String(r.family_id));
         if(!family || String(family.created_by)!==user.id || String(r.user_id)!==user.id || r.role!=='owner')throw new Error('Нельзя добавлять участника напрямую');
+        if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');
       } else if(table==='goal_contributions'){
         const goal=rows_('goals').find(g=>String(g.id)===String(r.goal_id));
         if(!goal || !allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
