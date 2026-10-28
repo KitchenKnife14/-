@@ -85,7 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const refresh = async () => load(session)
+  const refresh = async () => {
+    const { data } = await supabase.auth.getSession()
+    await load(data.session ?? null)
+  }
 
   return (
     <AuthContext.Provider value={{ session, profile, family, members, loading, error, refresh }}>
