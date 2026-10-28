@@ -346,3 +346,18 @@ test('notification upsert always scopes records to the current user', () => {
   });
   assert.match(forged.error.message, /другого пользователя/);
 });
+
+
+test('notifications without an explicit recipient are hidden from all users', () => {
+  const h = makeHarness();
+  const owner = h.signup('notification-unassigned-owner@example.com');
+  const partner = h.signup('notification-unassigned-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Проверка получателя' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+  h.context.writeRows_('notifications', [{
+    id: 'unassigned-notification', family_id: family.id, user_id: '', kind: 'system',
+    title: 'Без получателя', body: '', read: false, created_at: '2026-10-28T00:00:00.000Z'
+  }]);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'notifications', mode: 'select' }).data.length, 0);
+  assert.equal(h.call({ action: 'query', token: partner.token, table: 'notifications', mode: 'select' }).data.length, 0);
+});
