@@ -43,6 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(s)
     setLoading(true)
     setError(null)
+    setProfile(null)
+    setFamily(null)
+    setMembers([])
     try {
       const { data: prof, error: pErr } = await supabase
         .from('profiles')
