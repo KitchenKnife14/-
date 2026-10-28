@@ -2,42 +2,67 @@ import { supabase } from './googleSheets'
 import { DEFAULT_CATEGORIES } from './defaultCategories'
 
 export async function seedDefaultCategories(familyId: string): Promise<void> {
-  const { data: existing, error: checkErr } = await supabase
+  const { data, error } = await supabase
     .from('categories')
-    .select('id')
+    .select('*')
     .eq('family_id', familyId)
-    .limit(1)
-  if (checkErr) throw checkErr
-  if (existing && existing.length > 0) return
+  if (error) throw error
 
-  for (const cat of DEFAULT_CATEGORIES) {
-    const { data: parent, error: pErr } = await supabase
-      .from('categories')
-      .insert({
-        family_id: familyId,
-        name: cat.name,
-        kind: cat.kind,
-        icon: cat.icon,
-        color: cat.color,
-        sort_order: 0,
-      })
-      .select('id')
-      .single()
-    if (pErr) throw pErr
-    if (!parent) throw new Error(`Не удалось создать категорию «${cat.name}»`)
-    if (cat.children) {
-      for (const child of cat.children) {
-        const { error: childErr } = await supabase.from('categories').insert({
+  const existing = (data ?? []) as Array<{
+    id: string
+    family_id: string
+    parent_id: string | null
+    name: string
+    kind: string
+  }>
+
+  // Idempotent seeding: if a previous attempt stopped halfway, create only missing rows.
+  for (const [index, cat] of DEFAULT_CATEGORIES.entries()) {
+    let parent = existing.find((item) =>
+      !item.parent_id && item.name === cat.name && item.kind === cat.kind
+    )
+
+    if (!parent) {
+      const { data: created, error: createError } = await supabase
+        .from('categories')
+        .insert({
+          family_id: familyId,
+          name: cat.name,
+          kind: cat.kind,
+          icon: cat.icon,
+          color: cat.color,
+          sort_order: index,
+        })
+        .select('*')
+        .single()
+      if (createError) throw createError
+      if (!created) throw new Error(`Не удалось создать категорию «${cat.name}»`)
+      parent = created as typeof existing[number]
+      existing.push(parent)
+    }
+
+    for (const [childIndex, child] of (cat.children ?? []).entries()) {
+      const alreadyExists = existing.some((item) =>
+        item.parent_id === parent!.id && item.name === child.name
+      )
+      if (alreadyExists) continue
+
+      const { data: createdChild, error: childError } = await supabase
+        .from('categories')
+        .insert({
           family_id: familyId,
           parent_id: parent.id,
           name: child.name,
           kind: cat.kind,
           icon: child.icon,
           color: child.color,
-          sort_order: 0,
+          sort_order: childIndex,
         })
-        if (childErr) throw childErr
-      }
+        .select('*')
+        .single()
+      if (childError) throw childError
+      if (!createdChild) throw new Error(`Не удалось создать подкатегорию «${child.name}»`)
+      existing.push(createdChild as typeof existing[number])
     }
   }
 }
