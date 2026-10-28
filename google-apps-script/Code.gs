@@ -130,7 +130,7 @@ function route_(req,user){
     if(members.some(m=>m.user_id===user.id))return f;
     if(members.length>=2)throw new Error('В семье уже два участника');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Вы уже состоите в другой семье');
-    members.push({id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()});writeRows_('family_members',rows_('family_members').concat(members.filter(m=>!rows_('family_members').some(x=>x.id===m.id))));
+    members.push({id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()});const allMembers=rows_('family_members');allMembers.push(members[members.length-1]);writeRows_('family_members',allMembers);
     return f;
   }
   if(req.action==='query')return query_(req,user);
