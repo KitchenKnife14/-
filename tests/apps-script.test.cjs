@@ -289,3 +289,34 @@ test('deleting a goal removes its contribution history and unlinks planned purch
   const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
   assert.equal(purchase.goal_id, '');
 });
+
+
+test('personal notifications cannot be read or reassigned by another family member', () => {
+  const h = makeHarness();
+  const owner = h.signup('notification-owner@example.com');
+  const partner = h.signup('notification-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Уведомления семьи' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+
+  const created = h.call({
+    action: 'query', token: owner.token, table: 'notifications', mode: 'insert', returning: true,
+    values: { family_id: family.id, user_id: owner.user.id, kind: 'system', title: 'Личное уведомление', read: false }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const notification = created.data[0];
+  const partnerRead = h.call({ action: 'query', token: partner.token, table: 'notifications', mode: 'select' });
+  assert.equal(partnerRead.data.length, 0);
+
+  const reassigned = h.call({
+    action: 'query', token: owner.token, table: 'notifications', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: notification.id }],
+    values: { user_id: partner.user.id }
+  });
+  assert.match(reassigned.error.message, /получателя уведомления/);
+
+  const forged = h.call({
+    action: 'query', token: partner.token, table: 'notifications', mode: 'insert',
+    values: { family_id: family.id, user_id: owner.user.id, kind: 'system', title: 'Подмена' }
+  });
+  assert.match(forged.error.message, /другого пользователя/);
+});
