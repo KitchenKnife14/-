@@ -46,9 +46,13 @@ export default function PlanningPage() {
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
-  const factByCat = useMemo(() => {
+  const factByCatAndType = useMemo(() => {
     const m = new Map<string, number>()
-    for (const t of txs) { if (t.type === 'transfer') continue; if (!t.category_id) continue; m.set(t.category_id, (m.get(t.category_id) ?? 0) + t.amount_kopecks) }
+    for (const t of txs) {
+      if (t.type === 'transfer' || !t.category_id) continue
+      const key = `${t.type}:${t.category_id}`
+      m.set(key, (m.get(key) ?? 0) + t.amount_kopecks)
+    }
     return m
   }, [txs])
 
@@ -67,11 +71,16 @@ export default function PlanningPage() {
     if (error) { setError(error.message); return }
     if (!prevPlans || prevPlans.length === 0) { setError('В предыдущем месяце нет планов для копирования'); return }
     for (const p of prevPlans as MonthlyPlan[]) {
-      await supabase.from('monthly_plans').upsert({
+      const { error: copyError } = await supabase.from('monthly_plans').upsert({
         family_id: family.id, month_date: monthDate, category_id: p.category_id, type: p.type, planned_kopecks: p.planned_kopecks, note: p.note,
       }, { onConflict: 'family_id,month_date,category_id,type' })
+      if (copyError) {
+        setError(`Не удалось скопировать план «${TYPE_LABELS[p.type]}»: ${copyError.message}`)
+        await load()
+        return
+      }
     }
-    load()
+    await load()
   }
 
   const removePlan = async (p: MonthlyPlan) => { const { error: err } = await supabase.from('monthly_plans').delete().eq('id', p.id); if (err) setError(err.message); load() }
@@ -102,7 +111,7 @@ export default function PlanningPage() {
           <div className="space-y-2">
             {plans.map((p) => {
               const cat = p.category_id ? catMap.get(p.category_id) : null
-              const fact = p.category_id ? factByCat.get(p.category_id) ?? 0 : 0
+              const fact = p.category_id && (p.type === 'income' || p.type === 'expense') ? factByCatAndType.get(`${p.type}:${p.category_id}`) ?? 0 : 0
               const dev = p.type === 'income' ? fact - p.planned_kopecks : p.planned_kopecks - fact
               return (
                 <div key={p.id} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
