@@ -22,7 +22,7 @@ export const supabase={
  channel:(_name:string)=>{
   let table=''; let filters:Filter[]=[]; let callback:(()=>void)|null=null; let timer:ReturnType<typeof setInterval>|null=null; let previous='';
   const subscription={unsubscribe:()=>{if(timer!==null)clearInterval(timer);timer=null}};
-  const channel={on:(_event:string,config:unknown,cb:()=>void)=>{
+  const channel: {on:(event:string,config:unknown,cb:()=>void)=>any;subscribe:()=>{unsubscribe:()=>void}}={on:(_event:string,config:unknown,cb:()=>void)=>{
     const cfg=config as {table?:string;filter?:string};table=cfg.table||'';callback=cb;
     const match=(cfg.filter||'').match(/^([a-zA-Z0-9_]+)=eq\\.(.+)$/);
     filters=match?[{column:match[1],op:'eq',value:match[2]}]:[];
