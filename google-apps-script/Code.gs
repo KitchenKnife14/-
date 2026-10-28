@@ -79,7 +79,16 @@ function authSheet_(){
 }
 function authRows_(){const sh=authSheet_(),v=sh.getDataRange().getValues();return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
 function hash_(password,salt){let digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+password,Utilities.Charset.UTF_8);for(let i=0;i<10000;i++)digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,digest);return Utilities.base64Encode(digest);}
+function pruneSessions_(){
+  const props=PropertiesService.getScriptProperties(), all=props.getProperties(), now=Date.now();
+  Object.keys(all).forEach(key=>{
+    if(!key.startsWith('session:'))return;
+    try{const session=JSON.parse(all[key]);if(!session.expires||session.expires<=now)props.deleteProperty(key);}
+    catch(_){props.deleteProperty(key);}
+  });
+}
 function signup_(req){
+  pruneSessions_();
   const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||''), name=String(req.name||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Введите корректный email');
   if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
@@ -92,6 +101,7 @@ function signup_(req){
   return {data:{token,user:{id,email}},error:null};
 }
 function signin_(req){
+  pruneSessions_();
   const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||'');
   const u=authRows_().find(x=>x.email===email);
   if(!u || hash_(password,u.salt)!==u.hash) throw new Error('Неверный email или пароль');
