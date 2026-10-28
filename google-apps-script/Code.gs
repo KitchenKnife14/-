@@ -165,7 +165,13 @@ function query_(req,user){
     const input=Array.isArray(req.values)?req.values:[req.values];
     const existing=rows_(table);
     const created=input.map(raw=>{
-      const r=Object.assign({},raw);if((table==='categories'||table==='accounts')&&r.archived===undefined)r.archived=false;if(table==='profiles' && r.id!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      const r=Object.assign({},raw);
+      // Never trust client-supplied IDs or timestamps on newly created records.
+      if(r.id && existing.some(x=>String(x.id)===String(r.id)))throw new Error('Запись с таким ID уже существует');
+      if(table==='profiles' && String(r.id||user.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      if(table==='profiles')r.id=user.id;
+      if(TABLES[table].includes('created_at'))r.created_at=now_();
+      if(TABLES[table].includes('updated_at'))r.updated_at=now_();if((table==='categories'||table==='accounts')&&r.archived===undefined)r.archived=false;if(table==='profiles' && r.id!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='family_members'){
         const family=rows_('families').find(f=>String(f.id)===String(r.family_id));
         if(!family || String(family.created_by)!==user.id || String(r.user_id)!==user.id || r.role!=='owner')throw new Error('Нельзя добавлять участника напрямую');
@@ -174,7 +180,7 @@ function query_(req,user){
         const goal=rows_('goals').find(g=>String(g.id)===String(r.goal_id));
         if(!goal || !allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
       } else if(table!=='profiles'&&table!=='families'&&(!r.family_id||(!allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))))) throw new Error('Не указана семья или нет доступа к ней');
-      if(!r.id)r.id=id_(); if(!r.created_at && TABLES[table].includes('created_at'))r.created_at=now_();
+      if(!r.id)r.id=id_();
       if(TABLES[table].includes('created_by'))r.created_by=user.id;
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
@@ -188,7 +194,7 @@ function query_(req,user){
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
         if(mode==='delete')changed.push(r);
-        else {const patch=req.values||{};if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(TABLES[table].includes('updated_by'))next.updated_by=user.id;delete next.__row;if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}keep.push(next);changed.push(next);}
+        else {const patch=req.values||{};if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}keep.push(next);changed.push(next);}
       }else keep.push(r);
     });
     writeRows_(table,keep);return req.returning?changed.map(strip_):null;
@@ -203,7 +209,7 @@ function query_(req,user){
       const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());
       const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
-      if(found){if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');Object.assign(found,raw);}else {const r=Object.assign({id:id_()},raw);if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);}
+      if(found){if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');if(TABLES[table].includes('created_by')&&raw.created_by!==undefined&&String(raw.created_by)!==String(found.created_by))throw new Error('Нельзя менять автора записи');Object.assign(found,raw);if(TABLES[table].includes('updated_by'))found.updated_by=user.id;if(TABLES[table].includes('updated_at'))found.updated_at=now_();}else {const r=Object.assign({id:id_()},raw);if(TABLES[table].includes('created_at'))r.created_at=now_();if(TABLES[table].includes('updated_at'))r.updated_at=now_();if(TABLES[table].includes('created_by'))r.created_by=user.id;if(TABLES[table].includes('updated_by'))r.updated_by=user.id;if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);}
     });
     writeRows_(table,existing);return null;
   }
