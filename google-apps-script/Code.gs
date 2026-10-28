@@ -59,7 +59,7 @@ function sheet_(name) {
 function rows_(name) {
   const sh=sheet_(name), values=sh.getDataRange().getValues(); if(values.length<2) return [];
   return values.slice(1).filter(r=>r.some(v=>v!=='' && v!==null)).map((r,i)=> {
-    const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j])); o.__row=i+2; return o;
+    const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j]));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=i+2; return o;
   });
 }
 function normal_(v) { return v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone()||'Europe/Moscow','yyyy-MM-dd') : v; }
