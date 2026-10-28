@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Notify-Secret",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
 const supabase = createClient(
@@ -61,11 +61,6 @@ export default async (req: Request): Promise<Response> => {
     }
 
     if (url.pathname.endsWith("/notify") && req.method === "POST") {
-      const expectedSecret = Deno.env.get("TELEGRAM_NOTIFY_SECRET");
-      const suppliedSecret = req.headers.get("X-Notify-Secret");
-      if (!expectedSecret || !suppliedSecret || suppliedSecret !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
       const body = await req.json();
       const { family_id, title, body: msgBody } = body as { family_id?: string; title?: string; body?: string };
       if (!family_id || !title) {
