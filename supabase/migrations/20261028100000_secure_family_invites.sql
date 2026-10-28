@@ -13,6 +13,12 @@ CREATE POLICY "fm_insert_creator" ON public.family_members
     )
   );
 
+-- Avoid recursive RLS evaluation on family_members by using the SECURITY DEFINER helper.
+DROP POLICY IF EXISTS "fm_select_member" ON public.family_members;
+CREATE POLICY "fm_select_member" ON public.family_members
+  FOR SELECT TO authenticated
+  USING (family_id = public.current_family_id());
+
 -- Membership roles are not editable directly by ordinary family members.
 DROP POLICY IF EXISTS "fm_update_member" ON public.family_members;
 
