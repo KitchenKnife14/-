@@ -62,7 +62,7 @@ function rows_(name) {
     const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j]));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=i+2; return o;
   });
 }
-function normal_(v) { return v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone()||'Europe/Moscow','yyyy-MM-dd') : v; }
+function normal_(v) { return v instanceof Date ? Utilities.formatDate(v, 'Europe/Moscow','yyyy-MM-dd') : v; }
 function writeRows_(name, data) {
   const sh=sheet_(name), cols=TABLES[name];
   if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>o[k]===undefined||o[k]===null?'':o[k])));
