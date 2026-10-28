@@ -18,7 +18,7 @@ export default function AuthPage() {
     setLoading(true)
     try {
       if (mode === 'signup') {
-        const { data, error: err } = await supabase.auth.signUp({ email, password })
+        const { data, error: err } = await supabase.auth.signUp({ email, password, options: { data: { display_name: name || email.split('@')[0] } } })
         if (err) throw err
         if (data.user) await ensureProfile(data.user.id, name || email.split('@')[0])
       } else {
