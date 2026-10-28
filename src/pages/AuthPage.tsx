@@ -70,7 +70,7 @@ export default function AuthPage() {
             </div>
             <div>
               <label className="label">Пароль</label>
-              <input className="input" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 6 символов" />
+              <input className="input" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 8 символов" />
             </div>
             {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
             <button type="submit" disabled={loading} className="btn-primary w-full">
