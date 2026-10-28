@@ -23,10 +23,11 @@ export async function seedDefaultCategories(familyId: string): Promise<void> {
       })
       .select('id')
       .single()
-    if (pErr || !parent) continue
+    if (pErr) throw pErr
+    if (!parent) throw new Error(`Не удалось создать категорию «${cat.name}»`)
     if (cat.children) {
       for (const child of cat.children) {
-        await supabase.from('categories').insert({
+        const { error: childErr } = await supabase.from('categories').insert({
           family_id: familyId,
           parent_id: parent.id,
           name: child.name,
@@ -35,6 +36,7 @@ export async function seedDefaultCategories(familyId: string): Promise<void> {
           color: child.color,
           sort_order: 0,
         })
+        if (childErr) throw childErr
       }
     }
   }
