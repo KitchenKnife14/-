@@ -14,6 +14,7 @@ interface Props {
   categories: Category[]
   userId: string | null
   editing?: TransactionDraft | null
+  initialType?: TxType
 }
 
 export interface TransactionDraft {
@@ -26,9 +27,9 @@ export interface TransactionDraft {
   planned: boolean
 }
 
-export default function TransactionForm({ open, onClose, onSaved, categories, userId, editing }: Props) {
+export default function TransactionForm({ open, onClose, onSaved, categories, userId, editing, initialType = 'expense' }: Props) {
   const { family } = useAuth()
-  const [type, setType] = useState<TxType>('expense')
+  const [type, setType] = useState<TxType>(initialType)
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayISO())
   const [categoryId, setCategoryId] = useState<string>('')
@@ -46,7 +47,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
       setDescription(editing.description)
       setPlanned(editing.planned)
     } else {
-      setType('expense')
+      setType(initialType)
       setAmount('')
       setDate(todayISO())
       setCategoryId('')
@@ -54,9 +55,9 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
       setPlanned(false)
     }
     setError(null)
-  }, [editing, open])
+  }, [editing, open, initialType])
 
-  const visibleCats = categories.filter((c) => (type === 'transfer' ? c.kind === 'transfer' : c.kind === type) && !c.parent_id || (c.kind === type && c.parent_id))
+  const visibleCats = categories.filter((c) => c.kind === type)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,13 +78,12 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
         category_id: categoryId || null,
         description: description.trim(),
         planned,
-        created_by: userId,
       }
       if (editing) {
         const { error: err } = await supabase.from('transactions').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('transactions').insert(payload)
+        const { error: err } = await supabase.from('transactions').insert({ ...payload, created_by: userId })
         if (err) throw err
       }
       onSaved()
