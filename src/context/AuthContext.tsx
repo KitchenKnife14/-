@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { Profile, Family, FamilyMember } from '../lib/types'
 
 interface AuthState {
