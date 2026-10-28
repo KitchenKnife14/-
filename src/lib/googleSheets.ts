@@ -19,7 +19,21 @@ const listeners=new Set<(event:string,session:LocalSession|null)=>void>();functi
 export const supabase={
  from:(table:string)=>new QueryBuilder(table),
  rpc:async(name:string,params:Record<string,unknown>={})=>{try{return{data:await request({action:'rpc',name,params}),error:null}}catch(e){return{data:null,error:{message:e instanceof Error?e.message:'Ошибка RPC'}}}},
- channel:(_name:string)=>({on:(_event:string,_filter:unknown,_cb:()=>void)=>({subscribe:()=>({})}),subscribe:()=>({})}),removeChannel:(_c:unknown)=>undefined,
+ channel:(_name:string)=>{
+  let table=''; let filters:Filter[]=[]; let callback:(()=>void)|null=null; let timer:ReturnType<typeof setInterval>|null=null; let previous='';
+  const subscription={unsubscribe:()=>{if(timer!==null)clearInterval(timer);timer=null}};
+  const channel={on:(_event:string,config:unknown,cb:()=>void)=>{
+    const cfg=config as {table?:string;filter?:string};table=cfg.table||'';callback=cb;
+    const match=(cfg.filter||'').match(/^([a-zA-Z0-9_]+)=eq\\.(.+)$/);
+    filters=match?[{column:match[1],op:'eq',value:match[2]}]:[];
+    return channel;
+  },subscribe:()=>{
+    const poll=async()=>{if(!table||!callback||!readSession())return;try{const data=await request<unknown[]>({action:'query',table,mode:'select',filters});const signature=JSON.stringify(data);if(previous&&signature!==previous)callback();previous=signature}catch{}};
+    void poll();timer=setInterval(()=>void poll(),15000);return subscription;
+  }};
+  return channel;
+  },
+  removeChannel:(channel:unknown)=>{const c=channel as {unsubscribe?:()=>void};c.unsubscribe?.()},
  auth:{
  getSession:async()=>({data:{session:readSession() as unknown as Session|null},error:null}),getUser:async()=>({data:{user:readSession()?.user??null},error:null}),
  signUp:async({email,password,options}:{email:string;password:string;options?:{data?:{display_name?:string}}})=>{try{const d=await request<{token:string;user:{id:string;email:string}}>({action:'signup',email,password,name:options?.data?.display_name});const s=saveSession(d);notify('SIGNED_IN',s);return{data:{user:s?.user??null,session:s as unknown as Session},error:null}}catch(e){return{data:{user:null,session:null},error:{message:e instanceof Error?e.message:'Ошибка регистрации'}}}},
