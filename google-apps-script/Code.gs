@@ -201,7 +201,7 @@ function query_(req,user){
       const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());
       const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
-      if(found)Object.assign(found,raw);else {const r=Object.assign({id:id_()},raw);if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);}
+      if(found){if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');Object.assign(found,raw);}else {const r=Object.assign({id:id_()},raw);if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);}
     });
     writeRows_(table,existing);return null;
   }
