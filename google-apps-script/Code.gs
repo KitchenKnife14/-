@@ -24,13 +24,23 @@ const AUTH_SHEET = '_auth';
 const SESSION_TTL = 60 * 60 * 24 * 14;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
+// Кэш чтения листов на время ОДНОГО запроса (сбрасывается в doPost и после каждой записи).
+let ROWS_CACHE = {};
+let TZ_CACHE = null;
+// Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
+// а строки, начинающиеся с "=", в формулы).
+const TEXT_COLS = ['created_at','updated_at','joined_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name'];
 
 function doGet() {
-  return json_({status:'ok', message:'Сервер работает', spreadsheet:SpreadsheetApp.getActiveSpreadsheet().getName()});
+  const out={status:'ok', message:'Сервер работает'};
+  // Имя таблицы показываем только если в свойствах скрипта задано DEBUG_INFO=1 (для проверки, что это тестовая таблица).
+  if(PropertiesService.getScriptProperties().getProperty('DEBUG_INFO')==='1')out.spreadsheet=SpreadsheetApp.getActiveSpreadsheet().getName();
+  return json_(out);
 }
 function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
+    ROWS_CACHE = {}; TZ_CACHE = null;
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
     // Serialize authentication too: concurrent signups must not create duplicate emails.
@@ -54,21 +64,40 @@ function ss_(){ const s=SpreadsheetApp.getActiveSpreadsheet(); if(!s) throw new 
 function sheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
-  if (!sh) { sh=ss.insertSheet(name); sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]]); sh.setFrozenRows(1); }
+  if (!sh) { sh=ss.insertSheet(name); sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]]); sh.setFrozenRows(1); formatSheet_(sh,name); }
   const header=sh.getRange(1,1,1,TABLES[name].length).getValues()[0];
   if (header.join('|') !== TABLES[name].join('|')) throw new Error('Не совпадает структура листа '+name);
   return sh;
 }
 function rows_(name) {
+  if(ROWS_CACHE[name]) return ROWS_CACHE[name];
+  return ROWS_CACHE[name]=readRows_(name);
+}
+function readRows_(name) {
   const sh=sheet_(name), values=sh.getDataRange().getValues(); if(values.length<2) return [];
   return values.slice(1).filter(r=>r.some(v=>v!=='' && v!==null)).map((r,i)=> {
-    const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j]));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=i+2; return o;
+    const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j],k));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=i+2; return o;
   });
 }
-function normal_(v) { return v instanceof Date ? Utilities.formatDate(v, 'Europe/Moscow','yyyy-MM-dd') : v; }
+function tz_(){ if(!TZ_CACHE) TZ_CACHE=ss_().getSpreadsheetTimeZone()||'Europe/Moscow'; return TZ_CACHE; }
+// Если Google Sheets всё же превратил текст в Date, восстанавливаем осмысленное значение по имени столбца.
+function normal_(v,col) {
+  if(!(v instanceof Date)) return v;
+  if(col==='operation_time') return Utilities.formatDate(v,tz_(),'HH:mm');
+  if(/_at$/.test(col||'')) return v.toISOString();
+  return Utilities.formatDate(v,tz_(),'yyyy-MM-dd');
+}
+function safeCell_(value) {
+  // setValues treats strings beginning with '=' as formulas even when the cell is formatted as text.
+  // A leading apostrophe makes Sheets store the content as literal text.
+  return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
+}
 function writeRows_(name, data) {
   const sh=sheet_(name), cols=TABLES[name];
-  if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>o[k]===undefined||o[k]===null?'':o[k])));
+  delete ROWS_CACHE[name];
+  // Лист по умолчанию содержит 1000 строк; без расширения запись большего числа строк падает.
+  const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
+  if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
   const last=sh.getLastRow(); if(last>data.length+1) sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent();
 }
 function now_(){return new Date().toISOString();}
@@ -76,7 +105,7 @@ function id_(){return Utilities.getUuid();}
 function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();}
 function authSheet_(){
   const ss=ss_(); let sh=ss.getSheetByName(AUTH_SHEET);
-  if(!sh){sh=ss.insertSheet(AUTH_SHEET);sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]);sh.hideSheet();}
+  if(!sh){sh=ss.insertSheet(AUTH_SHEET);sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]);sh.hideSheet();formatAuth_(sh);}
   return sh;
 }
 function authRows_(){const sh=authSheet_(),v=sh.getDataRange().getValues();return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
@@ -94,16 +123,24 @@ function loginAttemptKey_(email){
   return 'loginfail:'+Utilities.base64Encode(digest).replace(/[+/=]/g,'');
 }
 function signup_(req){
+  if(PropertiesService.getScriptProperties().getProperty('SIGNUP_DISABLED')==='1')throw new Error('Регистрация закрыта');
   pruneSessions_();
   const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||''), name=String(req.name||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Введите корректный email');
   if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
   if(authRows_().some(u=>u.email===email)) throw new Error('Аккаунт с таким email уже существует');
   const id=id_(), salt=Utilities.getUuid();
-  authSheet_().appendRow([id,email,salt,hash_(password,salt),name||email.split('@')[0],now_()]);
+  authSheet_().appendRow([id,email,salt,hash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_));
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
-  ensureProfile_(id,name||email.split('@')[0]);
+  try{ensureProfile_(id,name||email.split('@')[0]);}
+  catch(err){
+    const cleanup=[];
+    try{const row=authRows_().find(u=>u.id===id);if(row)authSheet_().deleteRow(row.row);}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    try{PropertiesService.getScriptProperties().deleteProperty('session:'+token);}catch(cleanupErr){cleanup.push('сессия: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    if(cleanup.length)throw new Error('Не удалось полностью отменить регистрацию: '+cleanup.join('; ')+'. Исходная ошибка: '+(err&&err.message?err.message:String(err)));
+    throw err;
+  }
   return {token,user:{id,email}};
 }
 function signin_(req){
@@ -146,9 +183,13 @@ function route_(req,user){
     const name=String(req.name||'Наша семья').trim(); if(!name)throw new Error('Введите название семьи');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Пользователь уже состоит в семье');
     const f={id:id_(),name,invite_code:code_(),currency:'RUB',created_at:now_(),created_by:user.id};
-    const fam=rows_('families');fam.push(f);writeRows_('families',fam);
-    const mem=rows_('family_members');mem.push({id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()});writeRows_('family_members',mem);
-    seedCategories_(f.id);return f;
+    // Таблицы не поддерживают транзакции: при сбое на любом шаге откатываем уже записанное вручную.
+    try{
+      const fam=rows_('families');fam.push(f);writeRows_('families',fam);
+      const mem=rows_('family_members');mem.push({id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()});writeRows_('family_members',mem);
+      seedCategories_(f.id);
+    }catch(err){rollbackFamily_(f.id);throw err;}
+    return f;
   }
   if(req.action==='joinFamily'){
     const code=String(req.invite_code||'').trim().toUpperCase(), f=rows_('families').find(x=>String(x.invite_code).toUpperCase()===code);
@@ -231,6 +272,7 @@ function query_(req,user){
     return req.returning?created.map(r=>strip_(r)):null;
   }
   if(mode==='update'||mode==='delete'){
+    if(!filters.length)throw new Error('Для изменения или удаления нужен хотя бы один фильтр');
     if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');if(mode==='delete'&&(table==='families'||table==='profiles'))throw new Error('Удаление системных записей запрещено');
     const keep=[],changed=[],affectedGoalIds=new Set();
     all.forEach(r=>{
@@ -274,6 +316,12 @@ function query_(req,user){
   }
   throw new Error('Неизвестный режим запроса');
 }
+function rollbackFamily_(familyId){
+  const id=String(familyId), failures=[];
+  [['categories',r=>String(r.family_id)!==id],['family_members',r=>String(r.family_id)!==id],['families',r=>String(r.id)!==id]]
+    .forEach(u=>{try{writeRows_(u[0],rows_(u[0]).filter(u[1]));}catch(err){failures.push(u[0]+': '+(err&&err.message?err.message:String(err)));}});
+  if(failures.length)throw new Error('Не удалось полностью отменить создание семьи: '+failures.join('; '));
+}
 function strip_(r){const o=Object.assign({},r);delete o.__row;return o;}
 function seedCategories_(familyId){
   const defaults=[
@@ -296,6 +344,7 @@ function syncGoalTotals_(goalIds){
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
   if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code},user);return true;}
+  if(name==='create_family')return route_({action:'createFamily',name:p.p_name},user);
   if(name==='confirm_planned_purchase'){
     const id=String(p.p_purchase_id||'');
     const purchases=rows_('planned_purchases');
@@ -331,3 +380,43 @@ function rpc_(req,user){
   throw new Error('RPC не поддерживается: '+name);
 }
 function nextDate_(iso,freq,days){const d=new Date(iso+'T12:00:00Z');if(freq==='daily')d.setUTCDate(d.getUTCDate()+1);else if(freq==='weekly')d.setUTCDate(d.getUTCDate()+7);else if(freq==='yearly')d.setUTCFullYear(d.getUTCFullYear()+1);else if(freq==='custom')d.setUTCDate(d.getUTCDate()+Math.max(1,Number(days)||30));else {const day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+1);d.setUTCDate(Math.min(day,new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate()));}return d.toISOString().slice(0,10);}
+
+/* ===== Служебные функции: запускаются вручную в редакторе Apps Script (меню «Выполнить») ===== */
+function formatSheet_(sh,name){
+  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@');});
+}
+function formatAuth_(sh){sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@');}
+// Один раз после установки: применяет текстовый формат к столбцам всех листов.
+function setupSheets(){
+  Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));
+  const a=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AUTH_SHEET); if(a)formatAuth_(a);
+  const tz=SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  Logger.log('Готово: листы подготовлены. Часовой пояс таблицы: '+tz+(tz==='Europe/Moscow'?'':' — рекомендуется Europe/Moscow (Файл → Настройки)'));
+}
+// Когда вы с женой зарегистрировались — закройте регистрацию. openSignup() открывает обратно.
+function closeSignup(){PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED','1');Logger.log('Регистрация закрыта');}
+function openSignup(){PropertiesService.getScriptProperties().deleteProperty('SIGNUP_DISABLED');Logger.log('Регистрация открыта');}
+// Показывает в GET-ответе имя таблицы (для проверки тестовая/рабочая). Выключить: hideInfo().
+function showInfo(){PropertiesService.getScriptProperties().setProperty('DEBUG_INFO','1');Logger.log('ok');}
+function hideInfo(){PropertiesService.getScriptProperties().deleteProperty('DEBUG_INFO');Logger.log('ok');}
+// Замер времени одной проверки пароля (смотрите «Журнал выполнения»).
+function benchmarkHash(){const t=Date.now();hash_('test-password','salt');Logger.log('Хеш пароля: '+(Date.now()-t)+' мс');}
+
+// Проверка поведения Google Sheets на ВАШЕЙ таблице (создаёт и удаляет временный лист). Смотрите «Журнал выполнения».
+function selfTest(){
+  const ss=ss_(), name='_selftest_tmp', out=[]; let sh=ss.getSheetByName(name); if(sh)ss.deleteSheet(sh);
+  sh=ss.insertSheet(name);
+  try{
+    sh.getRange(1,1,sh.getMaxRows(),1).setNumberFormat('@');
+    sh.getRange(1,1,3,1).setValues([[safeCell_('=1+1')],['14:30'],['2026-10-28']]);
+    const f=sh.getRange(1,1).getFormula(), v=sh.getRange(1,1,3,1).getValues().map(r=>r[0]);
+    out.push('1. Строка «=1+1» осталась текстом: '+(f===''&&v[0]==='=1+1'?'ДА':'НЕТ ('+f+' / '+v[0]+')'));
+    out.push('2. Время «14:30» осталось строкой: '+(v[1]==='14:30'?'ДА':'НЕТ ('+v[1]+')'));
+    out.push('3. Дата «2026-10-28» осталась строкой: '+(v[2]==='2026-10-28'?'ДА':'НЕТ ('+v[2]+')'));
+    const before=sh.getMaxRows(); sh.insertRowsAfter(before,50);
+    out.push('4. Добавленные строки сами получили текстовый формат: '+(sh.getRange(before+1,1).getNumberFormat()==='@'?'ДА':'НЕТ (код всё равно применяет формат заново)'));
+    out.push('Часовой пояс таблицы: '+ss.getSpreadsheetTimeZone()+'; скрипта: '+Session.getScriptTimeZone());
+  }catch(e){out.push('ОШИБКА теста: '+e.message);}
+  finally{ss.deleteSheet(sh);}
+  Logger.log(out.join('\n'));
+}

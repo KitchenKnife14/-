@@ -31,9 +31,11 @@ function makeHarness() {
       }
       return this;
     }
+    setNumberFormat(format) { this.numberFormat = format; return this; }
+    getNumberFormat() { return this.numberFormat || 'General'; }
   }
   class Sheet {
-    constructor(name) { this.name = name; this.cells = []; }
+    constructor(name) { this.name = name; this.cells = []; this.maxRows = 1000; }
     getRange(...args) { return new Range(this, ...args); }
     getDataRange() {
       const last = this.getLastRow() || 1;
@@ -45,13 +47,18 @@ function makeHarness() {
       return 0;
     }
     appendRow(row) { this.getRange(this.getLastRow() + 1, 1, 1, row.length).setValues([row]); }
+    getMaxRows() { return this.maxRows; }
+    insertRowsAfter(after, howMany) { this.maxRows += howMany; return this; }
+    deleteRow(row) { this.cells.splice(row - 1, 1); return this; }
     setFrozenRows() {}
     hideSheet() {}
   }
   const spreadsheet = {
     getName: () => 'Семейный бюджет',
     getSheetByName: name => sheets.get(name) || null,
-    insertSheet: name => { const sheet = new Sheet(name); sheets.set(name, sheet); return sheet; }
+    insertSheet: name => { const sheet = new Sheet(name); sheets.set(name, sheet); return sheet; },
+    deleteSheet: sheet => sheets.delete(sheet.name),
+    getSpreadsheetTimeZone: () => 'Europe/Moscow'
   };
   const context = {
     console,
@@ -413,4 +420,109 @@ test('transaction form uses the Google Sheets adapter instead of the legacy Supa
   const source = fs.readFileSync('src/components/TransactionForm.tsx', 'utf8');
   assert.match(source, /from ['"]\.\.\/lib\/googleSheets['"]/);
   assert.doesNotMatch(source, /from ['"]\.\.\/lib\/supabase['"]/);
+});
+
+
+test('update and delete without filters are rejected and preserve family data', () => {
+  const h = makeHarness();
+  const user = h.signup('no-filter@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита фильтров' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12300, operation_date: '2026-10-29', description: 'Не удалять' }
+  });
+  assert.equal(created.error, null, created.error?.message);
+
+  const update = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'update', values: { description: 'Повреждено' } });
+  assert.match(update.error.message, /нужен хотя бы один фильтр/i);
+  const remove = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'delete' });
+  assert.match(remove.error.message, /нужен хотя бы один фильтр/i);
+
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(rows.data.length, 1);
+  assert.equal(rows.data[0].description, 'Не удалять');
+});
+
+test('health endpoint hides spreadsheet name unless DEBUG_INFO is enabled', () => {
+  const h = makeHarness();
+  const normal = JSON.parse(h.context.doGet().getContent());
+  assert.equal(normal.status, 'ok');
+  assert.equal(Object.hasOwn(normal, 'spreadsheet'), false);
+});
+
+
+test('family creation rolls back earlier writes if default category creation fails', () => {
+  const h = makeHarness();
+  const user = h.signup('family-rollback@example.com');
+  const originalWrite = h.context.writeRows_;
+  let failOnce = true;
+  h.context.writeRows_ = function(name, rows) {
+    if (name === 'categories' && failOnce) {
+      failOnce = false;
+      throw new Error('simulated category write failure');
+    }
+    return originalWrite(name, rows);
+  };
+
+  const failed = h.call({ action: 'createFamily', token: user.token, name: 'Семья с ошибкой' });
+  assert.match(failed.error.message, /simulated category write failure/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'families', mode: 'select' }).data.length, 0);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' }).data.length, 0);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data.length, 0);
+});
+
+
+test('direct API requests cannot read, update or delete another family records', () => {
+  const h = makeHarness();
+  const owner = h.signup('direct-api-owner@example.com');
+  const outsider = h.signup('direct-api-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья владельца' }).data;
+  const inserted = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 56700, operation_date: '2026-10-29', description: 'Частная запись' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const id = inserted.data[0].id;
+
+  const read = h.call({ action: 'query', token: outsider.token, table: 'transactions', mode: 'select', filters: [{ column: 'id', op: 'eq', value: id }] });
+  assert.equal(read.error, null, read.error?.message);
+  assert.equal(read.data.length, 0);
+
+  const update = h.call({ action: 'query', token: outsider.token, table: 'transactions', mode: 'update', filters: [{ column: 'id', op: 'eq', value: id }], values: { description: 'Подмена' } });
+  assert.equal(update.error, null, update.error?.message);
+  const remove = h.call({ action: 'query', token: outsider.token, table: 'transactions', mode: 'delete', filters: [{ column: 'id', op: 'eq', value: id }] });
+  assert.equal(remove.error, null, remove.error?.message);
+
+  const ownerRows = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select', filters: [{ column: 'id', op: 'eq', value: id }] });
+  assert.equal(ownerRows.data.length, 1);
+  assert.equal(ownerRows.data[0].description, 'Частная запись');
+});
+
+
+test('signup removes auth record and session when profile creation fails', () => {
+  const h = makeHarness();
+  const originalWrite = h.context.writeRows_;
+  let failOnce = true;
+  h.context.writeRows_ = function(name, rows) {
+    if (name === 'profiles' && failOnce) {
+      failOnce = false;
+      throw new Error('simulated profile write failure');
+    }
+    return originalWrite(name, rows);
+  };
+
+  const failed = h.call({ action: 'signup', email: 'profile-failure@example.com', password: 'correct-horse-battery' });
+  assert.match(failed.error.message, /simulated profile write failure/);
+  assert.equal(h.context.authRows_().some(user => user.email === 'profile-failure@example.com'), false);
+  const signin = h.call({ action: 'signin', email: 'profile-failure@example.com', password: 'correct-horse-battery' });
+  assert.match(signin.error.message, /Неверный email или пароль/);
+});
+
+
+test('strings beginning with equals are escaped before writing to Sheets', () => {
+  const h = makeHarness();
+  assert.equal(h.context.safeCell_('=1+1'), "'=1+1");
+  assert.equal(h.context.safeCell_('обычный текст'), 'обычный текст');
+  assert.equal(h.context.safeCell_(14), 14);
+  assert.equal(h.context.safeCell_(null), null);
 });
