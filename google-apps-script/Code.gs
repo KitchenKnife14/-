@@ -305,9 +305,10 @@ function query_(req,user){
   throw new Error('Неизвестный режим запроса');
 }
 function rollbackFamily_(familyId){
-  const id=String(familyId);
+  const id=String(familyId), failures=[];
   [['categories',r=>String(r.family_id)!==id],['family_members',r=>String(r.family_id)!==id],['families',r=>String(r.id)!==id]]
-    .forEach(u=>{try{writeRows_(u[0],rows_(u[0]).filter(u[1]));}catch(_){}});
+    .forEach(u=>{try{writeRows_(u[0],rows_(u[0]).filter(u[1]));}catch(err){failures.push(u[0]+': '+(err&&err.message?err.message:String(err)));}});
+  if(failures.length)throw new Error('Не удалось полностью отменить создание семьи: '+failures.join('; '));
 }
 function strip_(r){const o=Object.assign({},r);delete o.__row;return o;}
 function seedCategories_(familyId){
