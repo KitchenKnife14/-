@@ -128,7 +128,14 @@ function signup_(req){
   authSheet_().appendRow([id,email,salt,hash_(password,salt),name||email.split('@')[0],now_()]);
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
-  ensureProfile_(id,name||email.split('@')[0]);
+  try{ensureProfile_(id,name||email.split('@')[0]);}
+  catch(err){
+    const cleanup=[];
+    try{const row=authRows_().find(u=>u.id===id);if(row)authSheet_().deleteRow(row.row);}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    try{PropertiesService.getScriptProperties().deleteProperty('session:'+token);}catch(cleanupErr){cleanup.push('сессия: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    if(cleanup.length)throw new Error('Не удалось полностью отменить регистрацию: '+cleanup.join('; ')+'. Исходная ошибка: '+(err&&err.message?err.message:String(err)));
+    throw err;
+  }
   return {token,user:{id,email}};
 }
 function signin_(req){
