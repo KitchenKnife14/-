@@ -408,7 +408,7 @@ function selfTest(){
   sh=ss.insertSheet(name);
   try{
     sh.getRange(1,1,sh.getMaxRows(),1).setNumberFormat('@');
-    sh.getRange(1,1,3,1).setValues([['=1+1'],['14:30'],['2026-10-28']]);
+    sh.getRange(1,1,3,1).setValues([[safeCell_('=1+1')],['14:30'],['2026-10-28']]);
     const f=sh.getRange(1,1).getFormula(), v=sh.getRange(1,1,3,1).getValues().map(r=>r[0]);
     out.push('1. Строка «=1+1» осталась текстом: '+(f===''&&v[0]==='=1+1'?'ДА':'НЕТ ('+f+' / '+v[0]+')'));
     out.push('2. Время «14:30» осталось строкой: '+(v[1]==='14:30'?'ДА':'НЕТ ('+v[1]+')'));
