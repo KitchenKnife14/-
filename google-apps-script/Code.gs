@@ -149,9 +149,14 @@ function route_(req,user){
     const name=String(req.name||'Наша семья').trim(); if(!name)throw new Error('Введите название семьи');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Пользователь уже состоит в семье');
     const f={id:id_(),name,invite_code:code_(),currency:'RUB',created_at:now_(),created_by:user.id};
-    const fam=rows_('families');fam.push(f);writeRows_('families',fam);
-    const mem=rows_('family_members');mem.push({id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()});writeRows_('family_members',mem);
-    seedCategories_(f.id);return f;
+    try{
+      const fam=rows_('families');fam.push(f);writeRows_('families',fam);
+      const mem=rows_('family_members');mem.push({id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()});writeRows_('family_members',mem);
+      seedCategories_(f.id);return f;
+    }catch(err){
+      try{rollbackFamily_(f.id)}catch(rollbackErr){throw new Error(String(err&&err.message||err)+'; '+String(rollbackErr&&rollbackErr.message||rollbackErr))}
+      throw err;
+    }
   }
   if(req.action==='joinFamily'){
     const code=String(req.invite_code||'').trim().toUpperCase(), f=rows_('families').find(x=>String(x.invite_code).toUpperCase()===code);
@@ -279,6 +284,19 @@ function query_(req,user){
   throw new Error('Неизвестный режим запроса');
 }
 function strip_(r){const o=Object.assign({},r);delete o.__row;return o;}
+function rollbackFamily_(familyId){
+  const errors=[];
+  const cleanup=[
+    ['categories',r=>String(r.family_id)===String(familyId)],
+    ['family_members',r=>String(r.family_id)===String(familyId)],
+    ['families',r=>String(r.id)===String(familyId)]
+  ];
+  cleanup.forEach(([table,remove])=>{
+    try{writeRows_(table,rows_(table).filter(r=>!remove(r)));}
+    catch(err){errors.push(table+': '+String(err&&err.message||err));}
+  });
+  if(errors.length)throw new Error('Откат семьи выполнен не полностью: '+errors.join('; '));
+}
 function seedCategories_(familyId){
   const defaults=[
     ['Жильё и обязательные платежи','expense','🏠','#2563eb'],['Продукты и питание','expense','🛒','#16a34a'],['Быт','expense','🧴','#0891b2'],['Транспорт','expense','🚌','#ea580c'],['Здоровье','expense','🩺','#dc2626'],['Личные расходы','expense','👕','#7c3aed'],['Развлечения','expense','🎮','#db2777'],['Техника','expense','💻','#0f766e'],['Семья и подарки','expense','🎁','#c026d3'],['Финансовые операции','transfer','🔁','#64748b'],['Накопления','expense','🐷','#059669'],['Прочее','expense','📦','#6b7280'],['Доходы','income','💵','#16a34a']
