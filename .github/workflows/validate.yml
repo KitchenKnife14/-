@@ -2,9 +2,11 @@ name: Validate Google Sheets migration
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, migration/google-sheets]
   push:
-    branches: [migration/google-sheets]
+    branches:
+      - migration/google-sheets
+      - 'integration/**'
   workflow_dispatch:
 
 jobs:
