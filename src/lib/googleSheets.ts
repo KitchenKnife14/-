@@ -5,7 +5,23 @@ const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL as string | undefine
 const SESSION_KEY = 'budget_google_session_v1'
 function readSession(): LocalSession | null { try { const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null') as LocalSession|null; if(s&&s.expires_at*1000>Date.now())return s;localStorage.removeItem(SESSION_KEY);return null } catch{return null} }
 function saveSession(data:{token:string;user:{id:string;email:string}}|null){if(!data){localStorage.removeItem(SESSION_KEY);return null}const s:LocalSession={access_token:data.token,token_type:'bearer',expires_at:Math.floor(Date.now()/1000)+1209600,user:{id:data.user.id,email:data.user.email,app_metadata:{},user_metadata:{},aud:'authenticated',created_at:new Date().toISOString()} as User};localStorage.setItem(SESSION_KEY,JSON.stringify(s));return s}
-async function request<T>(payload:Record<string,unknown>):Promise<T>{if(!API_URL)throw new Error('Не настроен VITE_GOOGLE_APPS_SCRIPT_URL');const response=await fetch(API_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,token:readSession()?.access_token})});const result=await response.json() as {data?:T;error?:{message:string}};if(result.error)throw new Error(result.error.message);return result.data as T}
+async function request<T>(payload:Record<string,unknown>):Promise<T>{
+  if(!API_URL)throw new Error('Не настроен VITE_GOOGLE_APPS_SCRIPT_URL');
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),45000);
+  let result={} as {data?:T;error?:{message:string}};
+  try{
+    const response=await fetch(API_URL,{method:'POST',redirect:'follow',signal:controller.signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,token:readSession()?.access_token})});
+    const text=await response.text();
+    try{result=JSON.parse(text)}catch{throw new Error('Сервер вернул неожиданный ответ. Проверьте публикацию Apps Script и адрес API')}
+  }catch(e){
+    if(e instanceof DOMException&&e.name==='AbortError')throw new Error('Сервер не ответил вовремя. Попробуйте ещё раз');
+    if(e instanceof TypeError)throw new Error('Не удалось связаться с сервером. Проверьте интернет и адрес Apps Script');
+    throw e;
+  }finally{clearTimeout(timer)}
+  if(result.error)throw new Error(result.error.message);
+  return result.data as T;
+}
 class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|null;error:{message:string}|null}>{
  private mode='select';private filters:Filter[]=[];private values:Record<string,unknown>|Record<string,unknown>[]={};private returning=false;private limitValue?:number;private orderValues:{column:string;ascending:boolean}[]=[];private conflict?:string;private singleMode:'single'|'maybeSingle'|null=null;
  constructor(private table:string){}
