@@ -31,9 +31,11 @@ function makeHarness() {
       }
       return this;
     }
+    setNumberFormat(format) { this.numberFormat = format; return this; }
+    getNumberFormat() { return this.numberFormat || 'General'; }
   }
   class Sheet {
-    constructor(name) { this.name = name; this.cells = []; }
+    constructor(name) { this.name = name; this.cells = []; this.maxRows = 1000; }
     getRange(...args) { return new Range(this, ...args); }
     getDataRange() {
       const last = this.getLastRow() || 1;
@@ -45,13 +47,17 @@ function makeHarness() {
       return 0;
     }
     appendRow(row) { this.getRange(this.getLastRow() + 1, 1, 1, row.length).setValues([row]); }
+    getMaxRows() { return this.maxRows; }
+    insertRowsAfter(after, howMany) { this.maxRows += howMany; return this; }
     setFrozenRows() {}
     hideSheet() {}
   }
   const spreadsheet = {
     getName: () => 'Семейный бюджет',
     getSheetByName: name => sheets.get(name) || null,
-    insertSheet: name => { const sheet = new Sheet(name); sheets.set(name, sheet); return sheet; }
+    insertSheet: name => { const sheet = new Sheet(name); sheets.set(name, sheet); return sheet; },
+    deleteSheet: sheet => sheets.delete(sheet.name),
+    getSpreadsheetTimeZone: () => 'Europe/Moscow'
   };
   const context = {
     console,
