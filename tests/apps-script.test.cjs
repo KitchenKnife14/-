@@ -517,3 +517,12 @@ test('signup removes auth record and session when profile creation fails', () =>
   const signin = h.call({ action: 'signin', email: 'profile-failure@example.com', password: 'correct-horse-battery' });
   assert.match(signin.error.message, /Неверный email или пароль/);
 });
+
+
+test('strings beginning with equals are escaped before writing to Sheets', () => {
+  const h = makeHarness();
+  assert.equal(h.context.safeCell_('=1+1'), "'=1+1");
+  assert.equal(h.context.safeCell_('обычный текст'), 'обычный текст');
+  assert.equal(h.context.safeCell_(14), 14);
+  assert.equal(h.context.safeCell_(null), null);
+});
