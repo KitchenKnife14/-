@@ -87,12 +87,17 @@ function normal_(v,col) {
   if(/_at$/.test(col||'')) return v.toISOString();
   return Utilities.formatDate(v,tz_(),'yyyy-MM-dd');
 }
+function safeCell_(value) {
+  // setValues treats strings beginning with '=' as formulas even when the cell is formatted as text.
+  // A leading apostrophe makes Sheets store the content as literal text.
+  return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
+}
 function writeRows_(name, data) {
   const sh=sheet_(name), cols=TABLES[name];
   delete ROWS_CACHE[name];
   // Лист по умолчанию содержит 1000 строк; без расширения запись большего числа строк падает.
   const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
-  if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>o[k]===undefined||o[k]===null?'':o[k])));
+  if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
   const last=sh.getLastRow(); if(last>data.length+1) sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent();
 }
 function now_(){return new Date().toISOString();}
@@ -125,7 +130,7 @@ function signup_(req){
   if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
   if(authRows_().some(u=>u.email===email)) throw new Error('Аккаунт с таким email уже существует');
   const id=id_(), salt=Utilities.getUuid();
-  authSheet_().appendRow([id,email,salt,hash_(password,salt),name||email.split('@')[0],now_()]);
+  authSheet_().appendRow([id,email,salt,hash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_));
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
   try{ensureProfile_(id,name||email.split('@')[0]);}
