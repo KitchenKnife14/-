@@ -26,7 +26,10 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 
 function doGet() {
-  return json_({status:'ok', message:'Сервер работает', spreadsheet:SpreadsheetApp.getActiveSpreadsheet().getName()});
+  const out={status:'ok', message:'Сервер работает'};
+  // Имя таблицы раскрывается только для диагностики тестовой среды.
+  if(PropertiesService.getScriptProperties().getProperty('DEBUG_INFO')==='1')out.spreadsheet=SpreadsheetApp.getActiveSpreadsheet().getName();
+  return json_(out);
 }
 function doPost(e) {
   const lock = LockService.getScriptLock();
@@ -231,6 +234,7 @@ function query_(req,user){
     return req.returning?created.map(r=>strip_(r)):null;
   }
   if(mode==='update'||mode==='delete'){
+    if(!Array.isArray(filters)||filters.length===0)throw new Error('Для изменения или удаления нужен хотя бы один фильтр');
     if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');if(mode==='delete'&&(table==='families'||table==='profiles'))throw new Error('Удаление системных записей запрещено');
     const keep=[],changed=[],affectedGoalIds=new Set();
     all.forEach(r=>{
