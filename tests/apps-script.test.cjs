@@ -414,3 +414,53 @@ test('transaction form uses the Google Sheets adapter instead of the legacy Supa
   assert.match(source, /from ['"]\.\.\/lib\/googleSheets['"]/);
   assert.doesNotMatch(source, /from ['"]\.\.\/lib\/supabase['"]/);
 });
+
+
+test('create_family RPC creates family, owner membership and default categories', () => {
+  const h = makeHarness();
+  const user = h.signup('rpc-family@example.com');
+  const response = h.call({
+    action: 'rpc', token: user.token, name: 'create_family',
+    params: { p_name: 'RPC семья' }
+  });
+  assert.equal(response.error, null, response.error?.message);
+  assert.equal(response.data.name, 'RPC семья');
+  const memberships = h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' });
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' });
+  assert.equal(memberships.data.length, 1);
+  assert.equal(memberships.data[0].role, 'owner');
+  assert.ok(categories.data.length > 0);
+  assert.ok(categories.data.every(category => category.family_id === response.data.id));
+});
+
+test('create_family RPC rolls back partial writes when membership creation fails', () => {
+  const h = makeHarness();
+  const user = h.signup('rollback-family@example.com');
+  const originalWrite = h.context.writeRows_;
+  let failOnce = true;
+  h.context.writeRows_ = function(name, rows) {
+    if (name === 'family_members' && failOnce) {
+      failOnce = false;
+      throw new Error('simulated membership write failure');
+    }
+    return originalWrite(name, rows);
+  };
+  const response = h.call({
+    action: 'rpc', token: user.token, name: 'create_family',
+    params: { p_name: 'Не должна остаться' }
+  });
+  assert.match(response.error.message, /simulated membership write failure/);
+  for (const table of ['families', 'family_members', 'categories']) {
+    assert.equal(h.context.rows_(table).length, 0, `Expected rollback to clear ${table}`);
+  }
+});
+
+test('health endpoint hides spreadsheet name unless debug mode is enabled', () => {
+  const h = makeHarness();
+  const normal = JSON.parse(h.context.doGet().getContent());
+  assert.equal(normal.status, 'ok');
+  assert.equal(normal.spreadsheet, undefined);
+  h.context.PropertiesService.getScriptProperties().setProperty('DEBUG_INFO', '1');
+  const debug = JSON.parse(h.context.doGet().getContent());
+  assert.equal(debug.spreadsheet, 'Семейный бюджет');
+});
