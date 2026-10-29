@@ -414,3 +414,31 @@ test('transaction form uses the Google Sheets adapter instead of the legacy Supa
   assert.match(source, /from ['"]\.\.\/lib\/googleSheets['"]/);
   assert.doesNotMatch(source, /from ['"]\.\.\/lib\/supabase['"]/);
 });
+
+
+test('update and delete without filters are rejected and preserve family data', () => {
+  const h = makeHarness();
+  const user = h.signup('no-filter@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита фильтров' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12300, operation_date: '2026-10-29', description: 'Не удалять' }
+  });
+  assert.equal(created.error, null, created.error?.message);
+
+  const update = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'update', values: { description: 'Повреждено' } });
+  assert.match(update.error.message, /нужен хотя бы один фильтр/i);
+  const remove = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'delete' });
+  assert.match(remove.error.message, /нужен хотя бы один фильтр/i);
+
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(rows.data.length, 1);
+  assert.equal(rows.data[0].description, 'Не удалять');
+});
+
+test('health endpoint hides spreadsheet name unless DEBUG_INFO is enabled', () => {
+  const h = makeHarness();
+  const normal = JSON.parse(h.context.doGet().getContent());
+  assert.equal(normal.status, 'ok');
+  assert.equal(Object.hasOwn(normal, 'spreadsheet'), false);
+});
