@@ -26,7 +26,10 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 
 function doGet() {
-  return json_({status:'ok', message:'Сервер работает', spreadsheet:SpreadsheetApp.getActiveSpreadsheet().getName()});
+  const out={status:'ok', message:'Сервер работает'};
+  // Имя таблицы выдаётся только при явном включении DEBUG_INFO для диагностики тестового развёртывания.
+  if(PropertiesService.getScriptProperties().getProperty('DEBUG_INFO')==='1')out.spreadsheet=SpreadsheetApp.getActiveSpreadsheet().getName();
+  return json_(out);
 }
 function doPost(e) {
   const lock = LockService.getScriptLock();
@@ -146,9 +149,13 @@ function route_(req,user){
     const name=String(req.name||'Наша семья').trim(); if(!name)throw new Error('Введите название семьи');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Пользователь уже состоит в семье');
     const f={id:id_(),name,invite_code:code_(),currency:'RUB',created_at:now_(),created_by:user.id};
-    const fam=rows_('families');fam.push(f);writeRows_('families',fam);
-    const mem=rows_('family_members');mem.push({id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()});writeRows_('family_members',mem);
-    seedCategories_(f.id);return f;
+    // Google Sheets не поддерживает транзакции: откатываем частично созданную семью при сбое.
+    try {
+      const fam=rows_('families');fam.push(f);writeRows_('families',fam);
+      const mem=rows_('family_members');mem.push({id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()});writeRows_('family_members',mem);
+      seedCategories_(f.id);
+    } catch(err) { rollbackFamily_(f.id); throw err; }
+    return f;
   }
   if(req.action==='joinFamily'){
     const code=String(req.invite_code||'').trim().toUpperCase(), f=rows_('families').find(x=>String(x.invite_code).toUpperCase()===code);
@@ -274,6 +281,12 @@ function query_(req,user){
   }
   throw new Error('Неизвестный режим запроса');
 }
+function rollbackFamily_(familyId){
+  const id=String(familyId), failures=[];
+  [['categories',r=>String(r.family_id)!==id],['family_members',r=>String(r.family_id)!==id],['families',r=>String(r.id)!==id]]
+    .forEach(u=>{try{writeRows_(u[0],rows_(u[0]).filter(u[1]));}catch(err){failures.push(u[0]+': '+(err&&err.message?err.message:String(err)));}});
+  if(failures.length)throw new Error('Не удалось полностью отменить создание семьи: '+failures.join('; '));
+}
 function strip_(r){const o=Object.assign({},r);delete o.__row;return o;}
 function seedCategories_(familyId){
   const defaults=[
@@ -296,6 +309,7 @@ function syncGoalTotals_(goalIds){
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
   if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code},user);return true;}
+  if(name==='create_family')return route_({action:'createFamily',name:p.p_name},user);
   if(name==='confirm_planned_purchase'){
     const id=String(p.p_purchase_id||'');
     const purchases=rows_('planned_purchases');
