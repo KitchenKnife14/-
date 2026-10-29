@@ -49,6 +49,7 @@ function makeHarness() {
     appendRow(row) { this.getRange(this.getLastRow() + 1, 1, 1, row.length).setValues([row]); }
     getMaxRows() { return this.maxRows; }
     insertRowsAfter(after, howMany) { this.maxRows += howMany; return this; }
+    deleteRow(row) { this.cells.splice(row - 1, 1); return this; }
     setFrozenRows() {}
     hideSheet() {}
   }
@@ -495,4 +496,24 @@ test('direct API requests cannot read, update or delete another family records',
   const ownerRows = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select', filters: [{ column: 'id', op: 'eq', value: id }] });
   assert.equal(ownerRows.data.length, 1);
   assert.equal(ownerRows.data[0].description, 'Частная запись');
+});
+
+
+test('signup removes auth record and session when profile creation fails', () => {
+  const h = makeHarness();
+  const originalWrite = h.context.writeRows_;
+  let failOnce = true;
+  h.context.writeRows_ = function(name, rows) {
+    if (name === 'profiles' && failOnce) {
+      failOnce = false;
+      throw new Error('simulated profile write failure');
+    }
+    return originalWrite(name, rows);
+  };
+
+  const failed = h.call({ action: 'signup', email: 'profile-failure@example.com', password: 'correct-horse-battery' });
+  assert.match(failed.error.message, /simulated profile write failure/);
+  assert.equal(h.context.authRows_().some(user => user.email === 'profile-failure@example.com'), false);
+  const signin = h.call({ action: 'signin', email: 'profile-failure@example.com', password: 'correct-horse-battery' });
+  assert.match(signin.error.message, /Неверный email или пароль/);
 });
