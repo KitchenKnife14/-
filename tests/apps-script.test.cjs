@@ -451,9 +451,7 @@ test('create_family RPC rolls back partial writes when membership creation fails
   });
   assert.match(response.error.message, /simulated membership write failure/);
   for (const table of ['families', 'family_members', 'categories']) {
-    const rows = h.call({ action: 'query', token: user.token, table, mode: 'select' });
-    assert.equal(rows.error, null, rows.error?.message);
-    assert.equal(rows.data.length, 0, `Expected rollback to clear ${table}`);
+    assert.equal(h.context.rows_(table).length, 0, `Expected rollback to clear ${table}`);
   }
 });
 
