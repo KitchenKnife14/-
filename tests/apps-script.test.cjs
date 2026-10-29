@@ -442,3 +442,24 @@ test('health endpoint hides spreadsheet name unless DEBUG_INFO is enabled', () =
   assert.equal(normal.status, 'ok');
   assert.equal(Object.hasOwn(normal, 'spreadsheet'), false);
 });
+
+
+test('family creation rolls back earlier writes if default category creation fails', () => {
+  const h = makeHarness();
+  const user = h.signup('family-rollback@example.com');
+  const originalWrite = h.context.writeRows_;
+  let failOnce = true;
+  h.context.writeRows_ = function(name, rows) {
+    if (name === 'categories' && failOnce) {
+      failOnce = false;
+      throw new Error('simulated category write failure');
+    }
+    return originalWrite(name, rows);
+  };
+
+  const failed = h.call({ action: 'createFamily', token: user.token, name: 'Семья с ошибкой' });
+  assert.match(failed.error.message, /simulated category write failure/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'families', mode: 'select' }).data.length, 0);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' }).data.length, 0);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data.length, 0);
+});
