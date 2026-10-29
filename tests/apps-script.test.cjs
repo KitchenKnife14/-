@@ -463,3 +463,30 @@ test('family creation rolls back earlier writes if default category creation fai
   assert.equal(h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' }).data.length, 0);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data.length, 0);
 });
+
+
+test('direct API requests cannot read, update or delete another family records', () => {
+  const h = makeHarness();
+  const owner = h.signup('direct-api-owner@example.com');
+  const outsider = h.signup('direct-api-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья владельца' }).data;
+  const inserted = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 56700, operation_date: '2026-10-29', description: 'Частная запись' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const id = inserted.data[0].id;
+
+  const read = h.call({ action: 'query', token: outsider.token, table: 'transactions', mode: 'select', filters: [{ column: 'id', op: 'eq', value: id }] });
+  assert.equal(read.error, null, read.error?.message);
+  assert.equal(read.data.length, 0);
+
+  const update = h.call({ action: 'query', token: outsider.token, table: 'transactions', mode: 'update', filters: [{ column: 'id', op: 'eq', value: id }], values: { description: 'Подмена' } });
+  assert.equal(update.error, null, update.error?.message);
+  const remove = h.call({ action: 'query', token: outsider.token, table: 'transactions', mode: 'delete', filters: [{ column: 'id', op: 'eq', value: id }] });
+  assert.equal(remove.error, null, remove.error?.message);
+
+  const ownerRows = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select', filters: [{ column: 'id', op: 'eq', value: id }] });
+  assert.equal(ownerRows.data.length, 1);
+  assert.equal(ownerRows.data[0].description, 'Частная запись');
+});
