@@ -47,33 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setFamily(null)
     setMembers([])
     try {
-      const { data: prof, error: pErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', s.user.id)
-        .maybeSingle()
-      if (pErr) throw pErr
-      setProfile(prof as Profile | null)
-
-      const { data: fm, error: fmErr } = await supabase
-        .from('family_members')
-        .select('*')
-        .eq('user_id', s.user.id)
-      if (fmErr) throw fmErr
-      setMembers((fm as FamilyMember[]) ?? [])
-
-      if (fm && fm.length > 0) {
-        const famId = (fm[0] as FamilyMember).family_id
-        const { data: fam, error: famErr } = await supabase
-          .from('families')
-          .select('*')
-          .eq('id', famId)
-          .maybeSingle()
-        if (famErr) throw famErr
-        setFamily(fam as Family | null)
-      } else {
-        setFamily(null)
-      }
+      const { data, error } = await supabase.rpc('get_my_context', {})
+      if (error) throw new Error(error.message)
+      const c = data as { profile: Profile | null; members: FamilyMember[]; family: Family | null }
+      setProfile(c.profile)
+      setMembers(c.members ?? [])
+      setFamily(c.family ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки профиля')
     } finally {

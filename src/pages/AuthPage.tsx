@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
-import { ensureProfile } from '../lib/categories'
 
 export default function AuthPage() {
   const { refresh } = useAuth()
@@ -18,9 +17,8 @@ export default function AuthPage() {
     setLoading(true)
     try {
       if (mode === 'signup') {
-        const { data, error: err } = await supabase.auth.signUp({ email, password, options: { data: { display_name: name || email.split('@')[0] } } })
+        const { error: err } = await supabase.auth.signUp({ email, password, options: { data: { display_name: name || email.split('@')[0] } } })
         if (err) throw err
-        if (data.user) await ensureProfile(data.user.id, name || email.split('@')[0])
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password })
         if (err) throw err
