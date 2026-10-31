@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main, migration/google-sheets]
   push:
-    branches: [migration/google-sheets]
+    branches: [migration/google-sheets, audit/backend-upsert-guards]
   workflow_dispatch:
 
 jobs:
