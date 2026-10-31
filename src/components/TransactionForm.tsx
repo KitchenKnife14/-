@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
 import type { Account, Category, TxType } from '../lib/types'
 import { rublesToKopecks } from '../lib/money'
@@ -46,7 +46,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
   useEffect(() => {
     if (!open || !family) return
     let active = true
-    supabase.from('accounts').select('*').eq('family_id', family.id).then(({ data, error: err }) => {
+    googleSheets.from('accounts').select('*').eq('family_id', family.id).then(({ data, error: err }) => {
       if (!active) return
       if (err) setError(err.message)
       else setAccounts((data ?? []) as Account[])
@@ -110,10 +110,10 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
         planned,
       }
       if (editing) {
-        const { error: err } = await supabase.from('transactions').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('transactions').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('transactions').insert({ ...payload, created_by: userId })
+        const { error: err } = await googleSheets.from('transactions').insert({ ...payload, created_by: userId })
         if (err) throw err
       }
       onSaved()
