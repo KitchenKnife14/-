@@ -101,6 +101,14 @@ function safeCell_(value) {
   // A leading apostrophe makes Sheets store the content as literal text.
   return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
 }
+function appendRows_(name, data) {
+  if (!data.length) return;
+  const sh=sheet_(name), cols=TABLES[name], start=sh.getLastRow()+1;
+  const need=start+data.length-1;
+  if(sh.getMaxRows()<need){sh.insertRowsAfter(sh.getMaxRows(),need-sh.getMaxRows()+500);formatSheet_(sh,name);}
+  sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
+  delete ROWS_CACHE[name];
+}
 function writeRows_(name, data) {
   const sh=sheet_(name), cols=TABLES[name];
   delete ROWS_CACHE[name];
@@ -332,7 +340,7 @@ function query_(req,user){
       if(table==='budgets')assertUniqueBudget_(existing,r);
       existing.push(r);return r;
     });
-    writeRows_(table,existing);
+    appendRows_(table,created);
     if(table==='goal_contributions')syncGoalTotals_(created.map(r=>r.goal_id));
     return req.returning?created.map(r=>strip_(r)):null;
   }
