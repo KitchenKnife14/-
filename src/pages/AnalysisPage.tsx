@@ -21,14 +21,14 @@ export default function AnalysisPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [tRes, cRes] = await Promise.all([
+      const ids = members.map((m) => m.user_id)
+      const [tRes, cRes, pRes] = await Promise.all([
         googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
+        ids.length > 0 ? googleSheets.from('profiles').select('*').in('id', ids) : Promise.resolve({ data: [], error: null }),
       ])
-      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error
-      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[])
-      const ids = members.map((m) => m.user_id)
-      if (ids.length > 0) { const { data: pRes } = await googleSheets.from('profiles').select('*').in('id', ids); setProfiles(pRes as Profile[] ?? []) }
+      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error; if (pRes.error) throw pRes.error
+      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[]); setProfiles((pRes.data ?? []) as Profile[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
   }
