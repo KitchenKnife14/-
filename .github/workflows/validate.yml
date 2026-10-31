@@ -2,9 +2,9 @@ name: Validate Google Sheets migration
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, migration/google-sheets]
   push:
-    branches: [migration/google-sheets]
+    branches: [migration/google-sheets, audit/backend-upsert-guards]
   workflow_dispatch:
 
 jobs:
@@ -22,6 +22,8 @@ jobs:
         run: npm ci
       - name: TypeScript and production build
         run: npm run build
+      - name: Account balance regression tests
+        run: npm run test:balances
       - name: Apps Script syntax check
         run: node --check < google-apps-script/Code.gs
       - name: Apps Script API regression tests

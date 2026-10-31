@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 
 export default function AuthPage() {
-  const { refresh } = useAuth()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,13 +15,12 @@ export default function AuthPage() {
     setLoading(true)
     try {
       if (mode === 'signup') {
-        const { error: err } = await supabase.auth.signUp({ email, password, options: { data: { display_name: name || email.split('@')[0] } } })
+        const { error: err } = await googleSheets.auth.signUp({ email, password, options: { data: { display_name: name || email.split('@')[0] } } })
         if (err) throw err
       } else {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+        const { error: err } = await googleSheets.auth.signInWithPassword({ email, password })
         if (err) throw err
       }
-      await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка авторизации')
     } finally {

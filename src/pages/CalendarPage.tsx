@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO, currentMoscowDate } from '../lib/dates'
@@ -30,9 +30,9 @@ export default function CalendarPage() {
     setLoading(true); setError(null)
     try {
       const [tRes, rRes, cRes] = await Promise.all([
-        supabase.from('transactions').select('*').eq('family_id', family.id).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        supabase.from('recurring_payments').select('*').eq('family_id', family.id).eq('active', true),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('transactions').select('*').eq('family_id', family.id).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
+        googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).eq('active', true),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
       ])
       if (tRes.error) throw tRes.error; if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setRecurring(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[])
@@ -43,8 +43,8 @@ export default function CalendarPage() {
   useEffect(() => { load() }, [family?.id, range.start, range.end])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('cal-page').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('cal-page').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
@@ -108,8 +108,8 @@ export default function CalendarPage() {
 
   const daySum = (date: string) => {
     const dayTxs = txsByDate.get(date) ?? []
-    const income = dayTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
-    const expense = dayTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
+    const income = dayTxs.filter((t) => !t.planned && t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
+    const expense = dayTxs.filter((t) => !t.planned && t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
     return { income, expense, net: income - expense }
   }
 
@@ -157,7 +157,7 @@ export default function CalendarPage() {
         className={`min-h-[72px] p-1.5 rounded-lg border text-left transition-colors ${isToday ? 'border-primary-400 bg-primary-50/50' : 'border-slate-100 hover:bg-slate-50'} ${!inMonth ? 'opacity-40' : ''}`}>
         <div className="text-xs font-medium text-slate-600">{format(day, 'd')}</div>
         {sum.net !== 0 && <div className={`text-[10px] font-medium ${sum.net > 0 ? 'text-accent-600' : 'text-danger-600'}`}>{formatRublesShort(sum.net)}</div>}
-        {dayTxs.length > 0 && <div className="flex gap-0.5 mt-0.5">{dayTxs.slice(0, 3).map((t) => <span key={t.id} className={`w-1.5 h-1.5 rounded-full ${t.type === 'income' ? 'bg-accent-500' : 'bg-danger-500'}`} />)}</div>}
+        {dayTxs.length > 0 && <div className="flex gap-0.5 mt-0.5">{dayTxs.slice(0, 3).map((t) => <span key={t.id} className={`w-1.5 h-1.5 rounded-full ${t.type === 'income' ? 'bg-accent-500' : t.type === 'transfer' ? 'bg-primary-500' : 'bg-danger-500'}`} />)}</div>}
         {dayRecs.length > 0 && <div className="text-[10px] text-warn-500 mt-0.5">⟳</div>}
       </button>
     )
@@ -227,11 +227,12 @@ export default function CalendarPage() {
                   {selectedDayTxs.map((t) => {
                     const cat = t.category_id ? catMap.get(t.category_id) : null
                     const isIncome = t.type === 'income'
+                    const isTransfer = t.type === 'transfer'
                     return (
                       <div key={t.id} className="card flex items-center gap-3 py-3">
                         <div className="text-xl w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">{cat?.icon ?? '📝'}</div>
-                        <div className="flex-1 min-w-0"><div className="text-sm font-medium text-slate-900 truncate">{t.description || cat?.name || 'Операция'}</div><div className="text-xs text-slate-400">{cat?.name ?? 'Без категории'}</div></div>
-                        <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : 'text-slate-900'}`}>{isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}</div>
+                        <div className="flex-1 min-w-0"><div className="text-sm font-medium text-slate-900 truncate">{t.description || cat?.name || 'Операция'}{t.planned && <span className="ml-2 badge bg-warn-100 text-warn-600">план</span>}</div><div className="text-xs text-slate-400">{isTransfer ? 'Перевод' : cat?.name ?? 'Без категории'}</div></div>
+                        <div className={`text-sm font-semibold ${isTransfer ? 'text-primary-600' : isIncome ? 'text-accent-600' : 'text-slate-900'}`}>{isTransfer ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}</div>
                       </div>
                     )
                   })}
@@ -254,7 +255,8 @@ export default function CalendarPage() {
                       {d.txs.map((t) => {
                         const cat = t.category_id ? catMap.get(t.category_id) : null
                         const isIncome = t.type === 'income'
-                        return <div key={t.id} className="card flex items-center gap-3 py-2"><div className="text-lg w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">{cat?.icon ?? '📝'}</div><div className="flex-1 min-w-0"><div className="text-sm text-slate-900 truncate">{t.description || cat?.name || 'Операция'}</div></div><div className={`text-sm font-medium ${isIncome ? 'text-accent-600' : 'text-slate-900'}`}>{isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}</div></div>
+                        const isTransfer = t.type === 'transfer'
+                        return <div key={t.id} className="card flex items-center gap-3 py-2"><div className="text-lg w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">{cat?.icon ?? '📝'}</div><div className="flex-1 min-w-0"><div className="text-sm text-slate-900 truncate">{t.description || cat?.name || 'Операция'}{t.planned && <span className="ml-2 badge bg-warn-100 text-warn-600">план</span>}</div></div><div className={`text-sm font-medium ${isTransfer ? 'text-primary-600' : isIncome ? 'text-accent-600' : 'text-slate-900'}`}>{isTransfer ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}</div></div>
                       })}
                     </div>
                   </div>

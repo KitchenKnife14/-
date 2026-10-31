@@ -1,4 +1,4 @@
-import { supabase } from './googleSheets'
+import { googleSheets } from './googleSheets'
 import { DEFAULT_CATEGORIES } from './defaultCategories'
 
 type ExistingCategory = {
@@ -10,7 +10,7 @@ type ExistingCategory = {
 }
 
 export async function seedDefaultCategories(familyId: string): Promise<void> {
-  const { data, error } = await supabase
+  const { data, error } = await googleSheets
     .from('categories')
     .select('*')
     .eq('family_id', familyId)
@@ -24,7 +24,7 @@ export async function seedDefaultCategories(familyId: string): Promise<void> {
     !existing.some((item) => !item.parent_id && item.name === cat.name && item.kind === cat.kind)
   )
   if (missingParents.length) {
-    const { data: created, error: createError } = await supabase
+    const { data: created, error: createError } = await googleSheets
       .from('categories')
       .insert(missingParents.map((cat, index) => ({
         family_id: familyId,
@@ -76,7 +76,7 @@ export async function seedDefaultCategories(familyId: string): Promise<void> {
   }
 
   if (missingChildren.length) {
-    const { data: created, error: childError } = await supabase
+    const { data: created, error: childError } = await googleSheets
       .from('categories')
       .insert(missingChildren)
       .select('*')
@@ -88,7 +88,7 @@ export async function seedDefaultCategories(familyId: string): Promise<void> {
 }
 
 export async function ensureProfile(userId: string, displayName: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await googleSheets
     .from('profiles')
     .upsert({ id: userId, display_name: displayName }, { onConflict: 'id' })
   if (error) throw error

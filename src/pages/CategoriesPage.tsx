@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Category, CategoryKind } from '../lib/types'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Archive, Folder } from 'lucide-react'
@@ -19,7 +19,7 @@ export default function CategoriesPage() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase.from('categories').select('*').eq('family_id', family.id).order('sort_order').order('name')
+      const { data, error: err } = await googleSheets.from('categories').select('*').eq('family_id', family.id).order('sort_order').order('name')
       if (err) throw err
       setCats(data as Category[])
     } catch (e) {
@@ -32,15 +32,15 @@ export default function CategoriesPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('cat-page').on('postgres_changes', { event: '*', schema: 'public', table: 'categories', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('cat-page').on('table_changes', { event: '*', schema: 'public', table: 'categories', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
   const roots = cats.filter((c) => !c.parent_id && !c.archived)
   const childrenOf = (id: string) => cats.filter((c) => c.parent_id === id && !c.archived)
 
   const archive = async (c: Category) => {
-    const { error: err } = await supabase.from('categories').update({ archived: true }).eq('id', c.id)
+    const { error: err } = await googleSheets.from('categories').update({ archived: true }).eq('id', c.id)
     if (err) setError(err.message)
     load()
   }
@@ -141,10 +141,10 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, familyId }: {
     try {
       const payload = { name: name.trim(), kind, icon, color }
       if (editing) {
-        const { error: err } = await supabase.from('categories').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('categories').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('categories').insert({ ...payload, family_id: familyId, parent_id: parentId })
+        const { error: err } = await googleSheets.from('categories').insert({ ...payload, family_id: familyId, parent_id: parentId })
         if (err) throw err
       }
       onSaved()

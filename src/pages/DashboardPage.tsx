@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
-import type { Transaction, Category } from '../lib/types'
+import { googleSheets } from '../lib/googleSheets'
+import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDateShort, monthRange, monthLabel, currentMoscowDate } from '../lib/dates'
 import { Plus, TrendingUp, TrendingDown, Wallet, ArrowRight } from 'lucide-react'
@@ -12,6 +12,7 @@ export default function DashboardPage() {
   const { family, session } = useAuth()
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [now] = useState(currentMoscowDate)
   const [showAdd, setShowAdd] = useState(false)
   const [newTransactionType, setNewTransactionType] = useState<'expense' | 'income' | 'transfer'>('expense')
@@ -27,8 +28,8 @@ export default function DashboardPage() {
     setLoading(true)
     setError(null)
     try {
-      const [txRes, catRes] = await Promise.all([
-        supabase
+      const [txRes, catRes, accountRes] = await Promise.all([
+        googleSheets
           .from('transactions')
           .select('*')
           .eq('family_id', family.id)
@@ -36,12 +37,15 @@ export default function DashboardPage() {
           .lte('operation_date', range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        googleSheets.from('accounts').select('*').eq('family_id', family.id),
       ])
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
+      if (accountRes.error) throw accountRes.error
       setTxs(txRes.data as Transaction[])
       setCategories(catRes.data as Category[])
+      setAccounts(accountRes.data as Account[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
@@ -54,14 +58,14 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family?.id, range.start, range.end])
 
-  // Realtime: refresh when any transaction changes
+  // Polling: refresh when the adapter detects a changed transaction snapshot.
   useEffect(() => {
     if (!family) return
-    const channel = supabase
+    const channel = googleSheets
       .channel('dashboard-tx')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load())
+      .on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load())
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => { googleSheets.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family?.id])
 
@@ -72,6 +76,7 @@ export default function DashboardPage() {
   const plannedExpense = planned.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
   const recent = realized.slice(0, 6)
 
   const quickActions = [
@@ -108,7 +113,7 @@ export default function DashboardPage() {
         </div>
         <div className="card">
           <div className="flex items-center gap-2 text-slate-500 text-sm">
-            <Wallet size={16} className="text-primary-600" /> Остаток
+            <Wallet size={16} className="text-primary-600" /> Разница за месяц
           </div>
           <div className={`mt-1 text-2xl font-semibold ${income - expense >= 0 ? 'text-slate-900' : 'text-danger-600'}`}>
             {formatRubles(income - expense)}
@@ -157,15 +162,19 @@ export default function DashboardPage() {
             {recent.map((t) => {
               const cat = t.category_id ? catMap.get(t.category_id) : null
               const isIncome = t.type === 'income'
+              const isTransfer = t.type === 'transfer'
+              const operationLabel = isTransfer
+                ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}`
+                : `${formatDateShort(t.operation_date)} · ${cat?.name ?? 'Без категории'}`
               return (
                 <div key={t.id} className="card flex items-center gap-3 py-3">
                   <div className="text-xl w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">{cat?.icon ?? '📝'}</div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-slate-900 truncate">{t.description || cat?.name || 'Операция'}</div>
-                    <div className="text-xs text-slate-400">{formatDateShort(t.operation_date)} · {cat?.name ?? 'Без категории'}</div>
+                    <div className="text-xs text-slate-400">{operationLabel}</div>
                   </div>
-                  <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : 'text-slate-900'}`}>
-                    {isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
+                  <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : isTransfer ? 'text-primary-600' : 'text-slate-900'}`}>
+                    {isTransfer ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
                   </div>
                 </div>
               )
@@ -174,7 +183,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <TransactionForm open={showAdd} onClose={() => setShowAdd(false)} onSaved={load} categories={categories} userId={session?.user.id ?? null} initialType={newTransactionType} />
+      <TransactionForm open={showAdd} onClose={() => setShowAdd(false)} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} initialType={newTransactionType} />
     </div>
   )
 }

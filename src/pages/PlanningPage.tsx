@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { MonthlyPlan, Category, Transaction } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
@@ -28,9 +28,9 @@ export default function PlanningPage() {
     setLoading(true); setError(null)
     try {
       const [pRes, cRes, tRes] = await Promise.all([
-        supabase.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', monthDate),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-        supabase.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end),
+        googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', monthDate),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end),
       ])
       if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (tRes.error) throw tRes.error
       setPlans(pRes.data as MonthlyPlan[]); setCategories(cRes.data as Category[]); setTxs(tRes.data as Transaction[])
@@ -41,8 +41,8 @@ export default function PlanningPage() {
   useEffect(() => { load() }, [family?.id, monthDate])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('plan-page').on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_plans', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('plan-page').on('table_changes', { event: '*', schema: 'public', table: 'monthly_plans', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
@@ -67,23 +67,20 @@ export default function PlanningPage() {
 
   const copyFromPrev = async () => {
     if (!family) return
-    const { data: prevPlans, error } = await supabase.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', prevMonthDate)
+    const { data: prevPlans, error } = await googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', prevMonthDate)
     if (error) { setError(error.message); return }
     if (!prevPlans || prevPlans.length === 0) { setError('В предыдущем месяце нет планов для копирования'); return }
-    for (const p of prevPlans as MonthlyPlan[]) {
-      const { error: copyError } = await supabase.from('monthly_plans').upsert({
+    const { error: copyError } = await googleSheets.from('monthly_plans').upsert(
+      (prevPlans as MonthlyPlan[]).map((p) => ({
         family_id: family.id, month_date: monthDate, category_id: p.category_id, type: p.type, planned_kopecks: p.planned_kopecks, note: p.note,
-      }, { onConflict: 'family_id,month_date,category_id,type' })
-      if (copyError) {
-        setError(`Не удалось скопировать план «${TYPE_LABELS[p.type]}»: ${copyError.message}`)
-        await load()
-        return
-      }
-    }
+      })),
+      { onConflict: 'family_id,month_date,category_id,type' }
+    )
+    if (copyError) setError(`Не удалось скопировать планы: ${copyError.message}`)
     await load()
   }
 
-  const removePlan = async (p: MonthlyPlan) => { const { error: err } = await supabase.from('monthly_plans').delete().eq('id', p.id); if (err) setError(err.message); load() }
+  const removePlan = async (p: MonthlyPlan) => { const { error: err } = await googleSheets.from('monthly_plans').delete().eq('id', p.id); if (err) setError(err.message); load() }
 
   return (
     <div className="space-y-4">
@@ -158,7 +155,7 @@ function PlanForm({ open, onClose, onSaved, categories, familyId, monthDate }: {
     if (!amtK || amtK <= 0) { setError('Введите сумму больше нуля'); return }
     setSaving(true)
     try {
-      const { error: err } = await supabase.from('monthly_plans').upsert({
+      const { error: err } = await googleSheets.from('monthly_plans').upsert({
         family_id: familyId, month_date: monthDate, category_id: categoryId || null, type, planned_kopecks: amtK, note: note.trim(),
       }, { onConflict: 'family_id,month_date,category_id,type' })
       if (err) throw err

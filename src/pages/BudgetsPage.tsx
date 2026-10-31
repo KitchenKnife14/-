@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Budget, Category, Transaction } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
@@ -26,9 +26,9 @@ export default function BudgetsPage() {
     setLoading(true); setError(null)
     try {
       const [bRes, cRes, tRes] = await Promise.all([
-        supabase.from('budgets').select('*').eq('family_id', family.id).eq('month_date', monthDate),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-        supabase.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).eq('type', 'expense').gte('operation_date', range.start).lte('operation_date', range.end),
+        googleSheets.from('budgets').select('*').eq('family_id', family.id).eq('month_date', monthDate),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).eq('type', 'expense').gte('operation_date', range.start).lte('operation_date', range.end),
       ])
       if (bRes.error) throw bRes.error; if (cRes.error) throw cRes.error; if (tRes.error) throw tRes.error
       setBudgets(bRes.data as Budget[]); setCategories(cRes.data as Category[]); setTxs(tRes.data as Transaction[])
@@ -39,22 +39,33 @@ export default function BudgetsPage() {
   useEffect(() => { load() }, [family?.id, monthDate])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('bud-page').on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const budgetChannel = googleSheets.channel('bud-page-budgets').on('table_changes', { event: '*', schema: 'public', table: 'budgets', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const transactionChannel = googleSheets.channel('bud-page-transactions').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(budgetChannel); googleSheets.removeChannel(transactionChannel) }
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const spentByCat = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const t of txs) { if (t.category_id) m.set(t.category_id, (m.get(t.category_id) ?? 0) + t.amount_kopecks) }
-    return m
-  }, [txs])
+    const totals = new Map<string, number>()
+    for (const tx of txs) {
+      let categoryId = tx.category_id
+      const visited = new Set<string>()
+      while (categoryId && !visited.has(categoryId)) {
+        visited.add(categoryId)
+        const category = catMap.get(categoryId)
+        if (!category) break
+        totals.set(categoryId, (totals.get(categoryId) ?? 0) + tx.amount_kopecks)
+        categoryId = category.parent_id ?? null
+      }
+    }
+    return totals
+  }, [txs, catMap])
 
   const totalLimit = budgets.reduce((s, b) => s + b.limit_kopecks, 0)
   const totalSpent = budgets.reduce((s, b) => s + (spentByCat.get(b.category_id) ?? 0), 0)
   const totalPct = totalLimit > 0 ? (totalSpent / totalLimit) * 100 : 0
 
-  const remove = async (b: Budget) => { const { error: err } = await supabase.from('budgets').delete().eq('id', b.id); if (err) setError(err.message); load() }
+  const remove = async (b: Budget) => { const { error: err } = await googleSheets.from('budgets').delete().eq('id', b.id); if (err) setError(err.message); load() }
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
 
@@ -129,7 +140,7 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, e
     setError(null)
   }, [editing, open])
 
-  const expenseCats = categories.filter((c) => c.kind === 'expense' && !c.parent_id)
+  const expenseCats = categories.filter((c) => c.kind === 'expense' && !c.parent_id && !c.archived)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -142,10 +153,10 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, e
     try {
       const payload = { family_id: familyId, category_id: categoryId, month_date: monthDate, limit_kopecks: limK, warn_75: true, warn_90: true, warn_100: true }
       if (editing) {
-        const { error: err } = await supabase.from('budgets').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('budgets').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('budgets').insert(payload)
+        const { error: err } = await googleSheets.from('budgets').insert(payload)
         if (err) throw err
       }
       onSaved(); onClose()
