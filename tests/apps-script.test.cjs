@@ -662,3 +662,38 @@ test('recurring payment confirmation rejects a deterministic ID collision', () =
   const unchanged = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
   assert.equal(unchanged.next_due_date, '2026-11-01');
 });
+
+
+test('goal contribution upsert validates ownership and recalculates saved total', () => {
+  const h = makeHarness();
+  const owner = h.signup('goal-upsert-owner@example.com');
+  const outsider = h.signup('goal-upsert-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Цели' }).data;
+  const foreignFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Чужие цели' }).data;
+  const goal = h.call({
+    action: 'query', token: owner.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Отпуск', target_kopecks: 5000000 }
+  }).data[0];
+  const foreignGoal = h.call({
+    action: 'query', token: outsider.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: foreignFamily.id, name: 'Чужая цель', target_kopecks: 1000000 }
+  }).data[0];
+  const contribution = h.call({
+    action: 'query', token: owner.token, table: 'goal_contributions', mode: 'insert', returning: true,
+    values: { goal_id: goal.id, amount_kopecks: 100000, contribution_date: '2026-10-31' }
+  }).data[0];
+  const updated = h.call({
+    action: 'query', token: owner.token, table: 'goal_contributions', mode: 'upsert', onConflict: 'id',
+    values: { id: contribution.id, goal_id: goal.id, amount_kopecks: 250000, contribution_date: '2026-10-31' }
+  });
+  assert.equal(updated.error, null, updated.error?.message);
+  const saved = h.call({ action: 'query', token: owner.token, table: 'goals', mode: 'select' }).data[0];
+  assert.equal(Number(saved.saved_kopecks), 250000);
+  const rejected = h.call({
+    action: 'query', token: owner.token, table: 'goal_contributions', mode: 'upsert', onConflict: 'id',
+    values: { id: contribution.id, goal_id: foreignGoal.id, amount_kopecks: 300000, contribution_date: '2026-10-31' }
+  });
+  assert.match(rejected.error.message, /Нет доступа к этой цели/);
+  const unchanged = h.call({ action: 'query', token: owner.token, table: 'goals', mode: 'select' }).data[0];
+  assert.equal(Number(unchanged.saved_kopecks), 250000);
+});
