@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Chrome as Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users, Wallet } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 
 const navItems = [
   { to: '/', label: 'Главная', icon: Home, end: true },
@@ -22,7 +22,7 @@ const navItems = [
 export default function Layout() {
   const { profile, family } = useAuth()
   const navigate = useNavigate()
-  const signOut = async () => { await supabase.auth.signOut(); navigate('/') }
+  const signOut = async () => { await googleSheets.auth.signOut(); navigate('/') }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
