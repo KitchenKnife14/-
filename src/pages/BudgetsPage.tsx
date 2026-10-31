@@ -27,7 +27,7 @@ export default function BudgetsPage() {
     try {
       const [bRes, cRes, tRes] = await Promise.all([
         supabase.from('budgets').select('*').eq('family_id', family.id).eq('month_date', monthDate),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        supabase.from('categories').select('*').eq('family_id', family.id),
         supabase.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).eq('type', 'expense').gte('operation_date', range.start).lte('operation_date', range.end),
       ])
       if (bRes.error) throw bRes.error; if (cRes.error) throw cRes.error; if (tRes.error) throw tRes.error
@@ -140,7 +140,7 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, e
     setError(null)
   }, [editing, open])
 
-  const expenseCats = categories.filter((c) => c.kind === 'expense' && !c.parent_id)
+  const expenseCats = categories.filter((c) => c.kind === 'expense' && !c.parent_id && !c.archived)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
