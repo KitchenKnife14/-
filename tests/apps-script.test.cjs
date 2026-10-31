@@ -49,7 +49,8 @@ function makeHarness() {
     appendRow(row) { this.getRange(this.getLastRow() + 1, 1, 1, row.length).setValues([row]); }
     getMaxRows() { return this.maxRows; }
     insertRowsAfter(after, howMany) { this.maxRows += howMany; return this; }
-    deleteRow(row) { this.cells.splice(row - 1, 1); return this; }
+    deleteRow(row) { this.cells.splice(row - 1, 1); this.maxRows -= 1; return this; }
+    deleteRows(row, howMany) { this.cells.splice(row - 1, howMany); this.maxRows -= howMany; return this; }
     setFrozenRows() {}
     hideSheet() {}
   }
