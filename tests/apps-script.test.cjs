@@ -953,3 +953,20 @@ test('monthly plan bulk upsert inserts and updates multiple rows in one logical 
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((row) => Number(row.planned_kopecks)).sort((a, b) => a - b), [15000, 25000]);
 });
+
+test('transaction inserts append rows without replacing existing ledger entries', () => {
+  const h = makeHarness();
+  const user = h.signup('append-transaction@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Добавление операций' }).data;
+  for (const [description, amount] of [['Первый расход', 1200], ['Второй расход', 3400], ['Третий расход', 5600]]) {
+    const inserted = h.call({
+      action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+      values: { family_id: family.id, type: 'expense', amount_kopecks: amount, operation_date: '2026-10-31', description }
+    });
+    assert.equal(inserted.error, null, inserted.error?.message);
+  }
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map(row => row.description), ['Первый расход', 'Второй расход', 'Третий расход']);
+  assert.deepEqual(rows.map(row => Number(row.amount_kopecks)), [1200, 3400, 5600]);
+});
