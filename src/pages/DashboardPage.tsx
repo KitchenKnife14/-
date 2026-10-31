@@ -63,7 +63,7 @@ export default function DashboardPage() {
     if (!family) return
     const channel = googleSheets
       .channel('dashboard-tx')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load())
+      .on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load())
       .subscribe()
     return () => { googleSheets.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
