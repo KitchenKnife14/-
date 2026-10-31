@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 
 export default function OnboardingPage() {
   const { session, profile, refresh } = useAuth()
@@ -21,7 +21,7 @@ export default function OnboardingPage() {
       if (!session?.user) throw new Error('Нет сессии')
       if (mode === 'create') {
         if (!familyName.trim()) throw new Error('Введите название семьи')
-        const { error: createErr } = await supabase.rpc('create_family', {
+        const { error: createErr } = await googleSheets.rpc('create_family', {
           p_name: familyName.trim(),
           p_display_name: userName.trim(),
         })
@@ -29,7 +29,7 @@ export default function OnboardingPage() {
       } else {
         const code = inviteCode.trim().toUpperCase()
         if (!code) throw new Error('Введите код приглашения')
-        const { error: joinErr } = await supabase.rpc('join_family_by_invite', {
+        const { error: joinErr } = await googleSheets.rpc('join_family_by_invite', {
           p_invite_code: code,
           p_display_name: userName.trim(),
         })
