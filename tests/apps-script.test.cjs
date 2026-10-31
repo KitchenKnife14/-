@@ -1090,3 +1090,32 @@ test('planned purchase confirmation updates only its row', () => {
   assert.equal(targetedUpdates, 1);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0].status, 'bought');
 });
+
+test('PBKDF2-HMAC-SHA256 matches Node crypto for Unicode and SHA-256 block boundaries', () => {
+  const h = makeHarness();
+  const vectors = [
+    ['password', 'salt', 1], ['password', 'salt', 2], ['password', 'salt', 4096],
+    ['пароль', 'соль', 2], ['пароль😀', 'соль🔐', 30],
+    ['a'.repeat(55), 'salt', 2], ['a'.repeat(56), 'salt', 2],
+    ['a'.repeat(63), 'salt', 2], ['a'.repeat(64), 'salt', 2],
+    ['a'.repeat(65), 'salt', 2], ['a'.repeat(100), 'salt', 2]
+  ];
+  for (const [password, salt, iterations] of vectors) {
+    const expected = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256').toString('hex');
+    assert.equal(h.context.pbkdf2Hex_(password, salt, iterations), expected);
+  }
+});
+
+test('new accounts store PBKDF2 hashes and legacy accounts migrate after successful sign-in', () => {
+  const h = makeHarness();
+  const created = h.signup('password-migration@example.com');
+  let row = h.context.authRows_().find(user => user.id === created.user.id);
+  assert.match(row.hash, /^p2\\$30000\\$[0-9a-f]{64}$/);
+
+  const legacy = h.context.hash_('correct-horse-battery', row.salt);
+  h.context.authSheet_().getRange(row.row, 4, 1, 1).setValues([[legacy]]);
+  const signin = h.call({ action: 'signin', email: 'password-migration@example.com', password: 'correct-horse-battery' });
+  assert.equal(signin.error, null, signin.error?.message);
+  row = h.context.authRows_().find(user => user.id === created.user.id);
+  assert.match(row.hash, /^p2\\$30000\\$[0-9a-f]{64}$/);
+});
