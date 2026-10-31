@@ -697,3 +697,32 @@ test('goal contribution upsert validates ownership and recalculates saved total'
   const unchanged = h.call({ action: 'query', token: owner.token, table: 'goals', mode: 'select' }).data[0];
   assert.equal(Number(unchanged.saved_kopecks), 250000);
 });
+
+test('deleting a purchase transaction unlinks the purchase and restores planned status', () => {
+  const h = makeHarness();
+  const user = h.signup('purchase-delete-link@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Связь покупки' }).data;
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Телевизор', estimated_kopecks: 5500000, status: 'planned' }
+  }).data[0];
+  const confirmed = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' }
+  });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+  const transactionId = confirmed.data.transaction_id;
+  const bought = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  assert.equal(bought.status, 'bought');
+  assert.equal(bought.linked_transaction_id, transactionId);
+
+  const removed = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: transactionId }]
+  });
+  assert.equal(removed.error, null, removed.error?.message);
+  const restored = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  assert.equal(restored.status, 'planned');
+  assert.equal(restored.linked_transaction_id, '');
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
+});
