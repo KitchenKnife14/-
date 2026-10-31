@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Chrome as Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users } from 'lucide-react'
+import { Chrome as Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users, Wallet } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
 
 const navItems = [
   { to: '/', label: 'Главная', icon: Home, end: true },
   { to: '/transactions', label: 'Операции', icon: ListTree, end: false },
+  { to: '/accounts', label: 'Счета', icon: Wallet, end: false },
   { to: '/calendar', label: 'Календарь', icon: Calendar, end: false },
   { to: '/recurring', label: 'Регулярные', icon: Repeat, end: false },
   { to: '/budgets', label: 'Бюджеты', icon: Target, end: false },
