@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDateShort, monthRange, monthLabel, currentMoscowDate } from '../lib/dates'
@@ -29,7 +29,7 @@ export default function DashboardPage() {
     setError(null)
     try {
       const [txRes, catRes, accountRes] = await Promise.all([
-        supabase
+        googleSheets
           .from('transactions')
           .select('*')
           .eq('family_id', family.id)
@@ -37,8 +37,8 @@ export default function DashboardPage() {
           .lte('operation_date', range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-        supabase.from('accounts').select('*').eq('family_id', family.id),
+        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('accounts').select('*').eq('family_id', family.id),
       ])
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
@@ -61,11 +61,11 @@ export default function DashboardPage() {
   // Realtime: refresh when any transaction changes
   useEffect(() => {
     if (!family) return
-    const channel = supabase
+    const channel = googleSheets
       .channel('dashboard-tx')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load())
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => { googleSheets.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family?.id])
 
