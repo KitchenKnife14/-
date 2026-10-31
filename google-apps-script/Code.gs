@@ -106,8 +106,8 @@ function appendRows_(name, data) {
   const sh=sheet_(name), cols=TABLES[name], start=sh.getLastRow()+1;
   const need=start+data.length-1;
   if(sh.getMaxRows()<need){sh.insertRowsAfter(sh.getMaxRows(),need-sh.getMaxRows()+500);formatSheet_(sh,name);}
-  sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
   delete ROWS_CACHE[name];
+  sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
 }
 function writeRows_(name, data) {
   const sh=sheet_(name), cols=TABLES[name];
