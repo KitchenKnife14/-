@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
-import type { PlannedPurchase, Category, Goal } from '../lib/types'
+import type { PlannedPurchase, Category, Goal, Account } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
@@ -18,6 +18,8 @@ export default function PurchasesPage() {
   const [items, setItems] = useState<PlannedPurchase[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [buyAccountId, setBuyAccountId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -30,13 +32,14 @@ export default function PurchasesPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [pRes, cRes, gRes] = await Promise.all([
+      const [pRes, cRes, gRes, aRes] = await Promise.all([
         googleSheets.from('planned_purchases').select('*').eq('family_id', family.id).order('created_at', { ascending: false }),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
         googleSheets.from('goals').select('*').eq('family_id', family.id),
+        googleSheets.from('accounts').select('*').eq('family_id', family.id),
       ])
-      if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (gRes.error) throw gRes.error
-      setItems(pRes.data as PlannedPurchase[]); setCategories(cRes.data as Category[]); setGoals(gRes.data as Goal[])
+      if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (gRes.error) throw gRes.error; if (aRes.error) throw aRes.error
+      setItems(pRes.data as PlannedPurchase[]); setCategories(cRes.data as Category[]); setGoals(gRes.data as Goal[]); setAccounts(aRes.data as Account[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
   }
@@ -71,6 +74,7 @@ export default function PurchasesPage() {
       const { error: buyError } = await googleSheets.rpc('confirm_planned_purchase', {
         p_purchase_id: buying.id,
         p_operation_date: todayISO(),
+        p_account_id: buyAccountId || null,
       })
       if (buyError) throw buyError
       setBuying(null)
@@ -123,7 +127,7 @@ export default function PurchasesPage() {
                   </div>
                   <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(p.estimated_kopecks)}</div>
                   <div className="flex gap-1 flex-shrink-0">
-                    {p.status !== 'bought' && <button onClick={() => setBuying(p)} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
+                    {p.status !== 'bought' && <button onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
                     <button onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
                     <button onClick={() => remove(p)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                   </div>
@@ -136,7 +140,8 @@ export default function PurchasesPage() {
       <PurchaseForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} categories={categories} goals={goals} familyId={family?.id ?? null} userId={session?.user.id ?? null} editing={editing} />
       <Modal open={!!buying} onClose={() => setBuying(null)} title="Отметить как купленное?">
         <p className="text-sm text-slate-600 mb-2">Будет создан фактический расход на сумму <strong>{formatRubles(buying?.estimated_kopecks ?? 0)}</strong>. Покупка получит статус «Куплено».</p>
-        <p className="text-xs text-slate-400 mb-4">Расход не будет учтён дважды — он заменит плановую стоимость, а не добавится поверх.</p>
+        <p className="text-xs text-slate-400 mb-3">Расход не будет учтён дважды — он заменит плановую стоимость, а не добавится поверх.</p>
+        <div className="mb-4"><label className="label">Списать со счёта</label><select className="input" value={buyAccountId} onChange={(e) => setBuyAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.filter((a) => !a.archived).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         <div className="flex gap-2"><button onClick={() => setBuying(null)} className="btn-secondary flex-1">Отмена</button><button onClick={confirmBuy} className="btn-primary flex-1">Подтвердить покупку</button></div>
       </Modal>
     </div>
