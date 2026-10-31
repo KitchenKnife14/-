@@ -598,14 +598,14 @@ function query_(req,user){
 }
 function rollbackFamily_(familyId){
   const id=String(familyId), failures=[];
-  [['categories',r=>String(r.family_id)!==id],['family_members',r=>String(r.family_id)!==id],['families',r=>String(r.id)!==id]]
-    .forEach(u=>{try{writeRows_(u[0],rows_(u[0]).filter(u[1]));}catch(err){failures.push(u[0]+': '+(err&&err.message?err.message:String(err)));}});
+  [['categories',r=>String(r.family_id)===id],['family_members',r=>String(r.family_id)===id],['families',r=>String(r.id)===id]]
+    .forEach(u=>{try{deleteRows_(u[0],rows_(u[0]).filter(u[1]));}catch(err){failures.push(u[0]+': '+(err&&err.message?err.message:String(err)));}});
   if(failures.length)throw new Error('Не удалось полностью отменить создание семьи: '+failures.join('; '));
 }
 function strip_(r){const o=Object.assign({},r);delete o.__row;return o;}
 function seedCategories_(familyId){
- const cats=rows_('categories'),t=now_(),fid=String(familyId),have=cats.filter(c=>String(c.family_id)===fid);
- DEFAULT_CATEGORIES.forEach((p,i)=>{let parent=have.find(c=>!c.parent_id&&c.name===p.name&&c.kind===p.kind);if(!parent){parent={id:id_(),family_id:familyId,parent_id:null,name:p.name,kind:p.kind,icon:p.icon,color:p.color,archived:false,sort_order:i,created_at:t};cats.push(parent);have.push(parent)}(p.children||[]).forEach((c,k)=>{if(have.some(x=>String(x.parent_id)===String(parent.id)&&x.name===c.name))return;const row={id:id_(),family_id:familyId,parent_id:parent.id,name:c.name,kind:p.kind,icon:c.icon,color:c.color,archived:false,sort_order:k,created_at:t};cats.push(row);have.push(row)})});writeRows_('categories',cats);
+ const t=now_(),fid=String(familyId),have=rows_('categories').filter(c=>String(c.family_id)===fid),created=[];
+ DEFAULT_CATEGORIES.forEach((p,i)=>{let parent=have.find(c=>!c.parent_id&&c.name===p.name&&c.kind===p.kind);if(!parent){parent={id:id_(),family_id:familyId,parent_id:null,name:p.name,kind:p.kind,icon:p.icon,color:p.color,archived:false,sort_order:i,created_at:t};created.push(parent);have.push(parent)}(p.children||[]).forEach((c,k)=>{if(have.some(x=>String(x.parent_id)===String(parent.id)&&x.name===c.name))return;const row={id:id_(),family_id:familyId,parent_id:parent.id,name:c.name,kind:p.kind,icon:c.icon,color:c.color,archived:false,sort_order:k,created_at:t};created.push(row);have.push(row)})});appendRows_('categories',created);
 }
 function syncGoalTotals_(goalIds){
   const ids=[...new Set((goalIds||[]).filter(Boolean).map(String))];
