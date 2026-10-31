@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
-import type { Transaction, Category } from '../lib/types'
+import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
 import { Plus, Search, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -12,6 +12,7 @@ export default function TransactionsPage() {
   const { family, session } = useAuth()
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [cursor, setCursor] = useState(currentMoscowMonth)
@@ -28,7 +29,7 @@ export default function TransactionsPage() {
     setLoading(true)
     setError(null)
     try {
-      const [txRes, catRes] = await Promise.all([
+      const [txRes, catRes, accountRes] = await Promise.all([
         supabase
           .from('transactions')
           .select('*')
@@ -37,12 +38,15 @@ export default function TransactionsPage() {
           .lte('operation_date', range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        supabase.from('categories').select('*').eq('family_id', family.id),
+        supabase.from('accounts').select('*').eq('family_id', family.id),
       ])
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
+      if (accountRes.error) throw accountRes.error
       setTxs(txRes.data as Transaction[])
-      setCategories(catRes.data as Category[])
+      setCategories((catRes.data as Category[]).filter(c => !c.archived))
+      setAccounts(accountRes.data as Account[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
@@ -58,6 +62,7 @@ export default function TransactionsPage() {
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
 
   const filtered = txs.filter((t) => {
     if (typeFilter !== 'all' && t.type !== typeFilter) return false
@@ -136,13 +141,13 @@ export default function TransactionsPage() {
                     {t.description || cat?.name || 'Операция'}
                     {t.planned && <span className="ml-2 badge bg-warn-100 text-warn-600">план</span>}
                   </div>
-                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {cat?.name ?? 'Без категории'}</div>
+                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {t.type === 'transfer' ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}` : `${cat?.name ?? 'Без категории'} · ${accountMap.get(t.account_id ?? '') ?? 'Без счёта'}`}</div>
                 </div>
                 <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : 'text-slate-900'}`}>
-                  {isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
+                  {t.type === 'transfer' ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, description: t.description, planned: t.planned }); setShowAdd(true) }} className="btn-ghost px-2" aria-label="Изменить">
+                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned }); setShowAdd(true) }} className="btn-ghost px-2" aria-label="Изменить">
                     <Pencil size={16} />
                   </button>
                   <button onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label="Удалить">
