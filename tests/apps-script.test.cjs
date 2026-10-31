@@ -1031,3 +1031,48 @@ test('goal contribution recalculation updates only affected goal rows', () => {
   assert.equal(Number(saved.find(g => g.id === goals[0].id).saved_kopecks), 12500);
   assert.equal(Number(saved.find(g => g.id === goals[1].id).saved_kopecks), 0);
 });
+
+test('family creation appends rows instead of rewriting existing sheets', () => {
+  const h = makeHarness();
+  const user = h.signup('append-family@example.com');
+  const rewrites = [];
+  const originalWriteRows = h.context.writeRows_;
+  h.context.writeRows_ = function(table, rows) {
+    if (['families', 'family_members', 'categories', 'profiles'].includes(table)) rewrites.push(table);
+    return originalWriteRows(table, rows);
+  };
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Добавление без переписи' });
+  assert.equal(family.error, null, family.error?.message);
+  assert.deepEqual(rewrites, []);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data.length > 80, true);
+});
+
+test('planned purchase confirmation updates only its row', () => {
+  const h = makeHarness();
+  const user = h.signup('purchase-targeted-update@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Точечное подтверждение' }).data;
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Велосипед', estimated_kopecks: 2000000, status: 'planned' }
+  }).data[0];
+  let fullRewrites = 0;
+  let targetedUpdates = 0;
+  const originalWriteRows = h.context.writeRows_;
+  const originalUpdateRows = h.context.updateRows_;
+  h.context.writeRows_ = function(table, rows) {
+    if (table === 'planned_purchases') fullRewrites++;
+    return originalWriteRows(table, rows);
+  };
+  h.context.updateRows_ = function(table, rows) {
+    if (table === 'planned_purchases') targetedUpdates += rows.length;
+    return originalUpdateRows(table, rows);
+  };
+  const result = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' }
+  });
+  assert.equal(result.error, null, result.error?.message);
+  assert.equal(fullRewrites, 0);
+  assert.equal(targetedUpdates, 1);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0].status, 'bought');
+});
