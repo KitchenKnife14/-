@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
@@ -25,7 +25,7 @@ export default function GoalsPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const { data, error: err } = await supabase.from('goals').select('*').eq('family_id', family.id).order('created_at', { ascending: false })
+      const { data, error: err } = await googleSheets.from('goals').select('*').eq('family_id', family.id).order('created_at', { ascending: false })
       if (err) throw err
       setGoals(data as Goal[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
@@ -35,22 +35,22 @@ export default function GoalsPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('goals-page').on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('goals-page').on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
-  const remove = async (g: Goal) => { const { error: err } = await supabase.from('goals').delete().eq('id', g.id); if (err) setError(err.message); load() }
+  const remove = async (g: Goal) => { const { error: err } = await googleSheets.from('goals').delete().eq('id', g.id); if (err) setError(err.message); load() }
   const toggleStatus = async (g: Goal) => {
     const newStatus = g.status === 'active' ? 'paused' : g.status === 'paused' ? 'active' : g.status
     if (newStatus === g.status) return
-    const { error: err } = await supabase.from('goals').update({ status: newStatus }).eq('id', g.id)
+    const { error: err } = await googleSheets.from('goals').update({ status: newStatus }).eq('id', g.id)
     if (err) setError(err.message); load()
   }
-  const markDone = async (g: Goal) => { const { error: err } = await supabase.from('goals').update({ status: 'done' }).eq('id', g.id); if (err) setError(err.message); load() }
+  const markDone = async (g: Goal) => { const { error: err } = await googleSheets.from('goals').update({ status: 'done' }).eq('id', g.id); if (err) setError(err.message); load() }
 
   const showHistory = async (g: Goal) => {
     setHistoryGoal(g)
-    const { data, error: err } = await supabase.from('goal_contributions').select('*').eq('goal_id', g.id).order('contribution_date', { ascending: false })
+    const { data, error: err } = await googleSheets.from('goal_contributions').select('*').eq('goal_id', g.id).order('contribution_date', { ascending: false })
     if (err) { setError(err.message); return }
     setContributions(data as GoalContribution[])
   }
@@ -147,10 +147,10 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
     try {
       const payload = { name: name.trim(), description: description.trim(), target_kopecks: targetK, target_date: targetDate || null, priority: parseInt(priority) }
       if (editing) {
-        const { error: err } = await supabase.from('goals').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('goals').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('goals').insert({ ...payload, family_id: familyId, saved_kopecks: 0, status: 'active' })
+        const { error: err } = await googleSheets.from('goals').insert({ ...payload, family_id: familyId, saved_kopecks: 0, status: 'active' })
         if (err) throw err
       }
       onSaved(); onClose()
@@ -192,8 +192,8 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
     if (!amt || amt === 0) { setError('Введите сумму'); return }
     setSaving(true)
     try {
-      const { data: prof } = await supabase.auth.getUser()
-      const { error: err } = await supabase.from('goal_contributions').insert({
+      const { data: prof } = await googleSheets.auth.getUser()
+      const { error: err } = await googleSheets.from('goal_contributions').insert({
         goal_id: goal.id, amount_kopecks: amt, contribution_date: date, note: note.trim(), created_by: prof.user?.id ?? null,
       })
       if (err) throw err
