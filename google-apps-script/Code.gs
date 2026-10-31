@@ -413,7 +413,15 @@ function rpc_(req,user){
     const transactionId='purchase_'+purchase.id;
     const txs=rows_('transactions');
     let tx=txs.find(x=>String(x.id)===transactionId);
-    if(tx && String(tx.family_id)!==String(purchase.family_id))throw new Error('Конфликт ID операции');
+    if(tx && (
+      String(tx.family_id)!==String(purchase.family_id) ||
+      tx.type!=='expense' ||
+      Number(tx.amount_kopecks)!==Number(purchase.estimated_kopecks) ||
+      String(tx.category_id||'')!==String(purchase.category_id||'') ||
+      String(tx.description||'')!==String(purchase.name||'') ||
+      String(tx.parent_recurring_id||'')!==''
+    ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
+    if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
     if(!tx){
       tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
       txs.push(tx);
@@ -430,8 +438,18 @@ function rpc_(req,user){
     if(r.next_due_date!==p.p_expected_due_date)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
     if(r.end_date && r.next_due_date>r.end_date){r.active=false;writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;}
     const txs=rows_('transactions'), transactionId='recurring_'+r.id+'_'+r.next_due_date;
-    // Deterministic ID makes retries safe if the transaction was written but the due date update failed.
-    if(!txs.some(t=>String(t.id)===transactionId))txs.push({id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()});
+    // Deterministic ID makes retries safe only when the existing row is the same recurring occurrence.
+    const existingTx=txs.find(t=>String(t.id)===transactionId);
+    if(existingTx && (
+      String(existingTx.family_id)!==String(r.family_id) ||
+      String(existingTx.parent_recurring_id||'')!==String(r.id) ||
+      String(existingTx.type)!==String(r.type) ||
+      Number(existingTx.amount_kopecks)!==Number(r.amount_kopecks) ||
+      String(existingTx.category_id||'')!==String(r.category_id||'') ||
+      String(existingTx.account_id||'')!==String(r.account_id||'') ||
+      String(existingTx.description||'')!==String(r.description||'')
+    ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
+    if(!existingTx)txs.push({id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()});
     writeRows_('transactions',txs);
     r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days);
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
