@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
 import { formatRubles, rublesToKopecks } from '../lib/money'
 import { calculateAccountBalances } from '../lib/accountBalances.js'
@@ -29,8 +29,8 @@ export default function AccountsPage() {
     setError(null)
     try {
       const [accountRes, txRes] = await Promise.all([
-        supabase.from('accounts').select('*').eq('family_id', family.id).order('created_at', { ascending: true }),
-        supabase.from('transactions').select('*').eq('family_id', family.id),
+        googleSheets.from('accounts').select('*').eq('family_id', family.id).order('created_at', { ascending: true }),
+        googleSheets.from('transactions').select('*').eq('family_id', family.id),
       ])
       if (accountRes.error) throw accountRes.error
       if (txRes.error) throw txRes.error
@@ -46,9 +46,9 @@ export default function AccountsPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const accountsChannel = supabase.channel('accounts-page-accounts').on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    const transactionsChannel = supabase.channel('accounts-page-transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(accountsChannel); supabase.removeChannel(transactionsChannel) }
+    const accountsChannel = googleSheets.channel('accounts-page-accounts').on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const transactionsChannel = googleSheets.channel('accounts-page-transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(accountsChannel); googleSheets.removeChannel(transactionsChannel) }
   }, [family?.id])
 
   const balances = useMemo(() => calculateAccountBalances(accounts, transactions), [accounts, transactions])
@@ -72,8 +72,8 @@ export default function AccountsPage() {
     try {
       const payload = { family_id: family.id, name: normalizedName, kind, starting_balance_kopecks: balance }
       const result = editing
-        ? await supabase.from('accounts').update(payload).eq('id', editing.id)
-        : await supabase.from('accounts').insert(payload)
+        ? await googleSheets.from('accounts').update(payload).eq('id', editing.id)
+        : await googleSheets.from('accounts').insert(payload)
       if (result.error) throw result.error
       setModalOpen(false)
       await load()
@@ -83,7 +83,7 @@ export default function AccountsPage() {
   }
 
   const toggleArchived = async (account: Account) => {
-    const { error: err } = await supabase.from('accounts').update({ archived: !account.archived }).eq('id', account.id)
+    const { error: err } = await googleSheets.from('accounts').update({ archived: !account.archived }).eq('id', account.id)
     if (err) setError(err.message)
     else await load()
   }
