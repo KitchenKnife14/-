@@ -574,3 +574,50 @@ test('upsert cannot create a duplicate ID belonging to another family', () => {
   assert.equal(visible.length, 1);
   assert.equal(visible[0].family_id, familyA.id);
 });
+
+
+test('transactions cannot reference a category or account from another family', () => {
+  const h = makeHarness();
+  const a = h.signup('relation-a@example.com');
+  const b = h.signup('relation-b@example.com');
+  const fa = h.call({ action: 'createFamily', token: a.token, name: 'Семья A' }).data;
+  const fb = h.call({ action: 'createFamily', token: b.token, name: 'Семья B' }).data;
+  const foreignCategory = h.call({ action: 'query', token: b.token, table: 'categories', mode: 'select' }).data[0];
+  const foreignAccount = h.call({
+    action: 'query', token: b.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: fb.id, name: 'Чужой счёт', kind: 'cash', starting_balance_kopecks: 0 }
+  }).data[0];
+  const byCategory = h.call({
+    action: 'query', token: a.token, table: 'transactions', mode: 'insert',
+    values: { family_id: fa.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-10-31', category_id: foreignCategory.id }
+  });
+  assert.match(byCategory.error.message, /Категория не найдена в этой семье/);
+  const byAccount = h.call({
+    action: 'query', token: a.token, table: 'transactions', mode: 'insert',
+    values: { family_id: fa.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-10-31', account_id: foreignAccount.id }
+  });
+  assert.match(byAccount.error.message, /Счёт списания не найдена в этой семье/);
+});
+
+test('transaction update cannot attach a foreign category or rewrite created_at', () => {
+  const h = makeHarness();
+  const a = h.signup('relation-update-a@example.com');
+  const b = h.signup('relation-update-b@example.com');
+  const fa = h.call({ action: 'createFamily', token: a.token, name: 'Семья A' }).data;
+  h.call({ action: 'createFamily', token: b.token, name: 'Семья B' });
+  const foreignCategory = h.call({ action: 'query', token: b.token, table: 'categories', mode: 'select' }).data[0];
+  const created = h.call({
+    action: 'query', token: a.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: fa.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-10-31' }
+  }).data[0];
+  const categoryUpdate = h.call({
+    action: 'query', token: a.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: created.id }], values: { category_id: foreignCategory.id }
+  });
+  assert.match(categoryUpdate.error.message, /Категория не найдена в этой семье/);
+  const timestampUpdate = h.call({
+    action: 'query', token: a.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: created.id }], values: { created_at: '1999-01-01T00:00:00.000Z' }
+  });
+  assert.match(timestampUpdate.error.message, /Нельзя менять дату создания записи/);
+});
