@@ -468,6 +468,12 @@ function rpc_(req,user){
     const purchase=purchases.find(x=>String(x.id)===id&&canAccessRow_('planned_purchases',x,user));
     if(!purchase)throw new Error('Планируемая покупка не найдена');
     const transactionId='purchase_'+purchase.id;
+    const accountId=String(p.p_account_id||'');
+    if(accountId){
+      const account=rows_('accounts').find(x=>String(x.id)===accountId&&canAccessRow_('accounts',x,user));
+      if(!account||String(account.family_id)!==String(purchase.family_id))throw new Error('Выбранный счёт не найден в этой семье');
+      if(account.archived)throw new Error('Нельзя списать покупку с архивного счёта');
+    }
     const txs=rows_('transactions');
     let tx=txs.find(x=>String(x.id)===transactionId);
     if(tx && (
@@ -476,11 +482,12 @@ function rpc_(req,user){
       Number(tx.amount_kopecks)!==Number(purchase.estimated_kopecks) ||
       String(tx.category_id||'')!==String(purchase.category_id||'') ||
       String(tx.description||'')!==String(purchase.name||'') ||
+      String(tx.account_id||'')!==accountId ||
       String(tx.parent_recurring_id||'')!==''
     ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
     if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
     if(!tx){
-      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
+      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
       txs.push(tx);
       writeRows_('transactions',txs);
     }
