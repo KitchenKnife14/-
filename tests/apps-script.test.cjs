@@ -844,6 +844,23 @@ test('transfers require two distinct family accounts and referenced accounts can
     values: { family_id: family.id, type: 'transfer', amount_kopecks: 2500, operation_date: '2026-10-31', account_id: from.data[0].id, to_account_id: to.data[0].id, planned: false }
   });
   assert.equal(valid.error, null, valid.error?.message);
+  const transferId = valid.data[0].id;
+  const edited = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: transferId }],
+    values: { amount_kopecks: 3200 }
+  });
+  assert.equal(edited.error, null, edited.error?.message);
+  const afterEdit = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(afterEdit.amount_kopecks, 3200);
+  assert.equal(afterEdit.account_id, from.data[0].id);
+  assert.equal(afterEdit.to_account_id, to.data[0].id);
+  const removedTransfer = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: transferId }]
+  });
+  assert.equal(removedTransfer.error, null, removedTransfer.error?.message);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
   const deletion = h.call({
     action: 'query', token: user.token, table: 'accounts', mode: 'delete',
     filters: [{ column: 'id', op: 'eq', value: from.data[0].id }]
