@@ -494,9 +494,9 @@ function syncGoalTotals_(goalIds){
   const contributions=rows_('goal_contributions'), goals=rows_('goals');
   const totals=new Map(ids.map(id=>[id,0]));
   contributions.forEach(c=>{const key=String(c.goal_id);if(totals.has(key))totals.set(key,totals.get(key)+Number(c.amount_kopecks||0));});
-  let changed=false;
-  goals.forEach(g=>{const key=String(g.id);if(totals.has(key)){g.saved_kopecks=totals.get(key);changed=true;}});
-  if(changed)writeRows_('goals',goals);
+  const changed=[];
+  goals.forEach(g=>{const key=String(g.id);if(totals.has(key)){const next=Number(totals.get(key));if(Number(g.saved_kopecks||0)!==next){g.saved_kopecks=next;changed.push(g);}}});
+  if(changed.length)updateRows_('goals',changed);
 }
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
