@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { PlannedPurchase, Category, Goal } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
@@ -31,9 +31,9 @@ export default function PurchasesPage() {
     setLoading(true); setError(null)
     try {
       const [pRes, cRes, gRes] = await Promise.all([
-        supabase.from('planned_purchases').select('*').eq('family_id', family.id).order('created_at', { ascending: false }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-        supabase.from('goals').select('*').eq('family_id', family.id),
+        googleSheets.from('planned_purchases').select('*').eq('family_id', family.id).order('created_at', { ascending: false }),
+        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('goals').select('*').eq('family_id', family.id),
       ])
       if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (gRes.error) throw gRes.error
       setItems(pRes.data as PlannedPurchase[]); setCategories(cRes.data as Category[]); setGoals(gRes.data as Goal[])
@@ -44,8 +44,8 @@ export default function PurchasesPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('pp-page').on('postgres_changes', { event: '*', schema: 'public', table: 'planned_purchases', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('pp-page').on('postgres_changes', { event: '*', schema: 'public', table: 'planned_purchases', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
@@ -62,13 +62,13 @@ export default function PurchasesPage() {
   })
 
   const totalEstimated = filtered.filter((p) => p.status !== 'bought' && p.status !== 'cancelled').reduce((s, p) => s + p.estimated_kopecks, 0)
-  const remove = async (p: PlannedPurchase) => { const { error: err } = await supabase.from('planned_purchases').delete().eq('id', p.id); if (err) setError(err.message); load() }
+  const remove = async (p: PlannedPurchase) => { const { error: err } = await googleSheets.from('planned_purchases').delete().eq('id', p.id); if (err) setError(err.message); load() }
 
   const confirmBuy = async () => {
     if (!buying || !family || !session?.user) return
     setError(null)
     try {
-      const { error: buyError } = await supabase.rpc('confirm_planned_purchase', {
+      const { error: buyError } = await googleSheets.rpc('confirm_planned_purchase', {
         p_purchase_id: buying.id,
         p_operation_date: todayISO(),
       })
@@ -179,10 +179,10 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
         desired_date: desiredDate || null, url: url.trim(), comment: comment.trim(), status, goal_id: goalId || null,
       }
       if (editing) {
-        const { error: err } = await supabase.from('planned_purchases').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('planned_purchases').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await supabase.from('planned_purchases').insert({ ...payload, family_id: familyId, created_by: userId })
+        const { error: err } = await googleSheets.from('planned_purchases').insert({ ...payload, family_id: familyId, created_by: userId })
         if (err) throw err
       }
       onSaved(); onClose()
