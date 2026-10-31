@@ -331,6 +331,17 @@ function query_(req,user){
       }else keep.push(r);
     });
     writeRows_(table,keep);
+    if(table==='recurring_payments'&&mode==='delete'&&changed.length){
+      const deletedIds=new Set(changed.map(payment=>String(payment.id)));
+      const transactions=rows_('transactions');let transactionsChanged=false;
+      transactions.forEach(tx=>{
+        if(tx.parent_recurring_id&&deletedIds.has(String(tx.parent_recurring_id))){
+          tx.parent_recurring_id='';
+          transactionsChanged=true;
+        }
+      });
+      if(transactionsChanged)writeRows_('transactions',transactions);
+    }
     if(table==='transactions'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(tx=>String(tx.id)));
       const purchases=rows_('planned_purchases');let purchasesChanged=false;
