@@ -1,10 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets, type GoogleGoogleSession } from '../lib/googleSheets'
 import type { Profile, Family, FamilyMember } from '../lib/types'
 
 interface AuthState {
-  session: Session | null
+  session: GoogleSession | null
   profile: Profile | null
   family: Family | null
   members: FamilyMember[]
@@ -24,30 +23,30 @@ const AuthContext = createContext<AuthState>({
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
+  const [session, setGoogleSession] = useState<GoogleSession | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [family, setFamily] = useState<Family | null>(null)
   const [members, setMembers] = useState<FamilyMember[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = async (s: Session | null) => {
+  const load = async (s: GoogleSession | null) => {
     if (!s) {
-      setSession(null)
+      setGoogleSession(null)
       setProfile(null)
       setFamily(null)
       setMembers([])
       setLoading(false)
       return
     }
-    setSession(s)
+    setGoogleSession(s)
     setLoading(true)
     setError(null)
     setProfile(null)
     setFamily(null)
     setMembers([])
     try {
-      const { data, error } = await supabase.rpc('get_my_context', {})
+      const { data, error } = await googleSheets.rpc('get_my_context', {})
       if (error) throw new Error(error.message)
       const c = data as { profile: Profile | null; members: FamilyMember[]; family: Family | null }
       setProfile(c.profile)
@@ -61,8 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => load(data.session ?? null))
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    googleSheets.auth.getGoogleSession().then(({ data }) => load(data.session ?? null))
+    const { data: sub } = googleSheets.auth.onAuthStateChange((_event, s) => {
       (async () => load(s))()
     })
     return () => sub.subscription.unsubscribe()
@@ -70,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refresh = async () => {
-    const { data } = await supabase.auth.getSession()
+    const { data } = await googleSheets.auth.getGoogleSession()
     await load(data.session ?? null)
   }
 
