@@ -39,8 +39,8 @@ export default function BudgetsPage() {
   useEffect(() => { load() }, [family?.id, monthDate])
   useEffect(() => {
     if (!family) return
-    const budgetChannel = googleSheets.channel('bud-page-budgets').on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    const transactionChannel = googleSheets.channel('bud-page-transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const budgetChannel = googleSheets.channel('bud-page-budgets').on('table_changes', { event: '*', schema: 'public', table: 'budgets', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const transactionChannel = googleSheets.channel('bud-page-transactions').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(budgetChannel); googleSheets.removeChannel(transactionChannel) }
   }, [family?.id])
 
