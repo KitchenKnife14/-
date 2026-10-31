@@ -717,11 +717,25 @@ test('deleting a purchase transaction unlinks the purchase and restores planned 
   assert.equal(bought.status, 'bought');
   assert.equal(bought.linked_transaction_id, transactionId);
 
+  let purchaseFullRewrites = 0;
+  let purchaseTargetedUpdates = 0;
+  const originalWriteRows = h.context.writeRows_;
+  const originalUpdateRows = h.context.updateRows_;
+  h.context.writeRows_ = function(table, rows) {
+    if (table === 'planned_purchases') purchaseFullRewrites++;
+    return originalWriteRows(table, rows);
+  };
+  h.context.updateRows_ = function(table, rows) {
+    if (table === 'planned_purchases') purchaseTargetedUpdates += rows.length;
+    return originalUpdateRows(table, rows);
+  };
   const removed = h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'delete',
     filters: [{ column: 'id', op: 'eq', value: transactionId }]
   });
   assert.equal(removed.error, null, removed.error?.message);
+  assert.equal(purchaseFullRewrites, 0);
+  assert.equal(purchaseTargetedUpdates, 1);
   const restored = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
   assert.equal(restored.status, 'planned');
   assert.equal(restored.linked_transaction_id, '');
