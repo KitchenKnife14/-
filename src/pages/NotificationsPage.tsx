@@ -27,7 +27,7 @@ export default function NotificationsPage() {
   useEffect(() => { load() }, [family?.id, filter])
   useEffect(() => {
     if (!family) return
-    const ch = googleSheets.channel('notif-page').on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const ch = googleSheets.channel('notif-page').on('table_changes', { event: '*', schema: 'public', table: 'notifications', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
