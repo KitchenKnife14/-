@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { RecurringPayment, Category, Account } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
@@ -24,9 +24,9 @@ export default function RecurringPage() {
     setLoading(true); setError(null)
     try {
       const [rRes, cRes, aRes] = await Promise.all([
-        supabase.from('recurring_payments').select('*').eq('family_id', family.id).order('next_due_date', { ascending: true }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-        supabase.from('accounts').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).order('next_due_date', { ascending: true }),
+        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('accounts').select('*').eq('family_id', family.id).eq('archived', false),
       ])
       if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error; if (aRes.error) throw aRes.error
       setItems(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[]); setAccounts(aRes.data as Account[])
@@ -37,8 +37,8 @@ export default function RecurringPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('rec-page').on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_payments', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('rec-page').on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_payments', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
   const catMap = new Map(categories.map((c) => [c.id, c]))
@@ -48,7 +48,7 @@ export default function RecurringPage() {
     if (!confirming || !family || !session?.user) return
     setError(null)
     try {
-      const { error: confirmError } = await supabase.rpc('confirm_recurring_payment', {
+      const { error: confirmError } = await googleSheets.rpc('confirm_recurring_payment', {
         p_recurring_id: confirming.id,
         p_expected_due_date: confirming.next_due_date,
         p_operation_date: todayISO(),
@@ -61,8 +61,8 @@ export default function RecurringPage() {
     }
   }
 
-  const toggleActive = async (r: RecurringPayment) => { const { error: err } = await supabase.from('recurring_payments').update({ active: !r.active }).eq('id', r.id); if (err) setError(err.message); load() }
-  const remove = async (r: RecurringPayment) => { const { error: err } = await supabase.from('recurring_payments').delete().eq('id', r.id); if (err) setError(err.message); load() }
+  const toggleActive = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').update({ active: !r.active }).eq('id', r.id); if (err) setError(err.message); load() }
+  const remove = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').delete().eq('id', r.id); if (err) setError(err.message); load() }
 
   const overdue = items.filter((r) => r.active && r.next_due_date < todayISO())
   const upcoming = items.filter((r) => r.active && r.next_due_date >= todayISO())
@@ -156,7 +156,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId,
     if (endDate && endDate < startDate) { setError('Дата окончания не может быть раньше даты начала'); return }
     setSaving(true)
     try {
-      const { error: err } = await supabase.from('recurring_payments').insert({
+      const { error: err } = await googleSheets.from('recurring_payments').insert({
         family_id: familyId, type, amount_kopecks: amt, category_id: categoryId || null, account_id: accountId || null,
         description: description.trim(), start_date: startDate, end_date: endDate || null,
         frequency, custom_interval_days: frequency === 'custom' ? parseInt(customDays) : null,
