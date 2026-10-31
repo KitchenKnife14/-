@@ -996,3 +996,38 @@ test('generated-ID transaction inserts do not read the full transaction ledger',
   assert.equal(transactionLedgerReads, 0);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 2);
 });
+
+test('goal contribution recalculation updates only affected goal rows', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-row-update@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Точечное обновление цели' }).data;
+  const goals = [];
+  for (const name of ['Цель А', 'Цель Б']) {
+    goals.push(h.call({
+      action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+      values: { family_id: family.id, name, target_kopecks: 100000, saved_kopecks: 0, status: 'active' }
+    }).data[0]);
+  }
+  let fullGoalRewrites = 0;
+  let targetedGoalUpdates = 0;
+  const originalWriteRows = h.context.writeRows_;
+  const originalUpdateRows = h.context.updateRows_;
+  h.context.writeRows_ = function(table, rows) {
+    if (table === 'goals') fullGoalRewrites++;
+    return originalWriteRows(table, rows);
+  };
+  h.context.updateRows_ = function(table, rows) {
+    if (table === 'goals') targetedGoalUpdates += rows.length;
+    return originalUpdateRows(table, rows);
+  };
+  const result = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: goals[0].id, amount_kopecks: 12500, contribution_date: '2026-10-31' }
+  });
+  assert.equal(result.error, null, result.error?.message);
+  assert.equal(fullGoalRewrites, 0);
+  assert.equal(targetedGoalUpdates, 1);
+  const saved = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data;
+  assert.equal(Number(saved.find(g => g.id === goals[0].id).saved_kopecks), 12500);
+  assert.equal(Number(saved.find(g => g.id === goals[1].id).saved_kopecks), 0);
+});
