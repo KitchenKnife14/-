@@ -12,6 +12,7 @@ interface Props {
   onClose: () => void
   onSaved: () => void
   categories: Category[]
+  accounts: Account[]
   userId: string | null
   editing?: TransactionDraft | null
   initialType?: TxType
@@ -29,9 +30,8 @@ export interface TransactionDraft {
   planned: boolean
 }
 
-export default function TransactionForm({ open, onClose, onSaved, categories, userId, editing, initialType = 'expense' }: Props) {
+export default function TransactionForm({ open, onClose, onSaved, categories, accounts, userId, editing, initialType = 'expense' }: Props) {
   const { family } = useAuth()
-  const [accounts, setAccounts] = useState<Account[]>([])
   const [type, setType] = useState<TxType>(initialType)
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayISO())
@@ -42,17 +42,6 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
   const [planned, setPlanned] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!open || !family) return
-    let active = true
-    googleSheets.from('accounts').select('*').eq('family_id', family.id).then(({ data, error: err }) => {
-      if (!active) return
-      if (err) setError(err.message)
-      else setAccounts((data ?? []) as Account[])
-    })
-    return () => { active = false }
-  }, [open, family?.id])
 
   useEffect(() => {
     if (editing) {
