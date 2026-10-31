@@ -23,7 +23,7 @@ export default function AnalysisPage() {
     try {
       const [tRes, cRes] = await Promise.all([
         googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
       ])
       if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[])
