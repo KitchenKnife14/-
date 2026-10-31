@@ -77,7 +77,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
     setError(null)
   }, [editing, open, initialType])
 
-  const visibleCats = categories.filter((c) => c.kind === type)
+  const visibleCats = categories.filter((c) => c.kind === type && (!c.archived || c.id === categoryId))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -152,7 +152,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
             <div><label className="label">На счёт</label><select className="input" required value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => a.id !== accountId && (!a.archived || a.id === toAccountId)).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
           </div>
         ) : (
-          <div><label className="label">Счёт</label><select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+          <div><label className="label">Счёт</label><select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
         )}
 
         {type !== 'transfer' && <div>
