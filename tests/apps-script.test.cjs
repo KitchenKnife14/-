@@ -855,6 +855,11 @@ test('transfers require two distinct family accounts and referenced accounts can
   assert.equal(afterEdit.amount_kopecks, 3200);
   assert.equal(afterEdit.account_id, from.data[0].id);
   assert.equal(afterEdit.to_account_id, to.data[0].id);
+  const protectedDelete = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: from.data[0].id }]
+  });
+  assert.match(protectedDelete.error.message, /Архивируйте его вместо удаления/);
   const removedTransfer = h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'delete',
     filters: [{ column: 'id', op: 'eq', value: transferId }]
@@ -865,6 +870,6 @@ test('transfers require two distinct family accounts and referenced accounts can
     action: 'query', token: user.token, table: 'accounts', mode: 'delete',
     filters: [{ column: 'id', op: 'eq', value: from.data[0].id }]
   });
-  assert.match(deletion.error.message, /Архивируйте его вместо удаления/);
-  assert.equal(h.call({ action: 'query', token: user.token, table: 'accounts', mode: 'select' }).data.length, 2);
+  assert.equal(deletion.error, null, deletion.error?.message);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'accounts', mode: 'select' }).data.length, 1);
 });
