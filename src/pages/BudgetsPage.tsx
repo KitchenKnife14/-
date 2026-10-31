@@ -39,16 +39,27 @@ export default function BudgetsPage() {
   useEffect(() => { load() }, [family?.id, monthDate])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('bud-page').on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const budgetChannel = supabase.channel('bud-page-budgets').on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const transactionChannel = supabase.channel('bud-page-transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { supabase.removeChannel(budgetChannel); supabase.removeChannel(transactionChannel) }
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const spentByCat = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const t of txs) { if (t.category_id) m.set(t.category_id, (m.get(t.category_id) ?? 0) + t.amount_kopecks) }
-    return m
-  }, [txs])
+    const totals = new Map<string, number>()
+    for (const tx of txs) {
+      let categoryId = tx.category_id
+      const visited = new Set<string>()
+      while (categoryId && !visited.has(categoryId)) {
+        visited.add(categoryId)
+        const category = catMap.get(categoryId)
+        if (!category) break
+        totals.set(categoryId, (totals.get(categoryId) ?? 0) + tx.amount_kopecks)
+        categoryId = category.parent_id ?? null
+      }
+    }
+    return totals
+  }, [txs, catMap])
 
   const totalLimit = budgets.reduce((s, b) => s + b.limit_kopecks, 0)
   const totalSpent = budgets.reduce((s, b) => s + (spentByCat.get(b.category_id) ?? 0), 0)
