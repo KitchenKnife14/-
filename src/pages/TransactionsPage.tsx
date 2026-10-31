@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
@@ -30,7 +30,7 @@ export default function TransactionsPage() {
     setError(null)
     try {
       const [txRes, catRes, accountRes] = await Promise.all([
-        supabase
+        googleSheets
           .from('transactions')
           .select('*')
           .eq('family_id', family.id)
@@ -38,8 +38,8 @@ export default function TransactionsPage() {
           .lte('operation_date', range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
-        supabase.from('categories').select('*').eq('family_id', family.id),
-        supabase.from('accounts').select('*').eq('family_id', family.id),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        googleSheets.from('accounts').select('*').eq('family_id', family.id),
       ])
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
@@ -57,8 +57,8 @@ export default function TransactionsPage() {
   useEffect(() => { load() }, [family?.id, range.start, range.end])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('tx-page').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('tx-page').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
@@ -82,7 +82,7 @@ export default function TransactionsPage() {
 
   const confirmDelete = async () => {
     if (!deleting) return
-    const { error: err } = await supabase.from('transactions').delete().eq('id', deleting.id)
+    const { error: err } = await googleSheets.from('transactions').delete().eq('id', deleting.id)
     if (err) setError(err.message)
     setDeleting(null)
     load()
