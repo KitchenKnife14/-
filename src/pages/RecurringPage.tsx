@@ -82,8 +82,8 @@ export default function RecurringPage() {
       ) : (
         <div className="space-y-4">
           {overdue.length > 0 && <Section title="Просроченные" items={overdue} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} highlight />}
-          {upcoming.length > 0 && <Section title="Предстоящие" items={upcoming} catMap={catMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} />}
-          {paused.length > 0 && <Section title="Приостановленные" items={paused} catMap={catMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} dim />}
+          {upcoming.length > 0 && <Section title="Предстоящие" items={upcoming} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} />}
+          {paused.length > 0 && <Section title="Приостановленные" items={paused} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} dim />}
         </div>
       )}
       <RecurringForm open={showForm} onClose={() => setShowForm(false)} onSaved={load} categories={categories} accounts={accounts} familyId={family?.id ?? null} userId={session?.user.id ?? null} />
