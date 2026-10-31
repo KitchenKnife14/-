@@ -726,3 +726,35 @@ test('deleting a purchase transaction unlinks the purchase and restores planned 
   assert.equal(restored.linked_transaction_id, '');
   assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
 });
+
+test('budgets reject duplicate family/category/month combinations on insert and update', () => {
+  const h = makeHarness();
+  const user = h.signup('budget-unique@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Уникальность бюджетов' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .filter(category => category.kind === 'expense' && !category.parent_id);
+  const first = h.call({
+    action: 'query', token: user.token, table: 'budgets', mode: 'insert', returning: true,
+    values: { family_id: family.id, category_id: categories[0].id, month_date: '2026-11-01', limit_kopecks: 100000 }
+  });
+  assert.equal(first.error, null, first.error?.message);
+  const duplicate = h.call({
+    action: 'query', token: user.token, table: 'budgets', mode: 'insert',
+    values: { family_id: family.id, category_id: categories[0].id, month_date: '2026-11-01', limit_kopecks: 200000 }
+  });
+  assert.match(duplicate.error.message, /уже задан бюджет/);
+  const second = h.call({
+    action: 'query', token: user.token, table: 'budgets', mode: 'insert', returning: true,
+    values: { family_id: family.id, category_id: categories[1].id, month_date: '2026-11-01', limit_kopecks: 300000 }
+  });
+  assert.equal(second.error, null, second.error?.message);
+  const update = h.call({
+    action: 'query', token: user.token, table: 'budgets', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: second.data[0].id }],
+    values: { category_id: categories[0].id }
+  });
+  assert.match(update.error.message, /уже задан бюджет/);
+  const rows = h.call({ action: 'query', token: user.token, table: 'budgets', mode: 'select' }).data;
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1].category_id, categories[1].id);
+});
