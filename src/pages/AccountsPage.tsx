@@ -46,8 +46,8 @@ export default function AccountsPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const accountsChannel = googleSheets.channel('accounts-page-accounts').on('postgres_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    const transactionsChannel = googleSheets.channel('accounts-page-transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const accountsChannel = googleSheets.channel('accounts-page-accounts').on('table_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const transactionsChannel = googleSheets.channel('accounts-page-transactions').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(accountsChannel); googleSheets.removeChannel(transactionsChannel) }
   }, [family?.id])
 
