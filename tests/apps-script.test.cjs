@@ -816,3 +816,38 @@ test('goal contributions require positive integer kopecks and deletion recalcula
   assert.equal(removed.error, null, removed.error?.message);
   assert.equal(Number(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks), 0);
 });
+
+test('transfers require two distinct family accounts and referenced accounts cannot be deleted', () => {
+  const h = makeHarness();
+  const user = h.signup('account-transfer-guards@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка переводов' }).data;
+  const addAccount = name => h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name, kind: 'bank', starting_balance_kopecks: 100000, archived: false }
+  });
+  const from = addAccount('Основная карта');
+  const to = addAccount('Накопительный счёт');
+  assert.equal(from.error, null, from.error?.message);
+  assert.equal(to.error, null, to.error?.message);
+  const missingDestination = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'transfer', amount_kopecks: 2500, operation_date: '2026-10-31', account_id: from.data[0].id }
+  });
+  assert.match(missingDestination.error.message, /нужны счёт списания и счёт зачисления/);
+  const sameAccount = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'transfer', amount_kopecks: 2500, operation_date: '2026-10-31', account_id: from.data[0].id, to_account_id: from.data[0].id }
+  });
+  assert.match(sameAccount.error.message, /должны различаться/);
+  const valid = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'transfer', amount_kopecks: 2500, operation_date: '2026-10-31', account_id: from.data[0].id, to_account_id: to.data[0].id, planned: false }
+  });
+  assert.equal(valid.error, null, valid.error?.message);
+  const deletion = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: from.data[0].id }]
+  });
+  assert.match(deletion.error.message, /Архивируйте его вместо удаления/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'accounts', mode: 'select' }).data.length, 2);
+});
