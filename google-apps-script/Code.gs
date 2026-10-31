@@ -508,13 +508,31 @@ function rpc_(req,user){
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
     if(!existingTx)txs.push({id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()});
     writeRows_('transactions',txs);
-    r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days);
+    r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;
   }
   throw new Error('RPC не поддерживается: '+name);
 }
-function nextDate_(iso,freq,days){const d=new Date(iso+'T12:00:00Z');if(freq==='daily')d.setUTCDate(d.getUTCDate()+1);else if(freq==='weekly')d.setUTCDate(d.getUTCDate()+7);else if(freq==='yearly')d.setUTCFullYear(d.getUTCFullYear()+1);else if(freq==='custom')d.setUTCDate(d.getUTCDate()+Math.max(1,Number(days)||30));else {const day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+1);d.setUTCDate(Math.min(day,new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate()));}return d.toISOString().slice(0,10);}
+function nextDate_(iso,freq,days,anchorIso){
+  const d=new Date(iso+'T12:00:00Z');
+  const anchor=new Date((anchorIso||iso)+'T12:00:00Z');
+  if(freq==='daily')d.setUTCDate(d.getUTCDate()+1);
+  else if(freq==='weekly')d.setUTCDate(d.getUTCDate()+7);
+  else if(freq==='custom')d.setUTCDate(d.getUTCDate()+Math.max(1,Number(days)||30));
+  else if(freq==='yearly'){
+    const year=d.getUTCFullYear()+1, month=anchor.getUTCMonth(), day=anchor.getUTCDate();
+    const last=new Date(Date.UTC(year,month+1,0)).getUTCDate();
+    return new Date(Date.UTC(year,month,Math.min(day,last),12)).toISOString().slice(0,10);
+  } else {
+    const year=d.getUTCFullYear(), month=d.getUTCMonth()+1, day=anchor.getUTCDate();
+    const nextMonth=new Date(Date.UTC(year,month,1));
+    const last=new Date(Date.UTC(nextMonth.getUTCFullYear(),nextMonth.getUTCMonth()+1,0)).getUTCDate();
+    nextMonth.setUTCHours(12,0,0,0);nextMonth.setUTCDate(Math.min(day,last));
+    return nextMonth.toISOString().slice(0,10);
+  }
+  return d.toISOString().slice(0,10);
+}
 
 /* ===== Служебные функции: запускаются вручную в редакторе Apps Script (меню «Выполнить») ===== */
 function formatSheet_(sh,name){
