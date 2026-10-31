@@ -43,7 +43,7 @@ export default function CalendarPage() {
   useEffect(() => { load() }, [family?.id, range.start, range.end])
   useEffect(() => {
     if (!family) return
-    const ch = googleSheets.channel('cal-page').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const ch = googleSheets.channel('cal-page').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
