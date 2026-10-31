@@ -160,7 +160,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <TransactionForm open={showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} userId={session?.user.id ?? null} editing={editing} />
+      <TransactionForm open={showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} editing={editing} />
 
       <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Удалить операцию?">
         <p className="text-sm text-slate-600 mb-4">Это действие нельзя отменить. Операция будет удалена безвозвратно.</p>
