@@ -144,11 +144,11 @@ test('recurring payment confirmation can retry after a partial write without dup
   });
   assert.equal(created.error, null, created.error?.message);
   const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
-  const originalWrite = h.context.writeRows_;
+  const originalUpdate = h.context.updateRows_;
   let failOnce = true;
-  h.context.writeRows_ = function(name, rows) {
+  h.context.updateRows_ = function(name, rows) {
     if (name === 'recurring_payments' && failOnce) { failOnce = false; throw new Error('simulated write failure'); }
-    return originalWrite(name, rows);
+    return originalUpdate(name, rows);
   };
   const args = { action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
     p_recurring_id: recurring.id, p_expected_due_date: '2026-10-28', p_operation_date: '2026-10-28'
@@ -213,11 +213,11 @@ test('purchase confirmation can retry after a partial write without duplicating 
   });
   assert.equal(created.error, null, created.error?.message);
   const purchase = created.data[0];
-  const originalWrite = h.context.writeRows_;
+  const originalUpdate = h.context.updateRows_;
   let failOnce = true;
-  h.context.writeRows_ = function(name, rows) {
+  h.context.updateRows_ = function(name, rows) {
     if (name === 'planned_purchases' && failOnce) { failOnce = false; throw new Error('simulated purchase status write failure'); }
-    return originalWrite(name, rows);
+    return originalUpdate(name, rows);
   };
   const args = { action: 'rpc', token: user.token, name: 'confirm_planned_purchase', params: {
     p_purchase_id: purchase.id, p_operation_date: '2026-10-28'
@@ -502,14 +502,14 @@ test('direct API requests cannot read, update or delete another family records',
 
 test('signup removes auth record and session when profile creation fails', () => {
   const h = makeHarness();
-  const originalWrite = h.context.writeRows_;
+  const originalAppend = h.context.appendRows_;
   let failOnce = true;
-  h.context.writeRows_ = function(name, rows) {
+  h.context.appendRows_ = function(name, rows) {
     if (name === 'profiles' && failOnce) {
       failOnce = false;
       throw new Error('simulated profile write failure');
     }
-    return originalWrite(name, rows);
+    return originalAppend(name, rows);
   };
 
   const failed = h.call({ action: 'signup', email: 'profile-failure@example.com', password: 'correct-horse-battery' });
