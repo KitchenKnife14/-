@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { googleSheets, type GoogleGoogleSession } from '../lib/googleSheets'
+import { googleSheets, type GoogleSession } from '../lib/googleSheets'
 import type { Profile, Family, FamilyMember } from '../lib/types'
 
 interface AuthState {
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthState>({
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setGoogleSession] = useState<GoogleSession | null>(null)
+  const [session, setSession] = useState<GoogleSession | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [family, setFamily] = useState<Family | null>(null)
   const [members, setMembers] = useState<FamilyMember[]>([])
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    googleSheets.auth.getGoogleSession().then(({ data }) => load(data.session ?? null))
+    googleSheets.auth.getSession().then(({ data }) => load(data.session ?? null))
     const { data: sub } = googleSheets.auth.onAuthStateChange((_event, s) => {
       (async () => load(s))()
     })
