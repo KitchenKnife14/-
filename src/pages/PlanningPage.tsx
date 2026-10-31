@@ -41,7 +41,7 @@ export default function PlanningPage() {
   useEffect(() => { load() }, [family?.id, monthDate])
   useEffect(() => {
     if (!family) return
-    const ch = googleSheets.channel('plan-page').on('postgres_changes', { event: '*', schema: 'public', table: 'monthly_plans', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const ch = googleSheets.channel('plan-page').on('table_changes', { event: '*', schema: 'public', table: 'monthly_plans', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
