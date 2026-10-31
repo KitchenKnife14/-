@@ -533,3 +533,44 @@ test('v3 create_family and join_family_by_invite save display names',()=>{const 
 test('v3 batch isolates errors and preserves request order',()=>{const h=makeHarness(),u=h.signup('batch-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Пакет'}).data,r=h.call({action:'batch',token:u.token,requests:[{action:'query',table:'families',mode:'select'},{action:'rpc',name:'get_my_context',params:{}},{action:'unknown_action'}]});assert.equal(r.error,null,r.error?.message);assert.equal(r.data.length,3);assert.equal(r.data[0].data[0].id,f.id);assert.equal(r.data[1].data.family.id,f.id);assert.match(r.data[2].error.message,/Неизвестное действие/);});
 test('v3 batch rejects more than 25 requests and unauthenticated calls',()=>{const h=makeHarness(),u=h.signup('batch-limit-v3@example.com'),r=h.call({action:'batch',token:u.token,requests:Array.from({length:26},()=>({action:'query',table:'profiles',mode:'select'}))}),noAuth=h.call({action:'batch',requests:[{action:'query',table:'profiles',mode:'select'}]});assert.match(r.error.message,/Слишком много запросов/);assert.match(noAuth.error.message,/Требуется вход/);});
 test('GET health endpoint reports API version 3',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,3);});
+
+
+test('upsert cannot overwrite server-owned audit fields', () => {
+  const h = makeHarness();
+  const user = h.signup('audit-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Аудит' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-10-31', description: 'Исходная' }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const tx = created.data[0];
+  const result = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'upsert', onConflict: 'id',
+    values: { id: tx.id, family_id: family.id, type: 'expense', amount_kopecks: 1000, created_by: 'forged-user' }
+  });
+  assert.match(result.error.message, /Нельзя менять автора записи/);
+  const unchanged = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(unchanged.created_by, user.user.id);
+});
+
+test('upsert cannot create a duplicate ID belonging to another family', () => {
+  const h = makeHarness();
+  const first = h.signup('audit-first@example.com');
+  const second = h.signup('audit-second@example.com');
+  const familyA = h.call({ action: 'createFamily', token: first.token, name: 'Семья A' }).data;
+  const familyB = h.call({ action: 'createFamily', token: second.token, name: 'Семья B' }).data;
+  const inserted = h.call({
+    action: 'query', token: first.token, table: 'transactions', mode: 'insert',
+    values: { id: 'shared-id', family_id: familyA.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-10-31' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const result = h.call({
+    action: 'query', token: second.token, table: 'transactions', mode: 'upsert', onConflict: 'id',
+    values: { id: 'shared-id', family_id: familyB.id, type: 'expense', amount_kopecks: 200, operation_date: '2026-10-31' }
+  });
+  assert.match(result.error.message, /уже существует или недоступна/);
+  const visible = h.call({ action: 'query', token: first.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].family_id, familyA.id);
+});
