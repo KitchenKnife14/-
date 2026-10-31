@@ -42,6 +42,7 @@ export default function RecurringPage() {
   }, [family?.id])
 
   const catMap = new Map(categories.map((c) => [c.id, c]))
+  const accountMap = new Map(accounts.map((a) => [a.id, a.name]))
 
   const confirmPayment = async () => {
     if (!confirming || !family || !session?.user) return
@@ -80,7 +81,7 @@ export default function RecurringPage() {
         <div className="card text-center py-8 text-sm text-slate-500"><Repeat size={24} className="mx-auto mb-2 text-slate-300" />Регулярных платежей пока нет. Добавьте аренду, подписки и другие повторяющиеся расходы.</div>
       ) : (
         <div className="space-y-4">
-          {overdue.length > 0 && <Section title="Просроченные" items={overdue} catMap={catMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} highlight />}
+          {overdue.length > 0 && <Section title="Просроченные" items={overdue} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} highlight />}
           {upcoming.length > 0 && <Section title="Предстоящие" items={upcoming} catMap={catMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} />}
           {paused.length > 0 && <Section title="Приостановленные" items={paused} catMap={catMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} dim />}
         </div>
@@ -95,8 +96,8 @@ export default function RecurringPage() {
   )
 }
 
-function Section({ title, items, catMap, onConfirm, onToggle, onRemove, highlight, dim }: {
-  title: string; items: RecurringPayment[]; catMap: Map<string, Category>; onConfirm: (r: RecurringPayment) => void; onToggle: (r: RecurringPayment) => void; onRemove: (r: RecurringPayment) => void; highlight?: boolean; dim?: boolean
+function Section({ title, items, catMap, accountMap, onConfirm, onToggle, onRemove, highlight, dim }: {
+  title: string; items: RecurringPayment[]; catMap: Map<string, Category>; accountMap: Map<string, string>; onConfirm: (r: RecurringPayment) => void; onToggle: (r: RecurringPayment) => void; onRemove: (r: RecurringPayment) => void; highlight?: boolean; dim?: boolean
 }) {
   return (
     <div>
@@ -110,7 +111,7 @@ function Section({ title, items, catMap, onConfirm, onToggle, onRemove, highligh
                 <div className="text-xl w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">{cat?.icon ?? '🔄'}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-900">{r.description}</div>
-                  <div className="text-xs text-slate-400">{cat?.name ?? 'Без категории'} · {FREQ_LABELS[r.frequency]} · до {formatDate(r.next_due_date)}{r.end_date ? ` · до ${formatDate(r.end_date)}` : ''}</div>
+                  <div className="text-xs text-slate-400">{cat?.name ?? 'Без категории'} · {r.account_id ? (accountMap.get(r.account_id) ?? 'Счёт недоступен') : 'Без счёта'} · {FREQ_LABELS[r.frequency]} · до {formatDate(r.next_due_date)}{r.end_date ? ` · до ${formatDate(r.end_date)}` : ''}</div>
                 </div>
                 <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(r.amount_kopecks)}</div>
                 <div className="flex gap-1 flex-shrink-0">
@@ -150,7 +151,9 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId,
     if (!familyId || !userId) return
     setError(null)
     const amt = Math.round(parseFloat(amount.replace(',', '.')) * 100)
-    if (!amt || amt <= 0) { setError('Введите сумму больше нуля'); return }
+    if (!Number.isSafeInteger(amt) || amt <= 0) { setError('Введите корректную сумму больше нуля'); return }
+    if (frequency === 'custom' && (!Number.isSafeInteger(Number(customDays)) || Number(customDays) < 1)) { setError('Интервал должен быть целым числом дней от 1'); return }
+    if (endDate && endDate < startDate) { setError('Дата окончания не может быть раньше даты начала'); return }
     setSaving(true)
     try {
       const { error: err } = await supabase.from('recurring_payments').insert({
