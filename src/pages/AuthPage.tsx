@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 
 export default function AuthPage() {
-  const { refresh } = useAuth()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -23,7 +21,6 @@ export default function AuthPage() {
         const { error: err } = await googleSheets.auth.signInWithPassword({ email, password })
         if (err) throw err
       }
-      await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка авторизации')
     } finally {
