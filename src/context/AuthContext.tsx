@@ -32,14 +32,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const load = async (s: GoogleSession | null) => {
     if (!s) {
-      setGoogleSession(null)
+      setSession(null)
       setProfile(null)
       setFamily(null)
       setMembers([])
       setLoading(false)
       return
     }
-    setGoogleSession(s)
+    setSession(s)
     setLoading(true)
     setError(null)
     setProfile(null)
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refresh = async () => {
-    const { data } = await googleSheets.auth.getGoogleSession()
+    const { data } = await googleSheets.auth.getSession()
     await load(data.session ?? null)
   }
 
