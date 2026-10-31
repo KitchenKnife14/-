@@ -245,6 +245,7 @@ function assertUniqueBudget_(rows,row,excludeId){
 function validateRelations_(table,row,user){
   const familyId=String(row.family_id||'');
   if(table==='goal_contributions'){
+    if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма пополнения должна быть положительным целым числом копеек');
     const goal=rows_('goals').find(x=>String(x.id)===String(row.goal_id));
     if(!goal)throw new Error('Связанная цель не найдена');
     if(!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
