@@ -29,7 +29,7 @@ export default function PlanningPage() {
     try {
       const [pRes, cRes, tRes] = await Promise.all([
         googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', monthDate),
-        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
         googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end),
       ])
       if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (tRes.error) throw tRes.error
