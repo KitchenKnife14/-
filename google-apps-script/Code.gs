@@ -517,33 +517,33 @@ function query_(req,user){
     if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
     if(table==='recurring_payments'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(payment=>String(payment.id)));
-      const transactions=rows_('transactions');let transactionsChanged=false;
+      const transactions=rows_('transactions'),transactionsChanged=[];
       transactions.forEach(tx=>{
         if(tx.parent_recurring_id&&deletedIds.has(String(tx.parent_recurring_id))){
           tx.parent_recurring_id='';
-          transactionsChanged=true;
+          transactionsChanged.push(tx);
         }
       });
-      if(transactionsChanged)updateRows_('transactions',transactions.filter(tx=>deletedIds.has(String(tx.parent_recurring_id))));
+      if(transactionsChanged.length)updateRows_('transactions',transactionsChanged);
     }
     if(table==='transactions'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(tx=>String(tx.id)));
-      const purchases=rows_('planned_purchases');let purchasesChanged=false;
+      const purchases=rows_('planned_purchases'),purchasesChanged=[];
       purchases.forEach(p=>{
         if(p.linked_transaction_id&&deletedIds.has(String(p.linked_transaction_id))){
           p.linked_transaction_id='';
           if(p.status==='bought')p.status='planned';
-          purchasesChanged=true;
+          purchasesChanged.push(p);
         }
       });
-      if(purchasesChanged)writeRows_('planned_purchases',purchases);
+      if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
     }
     if(table==='goals'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(g=>String(g.id)));
       deleteRows_('goal_contributions',rows_('goal_contributions').filter(c=>deletedIds.has(String(c.goal_id))));
-      const purchases=rows_('planned_purchases');let purchasesChanged=false;
-      purchases.forEach(p=>{if(p.goal_id&&deletedIds.has(String(p.goal_id))){p.goal_id='';purchasesChanged=true;}});
-      if(purchasesChanged)writeRows_('planned_purchases',purchases);
+      const purchases=rows_('planned_purchases'),purchasesChanged=[];
+      purchases.forEach(p=>{if(p.goal_id&&deletedIds.has(String(p.goal_id))){p.goal_id='';purchasesChanged.push(p);}});
+      if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
     }
     if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
     return req.returning?changed.map(strip_):null;
