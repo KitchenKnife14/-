@@ -113,7 +113,7 @@ export default function DashboardPage() {
         </div>
         <div className="card">
           <div className="flex items-center gap-2 text-slate-500 text-sm">
-            <Wallet size={16} className="text-primary-600" /> Остаток
+            <Wallet size={16} className="text-primary-600" /> Разница за месяц
           </div>
           <div className={`mt-1 text-2xl font-semibold ${income - expense >= 0 ? 'text-slate-900' : 'text-danger-600'}`}>
             {formatRubles(income - expense)}
