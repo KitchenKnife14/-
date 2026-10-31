@@ -44,7 +44,7 @@ export default function PurchasesPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const ch = googleSheets.channel('pp-page').on('postgres_changes', { event: '*', schema: 'public', table: 'planned_purchases', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const ch = googleSheets.channel('pp-page').on('table_changes', { event: '*', schema: 'public', table: 'planned_purchases', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
