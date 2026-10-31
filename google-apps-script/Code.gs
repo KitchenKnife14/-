@@ -251,6 +251,22 @@ function validateRelations_(table,row,user){
     if(!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
     return;
   }
+  if(table==='accounts'){
+    const name=String(row.name||'').trim();
+    if(!name)throw new Error('Введите название счёта');
+    if(!Number.isSafeInteger(Number(row.starting_balance_kopecks||0)))throw new Error('Начальный остаток должен быть целым числом копеек');
+    if(!['cash','bank','savings','other'].includes(String(row.kind||'')))throw new Error('Неизвестный тип счёта');
+  }
+  if(table==='transactions'){
+    if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма операции должна быть положительным целым числом копеек');
+    if(!['income','expense','transfer'].includes(String(row.type||'')))throw new Error('Неизвестный тип операции');
+    if(row.type==='transfer'&&(!row.account_id||!row.to_account_id))throw new Error('Для перевода нужны счёт списания и счёт зачисления');
+    if(row.type!=='transfer'&&row.to_account_id)throw new Error('Счёт зачисления допустим только для перевода');
+  }
+  if(table==='recurring_payments'){
+    if(row.type==='transfer')throw new Error('Регулярные переводы пока не поддерживаются');
+    if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма регулярного платежа должна быть положительным целым числом копеек');
+  }
   if(!familyId)return;
   const check=(field,relatedTable,label)=>{
     const value=row[field];if(value===undefined||value===null||value==='')return;
@@ -323,6 +339,12 @@ function query_(req,user){
   if(mode==='update'||mode==='delete'){
     if(!filters.length)throw new Error('Для изменения или удаления нужен хотя бы один фильтр');
     if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');if(mode==='delete'&&(table==='families'||table==='profiles'))throw new Error('Удаление системных записей запрещено');
+    if(mode==='delete'&&table==='accounts'){
+      const accountIds=new Set(all.filter(r=>matches(r)&&canAccessRow_(table,r,user)).map(r=>String(r.id)));
+      const referenced=rows_('transactions').some(tx=>accountIds.has(String(tx.account_id||''))||accountIds.has(String(tx.to_account_id||'')))||
+        rows_('recurring_payments').some(payment=>accountIds.has(String(payment.account_id||'')));
+      if(referenced)throw new Error('Счёт используется в истории. Архивируйте его вместо удаления.');
+    }
     const keep=[],changed=[],affectedGoalIds=new Set();
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
