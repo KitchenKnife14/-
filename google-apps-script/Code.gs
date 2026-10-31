@@ -292,7 +292,7 @@ function validateRelations_(table,row,user){
 }
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
-  let all=rows_(table);
+  let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const filters=req.filters||[];
   const matches=(row)=>filters.every(f=>{
     const a=row[f.column], b=f.value;
@@ -306,7 +306,7 @@ function query_(req,user){
   }
   if(mode==='insert'){
     const input=Array.isArray(req.values)?req.values:[req.values];
-    const existing=rows_(table);
+    const needsExisting=table==='budgets'||table==='profiles'||input.some(raw=>raw&&raw.id);\n    const existing=needsExisting?rows_(table):[];
     const createdIds_=new Set();
     const created=input.map(raw=>{
       const r=Object.assign({},raw);
