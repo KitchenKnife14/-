@@ -303,7 +303,8 @@ function query_(req,user){
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
       if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
-      validateRelations_(table,r,user);\n      existing.push(r);return r;
+      validateRelations_(table,r,user);
+      existing.push(r);return r;
     });
     writeRows_(table,existing);
     if(table==='goal_contributions')syncGoalTotals_(created.map(r=>r.goal_id));
@@ -346,7 +347,6 @@ function query_(req,user){
       const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(raw.id!==undefined&&existing.some(r=>String(r.id)===String(raw.id))&&(!found||String(found.id)!==String(raw.id)))throw new Error('Запись с таким ID уже существует или недоступна');
-      if(raw.id!==undefined&&existing.some(r=>String(r.id)===String(raw.id))&&(!found||String(found.id)!==String(raw.id)))throw new Error('Запись с таким ID уже существует или недоступна');
       if(found){
         if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
         if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');
@@ -364,7 +364,8 @@ function query_(req,user){
         if(TABLES[table].includes('created_by'))r.created_by=user.id;
         if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
         if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');
-        validateRelations_(table,r);\n        existing.push(r);
+        validateRelations_(table,r,user);
+        existing.push(r);
         if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
       }
     });
