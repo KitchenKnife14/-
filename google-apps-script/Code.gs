@@ -432,7 +432,7 @@ function query_(req,user){
   if(mode==='upsert'){
     const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
     if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
-    const affectedGoalIds=new Set();
+    const affectedGoalIds=new Set(), updatedRows=[], insertedRows=[];
     input.forEach(raw=>{
       if(table==='goals'&&Object.prototype.hasOwnProperty.call(raw,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');
       if(table==='notifications'&&raw.user_id&&String(raw.user_id)!==user.id)throw new Error('Нельзя создавать уведомления для другого пользователя');
@@ -455,6 +455,7 @@ function query_(req,user){
         if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
         if(TABLES[table].includes('updated_by'))found.updated_by=user.id;
         if(TABLES[table].includes('updated_at'))found.updated_at=now_();
+        updatedRows.push(found);
       }else {
         const r=Object.assign({id:id_()},raw);
         if(TABLES[table].includes('created_at'))r.created_at=now_();
@@ -465,10 +466,12 @@ function query_(req,user){
         validateRelations_(table,r,user);
         if(table==='budgets')assertUniqueBudget_(existing,r);
         existing.push(r);
+        insertedRows.push(r);
         if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
       }
     });
-    writeRows_(table,existing);
+    updateRows_(table,updatedRows);
+    appendRows_(table,insertedRows);
     if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
     return null;
   }
