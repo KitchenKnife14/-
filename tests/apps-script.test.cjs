@@ -970,3 +970,28 @@ test('transaction inserts append rows without replacing existing ledger entries'
   assert.deepEqual(rows.map(row => row.description), ['Первый расход', 'Второй расход', 'Третий расход']);
   assert.deepEqual(rows.map(row => Number(row.amount_kopecks)), [1200, 3400, 5600]);
 });
+
+test('generated-ID transaction inserts do not read the full transaction ledger', () => {
+  const h = makeHarness();
+  const user = h.signup('fast-ledger-insert@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Быстрое добавление' }).data;
+  const first = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-10-31', description: 'Существующая операция' }
+  });
+  assert.equal(first.error, null, first.error?.message);
+
+  const originalReadRows = h.context.readRows_;
+  let transactionLedgerReads = 0;
+  h.context.readRows_ = function(name) {
+    if (name === 'transactions') transactionLedgerReads++;
+    return originalReadRows(name);
+  };
+  const second = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 2500, operation_date: '2026-10-31', description: 'Новая операция' }
+  });
+  assert.equal(second.error, null, second.error?.message);
+  assert.equal(transactionLedgerReads, 0);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 2);
+});
