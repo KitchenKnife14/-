@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO, currentMoscowDate } from '../lib/dates'
@@ -30,9 +30,9 @@ export default function CalendarPage() {
     setLoading(true); setError(null)
     try {
       const [tRes, rRes, cRes] = await Promise.all([
-        supabase.from('transactions').select('*').eq('family_id', family.id).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        supabase.from('recurring_payments').select('*').eq('family_id', family.id).eq('active', true),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('transactions').select('*').eq('family_id', family.id).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
+        googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).eq('active', true),
+        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
       ])
       if (tRes.error) throw tRes.error; if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setRecurring(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[])
@@ -43,8 +43,8 @@ export default function CalendarPage() {
   useEffect(() => { load() }, [family?.id, range.start, range.end])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('cal-page').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('cal-page').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
