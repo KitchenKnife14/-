@@ -306,7 +306,8 @@ function query_(req,user){
   }
   if(mode==='insert'){
     const input=Array.isArray(req.values)?req.values:[req.values];
-    const needsExisting=table==='budgets'||table==='profiles'||input.some(raw=>raw&&raw.id);\n    const existing=needsExisting?rows_(table):[];
+    const needsExisting=table==='budgets'||table==='profiles'||input.some(raw=>raw&&raw.id);
+    const existing=needsExisting?rows_(table):[];
     const createdIds_=new Set();
     const created=input.map(raw=>{
       const r=Object.assign({},raw);
