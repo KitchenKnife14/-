@@ -323,7 +323,28 @@ function query_(req,user){
       const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(raw.id!==undefined&&existing.some(r=>String(r.id)===String(raw.id))&&(!found||String(found.id)!==String(raw.id)))throw new Error('Запись с таким ID уже существует или недоступна');
-      if(found){if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');if(TABLES[table].includes('created_by')&&raw.created_by!==undefined&&String(raw.created_by)!==String(found.created_by))throw new Error('Нельзя менять автора записи');Object.assign(found,raw);if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));if(TABLES[table].includes('updated_by'))found.updated_by=user.id;if(TABLES[table].includes('updated_at'))found.updated_at=now_();}else {const r=Object.assign({id:id_()},raw);if(TABLES[table].includes('created_at'))r.created_at=now_();if(TABLES[table].includes('updated_at'))r.updated_at=now_();if(TABLES[table].includes('created_by'))r.created_by=user.id;if(TABLES[table].includes('updated_by'))r.updated_by=user.id;if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');existing.push(r);if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));}
+      if(raw.id!==undefined&&existing.some(r=>String(r.id)===String(raw.id))&&(!found||String(found.id)!==String(raw.id)))throw new Error('Запись с таким ID уже существует или недоступна');
+      if(found){
+        if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
+        if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');
+        if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');
+        if(TABLES[table].includes('created_by')&&raw.created_by!==undefined&&String(raw.created_by)!==String(found.created_by))throw new Error('Нельзя менять автора записи');
+        if(TABLES[table].includes('created_at')&&raw.created_at!==undefined&&String(raw.created_at)!==String(found.created_at))throw new Error('Нельзя менять дату создания записи');
+        Object.assign(found,raw);
+        if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
+        if(TABLES[table].includes('created_by'))found.created_by=found.created_by;
+        if(TABLES[table].includes('updated_by'))found.updated_by=user.id;
+        if(TABLES[table].includes('updated_at'))found.updated_at=now_();
+      }else {
+        const r=Object.assign({id:id_()},raw);
+        if(TABLES[table].includes('created_at'))r.created_at=now_();
+        if(TABLES[table].includes('updated_at'))r.updated_at=now_();
+        if(TABLES[table].includes('created_by'))r.created_by=user.id;
+        if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
+        if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');
+        existing.push(r);
+        if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
+      }
     });
     writeRows_(table,existing);
     if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
