@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/googleSheets'
+import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles, kopecksToRubles } from '../lib/money'
 import { monthRange, currentMoscowDate } from '../lib/dates'
@@ -35,13 +35,13 @@ export default function ReportsPage() {
     setLoading(true); setError(null)
     try {
       const [tRes, cRes] = await Promise.all([
-        supabase.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
+        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
       ])
       if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[])
       const memberIds = members.map((m) => m.user_id)
-      if (memberIds.length > 0) { const { data: pRes } = await supabase.from('profiles').select('*').in('id', memberIds); setProfiles(pRes as Profile[] ?? []) }
+      if (memberIds.length > 0) { const { data: pRes } = await googleSheets.from('profiles').select('*').in('id', memberIds); setProfiles(pRes as Profile[] ?? []) }
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
   }
