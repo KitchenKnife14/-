@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
-import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO } from '../lib/dates'
+import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO, currentMoscowDate } from '../lib/dates'
 import { ChevronLeft, ChevronRight, Calendar as CalIcon } from 'lucide-react'
 import { ru } from 'date-fns/locale'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addDays, parseISO } from 'date-fns'
@@ -20,8 +20,8 @@ export default function CalendarPage() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('month')
   const [filter, setFilter] = useState<TxFilter>('all')
-  const [cursor, setCursor] = useState(new Date())
-  const [selectedDay, setSelectedDay] = useState<Date>(new Date())
+  const [cursor, setCursor] = useState(currentMoscowDate)
+  const [selectedDay, setSelectedDay] = useState<Date>(currentMoscowDate)
 
   const range = useMemo(() => monthRange(cursor.getFullYear(), cursor.getMonth()), [cursor])
 
@@ -68,20 +68,39 @@ export default function CalendarPage() {
   const recurringByDate = useMemo(() => {
     const m = new Map<string, RecurringPayment[]>()
     for (const r of recurring) {
+      if (!r.active || (r.end_date && r.next_due_date > r.end_date)) continue
       const start = parseISO(range.start)
       const end = parseISO(range.end)
+      const advance = (date: Date): Date | null => {
+        if (r.frequency === 'daily') return addDays(date, 1)
+        if (r.frequency === 'weekly') return addDays(date, 7)
+        if (r.frequency === 'monthly') {
+          const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1)
+          const lastDay = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate()
+          return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(date.getDate(), lastDay))
+        }
+        if (r.frequency === 'yearly') {
+          const year = date.getFullYear() + 1
+          const lastDay = new Date(year, date.getMonth() + 1, 0).getDate()
+          return new Date(year, date.getMonth(), Math.min(date.getDate(), lastDay))
+        }
+        if (r.frequency === 'custom') return addDays(date, r.custom_interval_days ?? 30)
+        return null
+      }
       let d = parseISO(r.next_due_date)
-      if (d < start) d = start
-      while (d <= end) {
+      let guard = 0
+      while (d < start && guard++ < 10000) {
+        const nextDate = advance(d)
+        if (!nextDate) break
+        d = nextDate
+      }
+      while (d <= end && (!r.end_date || format(d, 'yyyy-MM-dd') <= r.end_date)) {
         const key = format(d, 'yyyy-MM-dd')
         if (!m.has(key)) m.set(key, [])
         m.get(key)!.push(r)
-        if (r.frequency === 'daily') d = addDays(d, 1)
-        else if (r.frequency === 'weekly') d = addDays(d, 7)
-        else if (r.frequency === 'monthly') d = new Date(d.getFullYear(), d.getMonth() + 1, d.getDate())
-        else if (r.frequency === 'yearly') d = new Date(d.getFullYear() + 1, d.getMonth(), d.getDate())
-        else if (r.frequency === 'custom') d = addDays(d, r.custom_interval_days ?? 30)
-        else break
+        const nextDate = advance(d)
+        if (!nextDate) break
+        d = nextDate
       }
     }
     return m
@@ -132,7 +151,7 @@ export default function CalendarPage() {
     const dayRecs = recurringByDate.get(dateStr) ?? []
     const sum = daySum(dateStr)
     const inMonth = isSameMonth(day, cursor)
-    const isToday = isSameDay(day, new Date())
+    const isToday = isSameDay(day, currentMoscowDate())
     return (
       <button key={dateStr} onClick={() => { setSelectedDay(day); setView('day') }}
         className={`min-h-[72px] p-1.5 rounded-lg border text-left transition-colors ${isToday ? 'border-primary-400 bg-primary-50/50' : 'border-slate-100 hover:bg-slate-50'} ${!inMonth ? 'opacity-40' : ''}`}>

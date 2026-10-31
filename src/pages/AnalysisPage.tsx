@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles } from '../lib/money'
-import { monthRange, monthLabel } from '../lib/dates'
+import { monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function AnalysisPage() {
@@ -13,7 +13,7 @@ export default function AnalysisPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [cursor, setCursor] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() })
+  const [cursor, setCursor] = useState(currentMoscowMonth)
 
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
 

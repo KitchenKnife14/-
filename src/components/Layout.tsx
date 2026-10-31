@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Chrome as Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 
 const navItems = [
   { to: '/', label: 'Главная', icon: Home, end: true },
@@ -42,7 +42,8 @@ export default function Layout() {
         </nav>
         <div className="hidden md:block mt-auto pt-2">
           <div className="text-sm text-slate-700 truncate">{profile?.display_name || 'Пользователь'}</div>
-          <div className="text-xs text-slate-400 truncate mb-2">{family?.name}</div>
+          <div className="text-xs text-slate-400 truncate">{family?.name}</div>
+          {family?.invite_code && <div className="text-xs text-slate-500 mt-1 mb-2">Код приглашения: <span className="font-mono font-semibold">{family.invite_code}</span></div>}
           <button onClick={signOut} className="btn-ghost w-full justify-start text-sm"><LogOut size={16} /> Выйти</button>
         </div>
         <button onClick={signOut} className="md:hidden btn-ghost px-2" aria-label="Выйти"><LogOut size={18} /></button>
