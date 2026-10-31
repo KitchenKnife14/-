@@ -24,6 +24,7 @@ function makeHarness() {
       }));
       return this;
     }
+    setValue(value) { return this.setValues([[value]]); }
     clearContent() {
       for (let ri = 0; ri < this.rows; ri++) for (let ci = 0; ci < this.cols; ci++) {
         const r = this.row - 1 + ri, c = this.col - 1 + ci;
