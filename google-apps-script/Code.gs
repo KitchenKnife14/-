@@ -84,8 +84,8 @@ function rows_(name) {
 }
 function readRows_(name) {
   const sh=sheet_(name), values=sh.getDataRange().getValues(); if(values.length<2) return [];
-  return values.slice(1).filter(r=>r.some(v=>v!=='' && v!==null)).map((r,i)=> {
-    const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j],k));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=i+2; return o;
+  return values.slice(1).map((r,i)=>({values:r,row:i+2})).filter(x=>x.values.some(v=>v!==''&&v!==null)).map(({values:r,row})=>{
+    const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j],k));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=row;return o;
   });
 }
 function tz_(){ if(!TZ_CACHE) TZ_CACHE=ss_().getSpreadsheetTimeZone()||'Europe/Moscow'; return TZ_CACHE; }
@@ -108,6 +108,39 @@ function appendRows_(name, data) {
   if(sh.getMaxRows()<need){sh.insertRowsAfter(sh.getMaxRows(),need-sh.getMaxRows()+500);formatSheet_(sh,name);}
   delete ROWS_CACHE[name];
   sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
+}
+function updateRows_(name, data) {
+  if (!data.length) return;
+  const sh=sheet_(name), cols=TABLES[name];
+  const byRow=new Map(data.filter(r=>Number.isInteger(r.__row)).map(r=>[r.__row,r]));
+  const sorted=[...byRow.values()].sort((a,b)=>a.__row-b.__row);
+  if(!sorted.length)return;
+  delete ROWS_CACHE[name];
+  let group=[];
+  const flush=()=>{
+    if(!group.length)return;
+    sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
+    group=[];
+  };
+  sorted.forEach(row=>{
+    if(group.length&&row.__row!==group[group.length-1].__row+1)flush();
+    group.push(row);
+  });
+  flush();
+}
+function deleteRows_(name, data) {
+  const rowNumbers=[...new Set(data.map(r=>Number(r.__row)).filter(n=>Number.isInteger(n)&&n>=2))].sort((a,b)=>b-a);
+  if(!rowNumbers.length)return;
+  const sh=sheet_(name);
+  delete ROWS_CACHE[name];
+  let i=0;
+  while(i<rowNumbers.length){
+    const high=rowNumbers[i];
+    let low=high;
+    i++;
+    while(i<rowNumbers.length&&rowNumbers[i]===low-1){low=rowNumbers[i];i++;}
+    sh.deleteRows(low,high-low+1);
+  }
 }
 function writeRows_(name, data) {
   const sh=sheet_(name), cols=TABLES[name];
@@ -354,15 +387,15 @@ function query_(req,user){
         rows_('recurring_payments').some(payment=>accountIds.has(String(payment.account_id||'')));
       if(referenced)throw new Error('Счёт используется в истории. Архивируйте его вместо удаления.');
     }
-    const keep=[],changed=[],affectedGoalIds=new Set();
+    const changed=[],affectedGoalIds=new Set();
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
         if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
         if(mode==='delete')changed.push(r);
-        else {const patch=req.values||{};if(table==='goals'&&Object.prototype.hasOwnProperty.call(patch,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(table==='notifications'&&Object.prototype.hasOwnProperty.call(patch,'user_id')&&String(patch.user_id)!==String(r.user_id))throw new Error('Нельзя менять получателя уведомления');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(table==='goal_contributions')affectedGoalIds.add(String(next.goal_id));if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(TABLES[table].includes('created_at')&&Object.prototype.hasOwnProperty.call(patch,'created_at')&&String(patch.created_at)!==String(r.created_at))throw new Error('Нельзя менять дату создания записи');validateRelations_(table,next,user);if(table==='budgets')assertUniqueBudget_(all,next,r.id);if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}keep.push(next);changed.push(next);}
-      }else keep.push(r);
+        else {const patch=req.values||{};if(table==='goals'&&Object.prototype.hasOwnProperty.call(patch,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(table==='notifications'&&Object.prototype.hasOwnProperty.call(patch,'user_id')&&String(patch.user_id)!==String(r.user_id))throw new Error('Нельзя менять получателя уведомления');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(table==='goal_contributions')affectedGoalIds.add(String(next.goal_id));if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(TABLES[table].includes('created_at')&&Object.prototype.hasOwnProperty.call(patch,'created_at')&&String(patch.created_at)!==String(r.created_at))throw new Error('Нельзя менять дату создания записи');validateRelations_(table,next,user);if(table==='budgets')assertUniqueBudget_(all,next,r.id);if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}next.__row=r.__row;changed.push(next);}
+      }
     });
-    writeRows_(table,keep);
+    if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
     if(table==='recurring_payments'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(payment=>String(payment.id)));
       const transactions=rows_('transactions');let transactionsChanged=false;
