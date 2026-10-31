@@ -497,8 +497,7 @@ function rpc_(req,user){
     if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
     if(!tx){
       tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
-      txs.push(tx);
-      writeRows_('transactions',txs);
+      appendRows_('transactions',[tx]);
     }
     purchase.status='bought';
     purchase.linked_transaction_id=transactionId;
@@ -522,8 +521,7 @@ function rpc_(req,user){
       String(existingTx.account_id||'')!==String(r.account_id||'') ||
       String(existingTx.description||'')!==String(r.description||'')
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
-    if(!existingTx)txs.push({id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()});
-    writeRows_('transactions',txs);
+    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
     r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;
