@@ -25,8 +25,8 @@ export default function RecurringPage() {
     try {
       const [rRes, cRes, aRes] = await Promise.all([
         googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).order('next_due_date', { ascending: true }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-        googleSheets.from('accounts').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        googleSheets.from('accounts').select('*').eq('family_id', family.id),
       ])
       if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error; if (aRes.error) throw aRes.error
       setItems(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[]); setAccounts(aRes.data as Account[])
@@ -144,7 +144,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId,
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { if (open) { setType('expense'); setAmount(''); setCategoryId(''); setAccountId(''); setDescription(''); setFrequency('monthly'); setCustomDays('30'); setStartDate(todayISO()); setEndDate(''); setError(null) } }, [open])
-  const visibleCats = categories.filter((c) => c.kind === type)
+  const visibleCats = categories.filter((c) => c.kind === type && !c.archived)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -176,7 +176,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId,
         </div>
         <div><label className="label">Название</label><input className="input" required value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Аренда, подписка…" autoFocus /></div>
         <div><label className="label">Сумма, ₽</label><input className="input" type="number" step="0.01" min="0" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></div>
-        <div><label className="label">Счёт списания/зачисления</label><select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Не выбран</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+        <div><label className="label">Счёт списания/зачисления</label><select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Не выбран</option>{accounts.filter(a => !a.archived).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         <div><label className="label">Категория</label><select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{visibleCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
         <div><label className="label">Частота</label><select className="input" value={frequency} onChange={(e) => setFrequency(e.target.value as typeof frequency)}><option value="daily">Ежедневно</option><option value="weekly">Еженедельно</option><option value="monthly">Ежемесячно</option><option value="yearly">Ежегодно</option><option value="custom">По интервалу</option></select></div>
         {frequency === 'custom' && <div><label className="label">Интервал, дней</label><input className="input" type="number" min="1" required value={customDays} onChange={(e) => setCustomDays(e.target.value)} /></div>}
