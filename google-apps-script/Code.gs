@@ -322,6 +322,18 @@ function query_(req,user){
       }else keep.push(r);
     });
     writeRows_(table,keep);
+    if(table==='transactions'&&mode==='delete'&&changed.length){
+      const deletedIds=new Set(changed.map(tx=>String(tx.id)));
+      const purchases=rows_('planned_purchases');let purchasesChanged=false;
+      purchases.forEach(p=>{
+        if(p.linked_transaction_id&&deletedIds.has(String(p.linked_transaction_id))){
+          p.linked_transaction_id='';
+          if(p.status==='bought')p.status='planned';
+          purchasesChanged=true;
+        }
+      });
+      if(purchasesChanged)writeRows_('planned_purchases',purchases);
+    }
     if(table==='goals'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(g=>String(g.id)));
       writeRows_('goal_contributions',rows_('goal_contributions').filter(c=>!deletedIds.has(String(c.goal_id))));
