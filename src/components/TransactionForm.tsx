@@ -46,7 +46,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
   useEffect(() => {
     if (!open || !family) return
     let active = true
-    supabase.from('accounts').select('*').eq('family_id', family.id).eq('archived', false).then(({ data, error: err }) => {
+    supabase.from('accounts').select('*').eq('family_id', family.id).then(({ data, error: err }) => {
       if (!active) return
       if (err) setError(err.message)
       else setAccounts((data ?? []) as Account[])
@@ -148,8 +148,8 @@ export default function TransactionForm({ open, onClose, onSaved, categories, us
 
         {type === 'transfer' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="label">Со счёта</label><select className="input" required value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-            <div><label className="label">На счёт</label><select className="input" required value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => a.id !== accountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+            <div><label className="label">Со счёта</label><select className="input" required value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
+            <div><label className="label">На счёт</label><select className="input" required value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => a.id !== accountId && (!a.archived || a.id === toAccountId)).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
           </div>
         ) : (
           <div><label className="label">Счёт</label><select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
