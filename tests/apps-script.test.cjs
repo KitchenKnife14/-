@@ -873,3 +873,19 @@ test('transfers require two distinct family accounts and referenced accounts can
   assert.equal(deletion.error, null, deletion.error?.message);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'accounts', mode: 'select' }).data.length, 1);
 });
+
+test('monthly and yearly recurring dates preserve the original calendar anchor', () => {
+  const h = makeHarness();
+
+  // A short month must not permanently shift a monthly payment from the 31st to the 28th.
+  assert.equal(h.context.nextDate_('2026-01-31', 'monthly', null, '2026-01-31'), '2026-02-28');
+  assert.equal(h.context.nextDate_('2026-02-28', 'monthly', null, '2026-01-31'), '2026-03-31');
+
+  // A payment created on the 30th returns to the 30th after February.
+  assert.equal(h.context.nextDate_('2026-01-30', 'monthly', null, '2026-01-30'), '2026-02-28');
+  assert.equal(h.context.nextDate_('2026-02-28', 'monthly', null, '2026-01-30'), '2026-03-30');
+
+  // Leap-day yearly schedules return to February 29 in the next leap year.
+  assert.equal(h.context.nextDate_('2024-02-29', 'yearly', null, '2024-02-29'), '2025-02-28');
+  assert.equal(h.context.nextDate_('2027-02-28', 'yearly', null, '2024-02-29'), '2028-02-29');
+});
