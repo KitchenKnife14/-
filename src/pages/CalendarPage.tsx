@@ -32,7 +32,7 @@ export default function CalendarPage() {
       const [tRes, rRes, cRes] = await Promise.all([
         googleSheets.from('transactions').select('*').eq('family_id', family.id).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
         googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).eq('active', true),
-        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
       ])
       if (tRes.error) throw tRes.error; if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setRecurring(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[])
@@ -108,8 +108,8 @@ export default function CalendarPage() {
 
   const daySum = (date: string) => {
     const dayTxs = txsByDate.get(date) ?? []
-    const income = dayTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
-    const expense = dayTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
+    const income = dayTxs.filter((t) => !t.planned && t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
+    const expense = dayTxs.filter((t) => !t.planned && t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
     return { income, expense, net: income - expense }
   }
 
