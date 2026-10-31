@@ -32,7 +32,7 @@ export default function PurchasesPage() {
     try {
       const [pRes, cRes, gRes] = await Promise.all([
         googleSheets.from('planned_purchases').select('*').eq('family_id', family.id).order('created_at', { ascending: false }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
         googleSheets.from('goals').select('*').eq('family_id', family.id),
       ])
       if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (gRes.error) throw gRes.error
@@ -194,7 +194,7 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
     <Modal open={open} onClose={onClose} title={editing ? 'Редактировать покупку' : 'Новая покупка'}>
       <form onSubmit={submit} className="space-y-3">
         <div><label className="label">Название</label><input className="input" required value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
-        <div><label className="label">Категория</label><select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
+        <div><label className="label">Категория</label><select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{categories.filter((c) => !c.archived || c.id === categoryId).map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}{c.archived ? ' (архив)' : ''}</option>)}</select></div>
         <div><label className="label">Ориентировочная стоимость, ₽</label><input className="input" type="number" step="0.01" min="0" required value={estimated} onChange={(e) => setEstimated(e.target.value)} placeholder="5000" /></div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Приоритет</label><select className="input" value={priority} onChange={(e) => setPriority(e.target.value)}><option value="1">1 — Критически необходимое</option><option value="2">2 — Необходимое</option><option value="3">3 — Важное</option><option value="4">4 — Желательное</option><option value="5">5 — Необязательное</option></select></div>
