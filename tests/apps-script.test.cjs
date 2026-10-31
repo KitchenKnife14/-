@@ -758,3 +758,32 @@ test('budgets reject duplicate family/category/month combinations on insert and 
   assert.equal(rows.length, 2);
   assert.equal(rows[1].category_id, categories[1].id);
 });
+
+test('deleting a recurring payment preserves history and detaches its transactions', () => {
+  const h = makeHarness();
+  const user = h.signup('recurring-delete@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'История регулярных платежей' }).data;
+  const recurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 129900, description: 'Домашний интернет', start_date: '2026-10-01', frequency: 'monthly', next_due_date: '2026-11-01', active: true }
+  }).data[0];
+  const confirmed = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' }
+  });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+  const transactionId = 'recurring_' + recurring.id + '_' + recurring.next_due_date;
+  const before = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(before.parent_recurring_id, recurring.id);
+
+  const removed = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: recurring.id }]
+  });
+  assert.equal(removed.error, null, removed.error?.message);
+  const after = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(after.id, transactionId);
+  assert.equal(after.parent_recurring_id, '');
+  assert.equal(after.amount_kopecks, 129900);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data.length, 0);
+});
