@@ -45,7 +45,7 @@ export default function TransactionsPage() {
       if (catRes.error) throw catRes.error
       if (accountRes.error) throw accountRes.error
       setTxs(txRes.data as Transaction[])
-      setCategories((catRes.data as Category[]).filter(c => !c.archived))
+      setCategories(catRes.data as Category[])
       setAccounts(accountRes.data as Account[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки')
