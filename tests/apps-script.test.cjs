@@ -535,7 +535,7 @@ test('v3 batch rejects more than 25 requests and unauthenticated calls',()=>{con
 test('GET health endpoint reports API version 3',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,3);});
 
 
-test('upsert cannot overwrite server-owned audit fields', () => {
+test('upsert cannot overwrite server-owned creation timestamp', () => {
   const h = makeHarness();
   const user = h.signup('audit-owner@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Аудит' }).data;
@@ -547,11 +547,11 @@ test('upsert cannot overwrite server-owned audit fields', () => {
   const tx = created.data[0];
   const result = h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'upsert', onConflict: 'id',
-    values: { id: tx.id, family_id: family.id, type: 'expense', amount_kopecks: 1000, created_by: 'forged-user' }
+    values: { id: tx.id, family_id: family.id, type: 'expense', amount_kopecks: 1000, created_at: '1999-01-01T00:00:00.000Z' }
   });
-  assert.match(result.error.message, /Нельзя менять автора записи/);
+  assert.match(result.error.message, /Нельзя менять дату создания записи/);
   const unchanged = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
-  assert.equal(unchanged.created_by, user.user.id);
+  assert.notEqual(unchanged.created_at, '1999-01-01T00:00:00.000Z');
 });
 
 test('upsert cannot create a duplicate ID belonging to another family', () => {
