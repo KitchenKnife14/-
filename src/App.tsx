@@ -15,6 +15,7 @@ import PlanningPage from './pages/PlanningPage'
 import ReportsPage from './pages/ReportsPage'
 import AnalysisPage from './pages/AnalysisPage'
 import NotificationsPage from './pages/NotificationsPage'
+import AccountsPage from './pages/AccountsPage'
 
 export default function App() {
   const { session, family, loading } = useAuth()
@@ -28,6 +29,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
+        <Route path="accounts" element={<AccountsPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="recurring" element={<RecurringPage />} />
         <Route path="budgets" element={<BudgetsPage />} />
