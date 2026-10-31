@@ -119,7 +119,7 @@ export default function TransactionsPage() {
       <div className="flex gap-3 text-sm">
         <div className="text-accent-600">Доходы: {formatRubles(income)}</div>
         <div className="text-slate-700">Расходы: {formatRubles(expense)}</div>
-        <div className={income - expense >= 0 ? 'text-slate-500' : 'text-danger-600'}>Остаток: {formatRubles(income - expense)}</div>
+        <div className={income - expense >= 0 ? 'text-slate-500' : 'text-danger-600'}>Разница за период: {formatRubles(income - expense)}</div>
       </div>
 
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
