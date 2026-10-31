@@ -925,3 +925,31 @@ test('confirming a planned purchase can debit a selected active family account',
   assert.equal(tx.account_id, account.id);
   assert.equal(tx.amount_kopecks, 25000);
 });
+
+test('monthly plan bulk upsert inserts and updates multiple rows in one logical operation', () => {
+  const h = makeHarness();
+  const user = h.signup('monthly-plan-bulk@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Пакетное планирование' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .filter(category => category.kind === 'expense' && !category.parent_id).slice(0, 2);
+  const values = categories.map((category, index) => ({
+    family_id: family.id, month_date: '2026-11-01', category_id: category.id,
+    type: 'expense', planned_kopecks: (index + 1) * 10000, note: ''
+  }));
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'upsert',
+    onConflict: 'family_id,month_date,category_id,type', values
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'monthly_plans', mode: 'select' }).data.length, 2);
+
+  const updated = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'upsert',
+    onConflict: 'family_id,month_date,category_id,type',
+    values: values.map((row) => ({ ...row, planned_kopecks: row.planned_kopecks + 5000 }))
+  });
+  assert.equal(updated.error, null, updated.error?.message);
+  const rows = h.call({ action: 'query', token: user.token, table: 'monthly_plans', mode: 'select' }).data;
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => Number(row.planned_kopecks)).sort((a, b) => a - b), [15000, 25000]);
+});
