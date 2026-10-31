@@ -37,7 +37,7 @@ export default function DashboardPage() {
           .lte('operation_date', range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id).
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
         googleSheets.from('accounts').select('*').eq('family_id', family.id),
       ])
       if (txRes.error) throw txRes.error
