@@ -35,7 +35,7 @@ export default function GoalsPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const ch = googleSheets.channel('goals-page').on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const ch = googleSheets.channel('goals-page').on('table_changes', { event: '*', schema: 'public', table: 'goals', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
