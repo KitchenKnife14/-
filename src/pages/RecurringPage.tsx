@@ -37,7 +37,7 @@ export default function RecurringPage() {
   useEffect(() => { load() }, [family?.id])
   useEffect(() => {
     if (!family) return
-    const ch = googleSheets.channel('rec-page').on('postgres_changes', { event: '*', schema: 'public', table: 'recurring_payments', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    const ch = googleSheets.channel('rec-page').on('table_changes', { event: '*', schema: 'public', table: 'recurring_payments', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
