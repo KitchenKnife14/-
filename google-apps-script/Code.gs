@@ -332,7 +332,6 @@ function query_(req,user){
         if(TABLES[table].includes('created_at')&&raw.created_at!==undefined&&String(raw.created_at)!==String(found.created_at))throw new Error('Нельзя менять дату создания записи');
         Object.assign(found,raw);
         if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
-        if(TABLES[table].includes('created_by'))found.created_by=found.created_by;
         if(TABLES[table].includes('updated_by'))found.updated_by=user.id;
         if(TABLES[table].includes('updated_at'))found.updated_at=now_();
       }else {
