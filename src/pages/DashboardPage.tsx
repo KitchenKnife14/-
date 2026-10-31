@@ -58,7 +58,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family?.id, range.start, range.end])
 
-  // Realtime: refresh when any transaction changes
+  // Polling: refresh when the adapter detects a changed transaction snapshot.
   useEffect(() => {
     if (!family) return
     const channel = googleSheets
