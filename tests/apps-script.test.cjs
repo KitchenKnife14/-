@@ -787,3 +787,32 @@ test('deleting a recurring payment preserves history and detaches its transactio
   assert.equal(after.amount_kopecks, 129900);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data.length, 0);
 });
+
+test('goal contributions require positive integer kopecks and deletion recalculates totals', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-contribution-validation@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка пополнений' }).data;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Резерв', target_kopecks: 1000000 }
+  }).data[0];
+  for (const amount of [0, -100, 12.5]) {
+    const rejected = h.call({
+      action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+      values: { goal_id: goal.id, amount_kopecks: amount, contribution_date: '2026-10-31' }
+    });
+    assert.match(rejected.error.message, /положительным целым числом копеек/);
+  }
+  const contribution = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true,
+    values: { goal_id: goal.id, amount_kopecks: 45000, contribution_date: '2026-10-31' }
+  });
+  assert.equal(contribution.error, null, contribution.error?.message);
+  assert.equal(Number(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks), 45000);
+  const removed = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: contribution.data[0].id }]
+  });
+  assert.equal(removed.error, null, removed.error?.message);
+  assert.equal(Number(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks), 0);
+});
