@@ -342,11 +342,11 @@ function requireUser_(token){
 }
 function setProfileName_(userId,name){
  const n=String(name||'').trim();if(!n)return;const list=rows_('profiles'),p=list.find(x=>x.id===userId);
- if(p){if(p.display_name===n)return;p.display_name=n;}else list.push({id:userId,display_name:n,avatar_color:'#2563eb',timezone:'Europe/Moscow',created_at:now_()});writeRows_('profiles',list);
+ if(p){if(p.display_name===n)return;p.display_name=n;updateRows_('profiles',[p]);}else appendRows_('profiles',[{id:userId,display_name:n,avatar_color:'#2563eb',timezone:'Europe/Moscow',created_at:now_()}]);
 }
 function ensureProfile_(userId,name){
   const list=rows_('profiles'); if(list.some(p=>p.id===userId))return;
-  list.push({id:userId,display_name:name,avatar_color:'#2563eb',timezone:'Europe/Moscow',created_at:now_()});writeRows_('profiles',list);
+  appendRows_('profiles',[{id:userId,display_name:name,avatar_color:'#2563eb',timezone:'Europe/Moscow',created_at:now_()}]);
 }
 function route_(req,user){
   if(req.action==='getSession')return {user:{id:user.id,email:user.email}};
@@ -359,8 +359,8 @@ function route_(req,user){
     const f={id:id_(),name,invite_code:code_(),currency:'RUB',created_at:now_(),created_by:user.id};
     // Таблицы не поддерживают транзакции: при сбое на любом шаге откатываем уже записанное вручную.
     try{
-      const fam=rows_('families');fam.push(f);writeRows_('families',fam);
-      const mem=rows_('family_members');mem.push({id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()});writeRows_('family_members',mem);
+      appendRows_('families',[f]);
+      appendRows_('family_members',[{id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()}]);
       seedCategories_(f.id);
     }catch(err){rollbackFamily_(f.id);throw err;}
     return f;
@@ -373,7 +373,7 @@ function route_(req,user){
     if(members.some(m=>m.user_id===user.id))return f;
     if(members.length>=2)throw new Error('В семье уже два участника');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Вы уже состоите в другой семье');
-    members.push({id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()});const allMembers=rows_('family_members');allMembers.push(members[members.length-1]);writeRows_('family_members',allMembers);
+    const member={id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()};appendRows_('family_members',[member]);
     return f;
   }
   if(req.action==='query')return query_(req,user);
@@ -524,7 +524,7 @@ function query_(req,user){
           transactionsChanged=true;
         }
       });
-      if(transactionsChanged)writeRows_('transactions',transactions);
+      if(transactionsChanged)updateRows_('transactions',transactions.filter(tx=>deletedIds.has(String(tx.parent_recurring_id))));
     }
     if(table==='transactions'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(tx=>String(tx.id)));
@@ -540,7 +540,7 @@ function query_(req,user){
     }
     if(table==='goals'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(g=>String(g.id)));
-      writeRows_('goal_contributions',rows_('goal_contributions').filter(c=>!deletedIds.has(String(c.goal_id))));
+      deleteRows_('goal_contributions',rows_('goal_contributions').filter(c=>deletedIds.has(String(c.goal_id))));
       const purchases=rows_('planned_purchases');let purchasesChanged=false;
       purchases.forEach(p=>{if(p.goal_id&&deletedIds.has(String(p.goal_id))){p.goal_id='';purchasesChanged=true;}});
       if(purchasesChanged)writeRows_('planned_purchases',purchases);
@@ -656,14 +656,14 @@ function rpc_(req,user){
     }
     purchase.status='bought';
     purchase.linked_transaction_id=transactionId;
-    writeRows_('planned_purchases',purchases);
+    updateRows_('planned_purchases',[purchase]);
     return {transaction_id:transactionId};
   }
   if(name==='confirm_recurring_payment'){
     const id=p.p_recurring_id, r=rows_('recurring_payments').find(x=>x.id===id&&canAccessRow_('recurring_payments',x,user));
     if(!r)throw new Error('Регулярный платёж не найден');
     if(r.next_due_date!==p.p_expected_due_date)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
-    if(r.end_date && r.next_due_date>r.end_date){r.active=false;writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;}
+    if(r.end_date && r.next_due_date>r.end_date){r.active=false;updateRows_('recurring_payments',[r]);return true;}
     const txs=rows_('transactions'), transactionId='recurring_'+r.id+'_'+r.next_due_date;
     // Deterministic ID makes retries safe only when the existing row is the same recurring occurrence.
     const existingTx=txs.find(t=>String(t.id)===transactionId);
@@ -679,7 +679,7 @@ function rpc_(req,user){
     if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
     r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
-    writeRows_('recurring_payments',rows_('recurring_payments').map(x=>x.id===r.id?r:x));return true;
+    updateRows_('recurring_payments',[r]);return true;
   }
   throw new Error('RPC не поддерживается: '+name);
 }
