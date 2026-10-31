@@ -70,15 +70,14 @@ export default function PlanningPage() {
     const { data: prevPlans, error } = await googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', prevMonthDate)
     if (error) { setError(error.message); return }
     if (!prevPlans || prevPlans.length === 0) { setError('В предыдущем месяце нет планов для копирования'); return }
-    for (const p of prevPlans as MonthlyPlan[]) {
-      const { error: copyError } = await googleSheets.from('monthly_plans').upsert({
+    const results = await Promise.all((prevPlans as MonthlyPlan[]).map((p) =>
+      googleSheets.from('monthly_plans').upsert({
         family_id: family.id, month_date: monthDate, category_id: p.category_id, type: p.type, planned_kopecks: p.planned_kopecks, note: p.note,
       }, { onConflict: 'family_id,month_date,category_id,type' })
-      if (copyError) {
-        setError(`Не удалось скопировать план «${TYPE_LABELS[p.type]}»: ${copyError.message}`)
-        await load()
-        return
-      }
+    ))
+    const failed = results.find((result) => result.error)
+    if (failed?.error) {
+      setError(`Не удалось скопировать план: ${failed.error.message}`)
     }
     await load()
   }
