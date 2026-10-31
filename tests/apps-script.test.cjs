@@ -621,3 +621,44 @@ test('transaction update cannot attach a foreign category or rewrite created_at'
   });
   assert.match(timestampUpdate.error.message, /Нельзя менять дату создания записи/);
 });
+
+
+test('planned purchase confirmation rejects a deterministic ID collision', () => {
+  const h = makeHarness();
+  const user = h.signup('purchase-collision@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Покупки' }).data;
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Велосипед', estimated_kopecks: 2000000, status: 'planned' }
+  }).data[0];
+  h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { id: 'purchase_' + purchase.id, family_id: family.id, type: 'expense', amount_kopecks: 1, operation_date: '2026-10-31', description: 'Посторонняя операция' }
+  });
+  const result = h.call({ action: 'rpc', token: user.token, name: 'confirm_planned_purchase', params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' } });
+  assert.match(result.error.message, /не соответствует планируемой покупке/);
+  const unchanged = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  assert.notEqual(unchanged.status, 'bought');
+});
+
+test('recurring payment confirmation rejects a deterministic ID collision', () => {
+  const h = makeHarness();
+  const user = h.signup('recurring-collision@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Регулярные платежи' }).data;
+  const recurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 99000, description: 'Интернет', start_date: '2026-10-01', frequency: 'monthly', next_due_date: '2026-11-01', active: true }
+  }).data[0];
+  const transactionId = 'recurring_' + recurring.id + '_' + recurring.next_due_date;
+  h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { id: transactionId, family_id: family.id, type: 'expense', amount_kopecks: 1, operation_date: '2026-11-01', description: 'Чужая операция' }
+  });
+  const result = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' }
+  });
+  assert.match(result.error.message, /не соответствует регулярному платежу/);
+  const unchanged = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
+  assert.equal(unchanged.next_due_date, '2026-11-01');
+});
