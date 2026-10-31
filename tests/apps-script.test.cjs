@@ -889,3 +889,39 @@ test('monthly and yearly recurring dates preserve the original calendar anchor',
   assert.equal(h.context.nextDate_('2024-02-29', 'yearly', null, '2024-02-29'), '2025-02-28');
   assert.equal(h.context.nextDate_('2027-02-28', 'yearly', null, '2024-02-29'), '2028-02-29');
 });
+
+test('confirming a planned purchase can debit a selected active family account', () => {
+  const h = makeHarness();
+  const user = h.signup('purchase-account-owner@example.com');
+  const outsider = h.signup('purchase-account-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Покупка со счёта' }).data;
+  const foreignFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Другая семья' }).data;
+  const account = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Основная карта', kind: 'bank', starting_balance_kopecks: 100000 }
+  }).data[0];
+  const foreignAccount = h.call({
+    action: 'query', token: outsider.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: foreignFamily.id, name: 'Чужой счёт', kind: 'bank', starting_balance_kopecks: 0 }
+  }).data[0];
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Наушники', estimated_kopecks: 25000, status: 'planned' }
+  }).data[0];
+
+  const rejected = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31', p_account_id: foreignAccount.id }
+  });
+  assert.match(rejected.error.message, /счёт не найден в этой семье/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
+
+  const confirmed = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31', p_account_id: account.id }
+  });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+  const tx = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(tx.account_id, account.id);
+  assert.equal(tx.amount_kopecks, 25000);
+});
