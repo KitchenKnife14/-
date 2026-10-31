@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
 import { formatRubles, rublesToKopecks } from '../lib/money'
+import { calculateAccountBalances } from '../lib/accountBalances.js'
 import { Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import Modal from '../components/Modal'
 
@@ -50,21 +51,7 @@ export default function AccountsPage() {
     return () => { supabase.removeChannel(accountsChannel); supabase.removeChannel(transactionsChannel) }
   }, [family?.id])
 
-  const balances = useMemo(() => {
-    const result = new Map(accounts.map(account => [account.id, Number(account.starting_balance_kopecks || 0)]))
-    transactions.forEach(tx => {
-      if (tx.planned) return
-      const amount = Number(tx.amount_kopecks || 0)
-      if (!Number.isSafeInteger(amount) || amount <= 0) return
-      if (tx.type === 'income' && tx.account_id) result.set(tx.account_id, (result.get(tx.account_id) ?? 0) + amount)
-      if (tx.type === 'expense' && tx.account_id) result.set(tx.account_id, (result.get(tx.account_id) ?? 0) - amount)
-      if (tx.type === 'transfer') {
-        if (tx.account_id) result.set(tx.account_id, (result.get(tx.account_id) ?? 0) - amount)
-        if (tx.to_account_id) result.set(tx.to_account_id, (result.get(tx.to_account_id) ?? 0) + amount)
-      }
-    })
-    return result
-  }, [accounts, transactions])
+  const balances = useMemo(() => calculateAccountBalances(accounts, transactions), [accounts, transactions])
 
   const openCreate = () => {
     setEditing(null); setName(''); setKind('bank'); setStartingBalance('0'); setError(null); setModalOpen(true)
