@@ -3,7 +3,7 @@ export type GoogleSession = { access_token: string; token_type: 'bearer'; expire
 const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL as string | undefined
 const SESSION_KEY = 'budget_google_session_v1'
 function readSession(): GoogleSession | null { try { const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null') as GoogleSession|null; if(s&&s.expires_at*1000>Date.now())return s;localStorage.removeItem(SESSION_KEY);if(s)queueMicrotask(()=>notify('SIGNED_OUT',null));return null } catch{return null} }
-function saveSession(data:{token:string;user:{id:string;email:string}}|null){if(!data){localStorage.removeItem(SESSION_KEY);return null}const s:GoogleSession={access_token:data.token,token_type:'bearer',expires_at:Math.floor(Date.now()/1000)+1209600,user:{id:data.user.id,email:data.user.email,app_metadata:{},user_metadata:{},aud:'authenticated',created_at:new Date().toISOString()}};localStorage.setItem(SESSION_KEY,JSON.stringify(s));return s}
+function saveSession(data:{token:string;user:{id:string;email:string}}|null){if(!data){localStorage.removeItem(SESSION_KEY);return null}const s:GoogleSession={access_token:data.token,token_type:'bearer',expires_at:Math.floor(Date.now()/1000)+1209600,user:{id:data.user.id,email:data.user.email}};localStorage.setItem(SESSION_KEY,JSON.stringify(s));return s}
 const AUTH_ERRORS=['Сессия завершена','Требуется вход','Пользователь не найден']
 async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
   if(!API_URL)throw new Error('Не настроен VITE_GOOGLE_APPS_SCRIPT_URL')
@@ -81,6 +81,6 @@ export const googleSheets={
  signUp:async({email,password,options}:{email:string;password:string;options?:{data?:{display_name?:string}}})=>{try{const d=await request<{token:string;user:{id:string;email:string}}>({action:'signup',email,password,name:options?.data?.display_name});const s=saveSession(d);notify('SIGNED_IN',s);return{data:{user:s?.user??null,session:s},error:null}}catch(e){return{data:{user:null,session:null},error:new Error(e instanceof Error?e.message:'Ошибка регистрации')}}},
  signInWithPassword:async({email,password}:{email:string;password:string})=>{try{const d=await request<{token:string;user:{id:string;email:string}}>({action:'signin',email,password});const s=saveSession(d);notify('SIGNED_IN',s);return{data:{user:s?.user??null,session:s},error:null}}catch(e){return{data:{user:null,session:null},error:new Error(e instanceof Error?e.message:'Ошибка входа')}}},
  signOut:async()=>{try{await request({action:'signout'})}catch{}saveSession(null);notify('SIGNED_OUT',null);return{error:null}},
- onAuthStateChange:(cb:(event:string,session:GoogleSession|null)=>void)=>{const f=(e:string,s:GoogleSession|null)=>cb(e,s|null);listeners.add(f);return{data:{subscription:{unsubscribe:()=>{listeners.delete(f)}}}}}
+ onAuthStateChange:(cb:(event:string,session:GoogleSession|null)=>void)=>{const f=(e:string,s:GoogleSession|null)=>cb(e,s);listeners.add(f);return{data:{subscription:{unsubscribe:()=>{listeners.delete(f)}}}}}
  }
 };
