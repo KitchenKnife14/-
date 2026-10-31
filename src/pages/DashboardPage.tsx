@@ -183,7 +183,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <TransactionForm open={showAdd} onClose={() => setShowAdd(false)} onSaved={load} categories={categories} userId={session?.user.id ?? null} initialType={newTransactionType} />
+      <TransactionForm open={showAdd} onClose={() => setShowAdd(false)} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} initialType={newTransactionType} />
     </div>
   )
 }
