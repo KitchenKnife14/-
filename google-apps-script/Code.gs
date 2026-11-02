@@ -721,7 +721,7 @@ function query_(req,user){
   if(mode==='insert'){
     const input=Array.isArray(req.values)?req.values:[req.values];
     const needsExisting=table==='budgets'||table==='profiles'||input.some(raw=>raw&&raw.id);
-    const existing=needsExisting?rows_(table):[];
+    const existing=needsExisting?rows_(table).map(row=>Object.assign({},row)):[];
     const contributionBaseline=table==='goal_contributions'?rows_(table).map(strip_):null;
     const createdIds_=new Set();
     const created=input.map(raw=>{
@@ -820,7 +820,7 @@ function query_(req,user){
     return req.returning?changed.map(strip_):null;
   }
   if(mode==='upsert'){
-    const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
+    const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table).map(row=>Object.assign({},row));
     const contributionBaseline=table==='goal_contributions'?existing.map(strip_):null;
     if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
     const affectedGoalIds=new Set(), updatedRows=[], insertedRows=[];

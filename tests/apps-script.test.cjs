@@ -1381,3 +1381,86 @@ test('linked bought purchases cannot be edited in a way that desynchronizes thei
   });
   assert.match(reset.error.message, /статус и связь нельзя изменить/);
 });
+
+
+test('failed batched CRUD validation does not leak uncommitted rows into the request cache', () => {
+  const h = makeHarness();
+  const user = h.signup('batch-cache-isolation@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Кэш пакета' }).data;
+  const category = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .find(item => item.kind === 'expense' && !item.parent_id);
+
+  const result = h.call({
+    action: 'batch',
+    token: user.token,
+    requests: [
+      {
+        action: 'query',
+        table: 'budgets',
+        mode: 'insert',
+        values: [
+          { family_id: family.id, category_id: category.id, month_date: '2026-11-01', limit_kopecks: 100000 },
+          { family_id: family.id, category_id: category.id, month_date: '2026-11-01', limit_kopecks: 200000 }
+        ]
+      },
+      {
+        action: 'query',
+        table: 'budgets',
+        mode: 'select',
+        filters: [{ column: 'family_id', op: 'eq', value: family.id }]
+      }
+    ]
+  });
+
+  assert.equal(result.error, null, result.error?.message);
+  assert.ok(result.data[0].error, 'The duplicate budget insert must fail validation');
+  assert.deepEqual(result.data[1].data, [], 'The following select must not see an uncommitted budget from the failed insert');
+  assert.equal(h.context.dataRevision_() % 2, 0, 'No sheet write happened, so the revision remains readable');
+});
+
+test('failed batched upsert validation does not mutate cached rows before commit', () => {
+  const h = makeHarness();
+  const owner = h.signup('batch-upsert-cache-owner@example.com');
+  const outsider = h.signup('batch-upsert-cache-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Кэш upsert' }).data;
+  const foreignFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Чужая семья' }).data;
+  const category = h.call({ action: 'query', token: owner.token, table: 'categories', mode: 'select' }).data
+    .find(item => item.kind === 'expense' && !item.parent_id);
+  const foreignCategory = h.call({ action: 'query', token: outsider.token, table: 'categories', mode: 'select' }).data
+    .find(item => item.kind === 'expense' && !item.parent_id);
+  const created = h.call({
+    action: 'query', token: owner.token, table: 'monthly_plans', mode: 'insert', returning: true,
+    values: { family_id: family.id, month_date: '2026-11-01', category_id: category.id, type: 'expense', planned_kopecks: 10000, note: '' }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const plan = created.data[0];
+
+  const result = h.call({
+    action: 'batch',
+    token: owner.token,
+    requests: [
+      {
+        action: 'query',
+        table: 'monthly_plans',
+        mode: 'upsert',
+        onConflict: 'id',
+        values: [
+          { ...plan, planned_kopecks: 20000 },
+          { id: 'new-plan', family_id: foreignFamily.id, month_date: '2026-11-01', category_id: foreignCategory.id, type: 'expense', planned_kopecks: 30000 }
+        ]
+      },
+      {
+        action: 'query',
+        table: 'monthly_plans',
+        mode: 'select',
+        filters: [{ column: 'family_id', op: 'eq', value: family.id }]
+      }
+    ]
+  });
+
+  assert.equal(result.error, null, result.error?.message);
+  assert.ok(result.data[0].error, 'The foreign-family row must reject the upsert');
+  assert.equal(result.data[1].data.length, 1);
+  assert.equal(Number(result.data[1].data[0].planned_kopecks), 10000, 'The cached row must still match the persisted row');
+  assert.equal(h.context.dataRevision_() % 2, 0, 'No sheet write happened, so the revision remains readable');
+});
