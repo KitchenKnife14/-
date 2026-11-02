@@ -57,7 +57,7 @@ export default function AnalysisPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-900">Анализ доходов по участникам</h1>
+      <h1 className="page-title">Анализ доходов по участникам</h1>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between">
         <button onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
