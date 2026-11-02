@@ -213,6 +213,7 @@ function doPost(e) {
     tLocked = Date.now();
     lockMs = tLocked - t0;
 
+    try {
     let recoveringExistingWrite = false;
     const props = PropertiesService.getScriptProperties();
     const currentRevision = dataRevision_();
