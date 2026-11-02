@@ -34,6 +34,7 @@ const DEFAULT_CATEGORIES=[{"name":"Жильё и обязательные пла
 let ROWS_CACHE = {};
 let TZ_CACHE = null;
 let REQUEST_WRITE_FAILURE_RECOVERED = false;
+let REQUEST_DATA_MUTATION_STARTED = false;
 // Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
 // а строки, начинающиеся с "=", в формулы).
 const TEXT_COLS = ['created_at','updated_at','joined_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name'];
@@ -51,6 +52,7 @@ function resetRequestState_() {
   SHEET_READS = 0;
   SHEET_WRITES = 0;
   REQUEST_WRITE_FAILURE_RECOVERED = false;
+  REQUEST_DATA_MUTATION_STARTED = false;
 }
 
 function dataRevision_() {
@@ -205,7 +207,7 @@ function doPost(e) {
         // Reads remain blocked until the owner audits the potentially partial write.
         // RPC handlers and dedicated auth/family actions provide rollback or idempotent retry semantics.
         // Generic CRUD mutations do not, so a failed write must block reads until integrity is checked.
-        if (succeeded || SHEET_WRITES === 0 || REQUEST_WRITE_FAILURE_RECOVERED || !mayLeavePartialCrudWrite_(req)) finishWriteRevision_();
+        if (succeeded || !REQUEST_DATA_MUTATION_STARTED || REQUEST_WRITE_FAILURE_RECOVERED || !mayLeavePartialCrudWrite_(req)) finishWriteRevision_();
       }
     } finally {
       lock.releaseLock();
@@ -235,14 +237,14 @@ function batch_(req){
  if(list.length>BATCH_MAX)throw new Error('Слишком много запросов в пакете');
  const user=requireUser_(req.token), results=[];
  for(const item of list){
-  const writesBefore=SHEET_WRITES;
   REQUEST_WRITE_FAILURE_RECOVERED=false;
+  REQUEST_DATA_MUTATION_STARTED=false;
   try{
    if(!item||!item.action||['signup','signin','signout','batch'].includes(item.action))throw new Error('Действие недоступно в пакете');
    results.push({data:route_(item,user),error:null});
   }catch(err){
    const message=String(err&&err.message||err);
-   if(SHEET_WRITES>writesBefore&&!REQUEST_WRITE_FAILURE_RECOVERED){
+   if(REQUEST_DATA_MUTATION_STARTED&&!REQUEST_WRITE_FAILURE_RECOVERED){
     throw new Error('Пакет остановлен: одна из операций завершилась ошибкой после начала записи. Таблица заблокирована для проверки целостности. Исходная ошибка: '+message);
    }
    results.push({data:null,error:{message}});
@@ -299,6 +301,7 @@ function appendRows_(name, data) {
   const need=start+data.length-1;
   if(sh.getMaxRows()<need){sh.insertRowsAfter(sh.getMaxRows(),need-sh.getMaxRows()+500);formatSheet_(sh,name);}
   delete ROWS_CACHE[name];
+  REQUEST_DATA_MUTATION_STARTED=true;
   SHEET_WRITES++;
   sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
 }
@@ -312,6 +315,7 @@ function updateRows_(name, data) {
   let group=[];
   const flush=()=>{
     if(!group.length)return;
+    REQUEST_DATA_MUTATION_STARTED=true;
     SHEET_WRITES++;
     sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
     group=[];
@@ -328,11 +332,13 @@ function deleteRows_(name, data) {
   while(i<rowNumbers.length){
     const high=rowNumbers[i];let low=high;i++;
     while(i<rowNumbers.length&&rowNumbers[i]===low-1){low=rowNumbers[i];i++;}
+    REQUEST_DATA_MUTATION_STARTED=true;
     SHEET_WRITES++;
     sh.deleteRows(low,high-low+1);
   }
 }
 function writeRows_(name, data) {
+  REQUEST_DATA_MUTATION_STARTED=true;
   SHEET_WRITES++;
   const sh=sheet_(name), cols=TABLES[name];
   delete ROWS_CACHE[name];
@@ -471,13 +477,14 @@ function signup_(req){
   if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
   if(authRows_().some(u=>u.email===email)) throw new Error('Аккаунт с таким email уже существует');
   const id=id_(), salt=Utilities.getUuid();
+  REQUEST_DATA_MUTATION_STARTED=true;
   SHEET_WRITES++; authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_));
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
   try{ensureProfile_(id,name||email.split('@')[0]);}
   catch(err){
     const cleanup=[];
-    try{const row=authRows_().find(u=>u.id===id);if(row){SHEET_WRITES++;authSheet_().deleteRow(row.row);}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    try{const row=authRows_().find(u=>u.id===id);if(row){REQUEST_DATA_MUTATION_STARTED=true;SHEET_WRITES++;authSheet_().deleteRow(row.row);}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     try{PropertiesService.getScriptProperties().deleteProperty('session:'+token);}catch(cleanupErr){cleanup.push('сессия: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     if(cleanup.length)throw new Error('Не удалось полностью отменить регистрацию: '+cleanup.join('; ')+'. Исходная ошибка: '+(err&&err.message?err.message:String(err)));
     REQUEST_WRITE_FAILURE_RECOVERED=true;
@@ -503,7 +510,7 @@ function signin_(req){
   }
   props.deleteProperty(attemptKey);
   // Старый аккаунт: после успешного входа заменяем медленный прежний хеш на новый (следующие входы будут быстрыми).
-  if(isLegacyHash_(u.hash)){try{SHEET_WRITES++;authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt));}catch(_){}}
+  if(isLegacyHash_(u.hash)){try{REQUEST_DATA_MUTATION_STARTED=true;SHEET_WRITES++;authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt));}catch(_){}}
   const token=id_()+id_();
   props.setProperty('session:'+token,JSON.stringify({userId:u.id,expires:now+SESSION_TTL*1000}));
   return {token,user:{id:u.id,email:u.email}};

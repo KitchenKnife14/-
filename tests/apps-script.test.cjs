@@ -1351,12 +1351,19 @@ test('planned purchases can only become bought through the confirmation RPC', ()
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Отменённая покупка', estimated_kopecks: 1000, status: 'cancelled' }
   }).data[0];
+  const transactionCountBeforeRejectedConfirmation = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'select'
+  }).data.length;
   const cancelledConfirmation = h.call({
     action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
     params: { p_purchase_id: cancelled.id, p_operation_date: '2026-11-02' }
   });
   assert.match(cancelledConfirmation.error.message, /Отменённую покупку нельзя подтвердить/);
-  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
+  assert.equal(
+    h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length,
+    transactionCountBeforeRejectedConfirmation,
+    'A cancelled purchase must not create an expense'
+  );
 });
 
 test('linked bought purchases cannot be edited in a way that desynchronizes their expense history', () => {
