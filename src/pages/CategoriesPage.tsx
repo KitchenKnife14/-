@@ -48,7 +48,7 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Категории</h1>
+        <h1 className="page-title">Категории</h1>
         <button onClick={() => { setEditing(null); setParentId(null); setShowForm(true) }} className="btn-primary">
           <Plus size={18} /> Добавить
         </button>
