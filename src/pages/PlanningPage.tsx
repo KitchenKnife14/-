@@ -18,6 +18,8 @@ export default function PlanningPage() {
   const [error, setError] = useState<string | null>(null)
   const [cursor, setCursor] = useState(currentMoscowMonth)
   const [showForm, setShowForm] = useState(false)
+  const [deletingPlan, setDeletingPlan] = useState<MonthlyPlan | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const monthDate = firstDayOfMonth(cursor.year, cursor.month)
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
@@ -80,7 +82,21 @@ export default function PlanningPage() {
     await load()
   }
 
-  const removePlan = async (p: MonthlyPlan) => { const { error: err } = await googleSheets.from('monthly_plans').delete().eq('id', p.id); if (err) setError(err.message); load() }
+  const confirmRemovePlan = async () => {
+    if (!deletingPlan || deleteBusy) return
+    setDeleteBusy(true)
+    setError(null)
+    try {
+      const { error: err } = await googleSheets.from('monthly_plans').delete().eq('id', deletingPlan.id)
+      if (err) throw err
+      setDeletingPlan(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить план')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -122,7 +138,7 @@ export default function PlanningPage() {
                     <div className="text-xs text-slate-500">Факт: {formatRubles(fact)}</div>
                     <div className={`text-xs ${dev >= 0 ? 'text-accent-600' : 'text-danger-600'}`}>Откл: {dev >= 0 ? '+' : '−'}{formatRubles(Math.abs(dev))}</div>
                   </div>
-                  <button onClick={() => removePlan(p)} className="btn-ghost px-2 text-danger-600"><Trash2 size={14} /></button>
+                  <button type="button" onClick={() => setDeletingPlan(p)} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить план ${cat?.name ?? 'без категории'}`}><Trash2 size={14} /></button>
                 </div>
               )
             })}
@@ -130,6 +146,13 @@ export default function PlanningPage() {
         )}
       </div>
       <PlanForm open={showForm} onClose={() => setShowForm(false)} onSaved={load} categories={categories} familyId={family?.id ?? null} monthDate={monthDate} />
+      <Modal open={!!deletingPlan} onClose={() => { if (!deleteBusy) setDeletingPlan(null) }} title="Удалить план?">
+        <p className="text-sm text-slate-600 mb-4">Строка планирования будет удалена без возможности восстановления. Фактические операции не затрагиваются.</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setDeletingPlan(null)} disabled={deleteBusy} className="btn-secondary flex-1">Отмена</button>
+          <button type="button" onClick={confirmRemovePlan} disabled={deleteBusy} className="btn-danger flex-1">{deleteBusy ? 'Удаление…' : 'Удалить план'}</button>
+        </div>
+      </Modal>
     </div>
   )
 }
