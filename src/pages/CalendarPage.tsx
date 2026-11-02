@@ -166,7 +166,7 @@ export default function CalendarPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Финансовый календарь</h1>
+        <h1 className="page-title">Финансовый календарь</h1>
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {(['month', 'week', 'day', 'list'] as View[]).map((v) => (
             <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{v === 'month' ? 'Месяц' : v === 'week' ? 'Неделя' : v === 'day' ? 'День' : 'Список'}</button>
