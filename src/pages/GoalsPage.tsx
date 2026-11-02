@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
-import { formatRubles } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
@@ -167,8 +167,8 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
     e.preventDefault()
     if (!familyId) return
     setError(null)
-    const targetK = Math.round(parseFloat(target.replace(',', '.')) * 100)
-    if (!targetK || targetK <= 0) { setError('Введите сумму цели больше нуля'); return }
+    const targetK = parseRublesToKopecks(target)
+    if (targetK === null || targetK <= 0) { setError('Введите корректную сумму цели больше нуля (не более двух знаков после запятой)'); return }
     setSaving(true)
     try {
       const payload = { name: name.trim(), description: description.trim(), target_kopecks: targetK, target_date: targetDate || null, priority: parseInt(priority) }
@@ -214,8 +214,8 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
     e.preventDefault()
     if (!goal) return
     setError(null)
-    const amt = Math.round(parseFloat(amount.replace(',', '.')) * 100)
-    if (!Number.isSafeInteger(amt) || amt === 0) { setError('Введите корректную ненулевую сумму'); return }
+    const amt = parseRublesToKopecks(amount, true)
+    if (amt === null || amt === 0) { setError('Введите корректную ненулевую сумму (не более двух знаков после запятой)'); return }
     if (amt < 0 && Math.abs(amt) > Number(goal.saved_kopecks || 0)) {
       setError('Нельзя снять больше, чем сейчас накоплено')
       return
@@ -235,7 +235,7 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
   return (
     <Modal open={!!goal} onClose={onClose} title={`Движение по цели: ${goal?.name ?? ''}`}>
       <form onSubmit={submit} className="space-y-3">
-        <div><label className="label">Сумма, ₽ (положительная — пополнение, отрицательная — снятие)</label><input className="input" type="number" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" autoFocus /></div>
+        <div><label className="label">Сумма, ₽ (положительная — пополнение, отрицательная — снятие)</label><input className="input" type="number" step="0.01" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" autoFocus /></div>
         <div><label className="label">Дата</label><input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <div><label className="label">Комментарий</label><input className="input" value={note} onChange={(e) => setNote(e.target.value)} /></div>
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}

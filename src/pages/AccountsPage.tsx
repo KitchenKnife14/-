@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
-import { formatRubles, rublesToKopecks } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { calculateAccountBalances } from '../lib/accountBalances.js'
 import { Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import Modal from '../components/Modal'
@@ -65,9 +65,9 @@ export default function AccountsPage() {
     event.preventDefault()
     if (!family) return
     const normalizedName = name.trim()
-    const balance = rublesToKopecks(Number(startingBalance.replace(',', '.')))
+    const balance = parseRublesToKopecks(startingBalance, true)
     if (!normalizedName) { setError('Введите название счёта'); return }
-    if (!Number.isSafeInteger(balance)) { setError('Введите корректный начальный остаток'); return }
+    if (balance === null) { setError('Введите корректный начальный остаток (не более двух знаков после запятой)'); return }
     setSaving(true); setError(null)
     try {
       const payload = { family_id: family.id, name: normalizedName, kind, starting_balance_kopecks: balance }
@@ -118,7 +118,7 @@ export default function AccountsPage() {
         <form onSubmit={save} className="space-y-3">
           <div><label className="label">Название</label><input className="input" required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Например, Основная карта" /></div>
           <div><label className="label">Тип</label><select className="input" value={kind} onChange={e => setKind(e.target.value as Account['kind'])}><option value="bank">Банковский счёт</option><option value="cash">Наличные</option><option value="savings">Накопительный</option><option value="other">Другой</option></select></div>
-          <div><label className="label">Начальный остаток, ₽</label><input className="input" type="number" step="0.01" value={startingBalance} onChange={e => setStartingBalance(e.target.value)} /></div>
+          <div><label className="label">Начальный остаток, ₽</label><input className="input" type="number" step="0.01" inputMode="decimal" value={startingBalance} onChange={e => setStartingBalance(e.target.value)} /></div>
           <div className="flex gap-2"><button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : 'Сохранить'}</button></div>
         </form>
       </Modal>
