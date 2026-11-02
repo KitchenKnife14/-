@@ -112,7 +112,7 @@ function finishWriteRevision_() {
 function mayLeavePartialCrudWrite_(req) {
   if (!req || typeof req !== 'object') return false;
   if (req.action === 'query') return (req.mode || 'select') !== 'select';
-  if (req.action === 'rpc') return req.name !== 'get_my_context';
+  if (req.action === 'rpc') return !['get_my_context', 'join_family_by_invite', 'confirm_planned_purchase', 'confirm_recurring_payment'].includes(req.name);
   if (['signup', 'createFamily', 'joinFamily'].includes(req.action)) return true;
   if (req.action === 'batch') {
     return Array.isArray(req.requests) && req.requests.some(mayLeavePartialCrudWrite_);
