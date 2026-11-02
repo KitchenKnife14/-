@@ -643,6 +643,21 @@ function canAccessRow_(table,row,user){
   if(table==='goal_contributions'){const g=rows_('goals').find(g=>g.id===row.goal_id);return !!g&&fams.includes(String(g.family_id));}
   return false;
 }
+function assertIsoDate_(value,label,required){
+  const raw=String(value===undefined||value===null?'':value).trim();
+  if(!raw){if(required)throw new Error(label+' обязательна');return;}
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw))throw new Error(label+' должна быть в формате ГГГГ-ММ-ДД');
+  const parts=raw.split('-').map(Number),year=parts[0],month=parts[1],day=parts[2];
+  const date=new Date(Date.UTC(year,month-1,day));
+  if(year<1900||year>9999||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)throw new Error(label+' содержит некорректную календарную дату');
+}
+function assertMonthStart_(value,label,required){
+  assertIsoDate_(value,label,required);
+  if(value&&String(value).slice(-2)!=='01')throw new Error(label+' должна указывать на первое число месяца');
+}
+function assertTime_(value,label){
+  if(value!==undefined&&value!==null&&value!==''&&!/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(value)))throw new Error(label+' должна быть в формате ЧЧ:ММ');
+}
 function assertMoneyValue_(value, label, allowZero) {
   const amount = Number(value);
   if (typeof value !== 'number' || !Number.isSafeInteger(amount) || (allowZero ? amount < 0 : amount <= 0)) {
@@ -706,6 +721,7 @@ function assertUniqueMonthlyPlan_(rows,row,excludeId){
 function validateRelations_(table,row,user,previousRow){
   const familyId=String(row.family_id||'');
   if(table==='goal_contributions'){
+    assertIsoDate_(row.contribution_date,'Дата движения по цели',true);
     const amount=row.amount_kopecks;
     if(typeof amount!=='number'||!Number.isSafeInteger(amount)||amount===0)throw new Error('Сумма движения по цели должна быть ненулевым целым числом копеек');
     const goal=rows_('goals').find(x=>String(x.id)===String(row.goal_id));
@@ -752,21 +768,29 @@ function validateRelations_(table,row,user,previousRow){
     }
   }
   if(table==='transactions'){
+    assertIsoDate_(row.operation_date,'Дата операции',!previousRow);
+    assertTime_(row.operation_time,'Время операции');
     assertMoneyValue_(row.amount_kopecks,'Сумма операции',false);
     if(!['income','expense','transfer'].includes(String(row.type||'')))throw new Error('Неизвестный тип операции');
     if(row.type==='transfer'&&(!row.account_id||!row.to_account_id))throw new Error('Для перевода нужны счёт списания и счёт зачисления');
     if(row.type!=='transfer'&&row.to_account_id)throw new Error('Счёт зачисления допустим только для перевода');
   }
   if(table==='recurring_payments'){
+    assertIsoDate_(row.start_date,'Дата начала регулярного платежа',!previousRow);
+    assertIsoDate_(row.next_due_date,'Дата следующего платежа',!previousRow);
+    assertIsoDate_(row.end_date,'Дата окончания регулярного платежа',false);
+    if(row.start_date&&row.end_date&&String(row.end_date)<String(row.start_date))throw new Error('Дата окончания не может быть раньше даты начала');
+    if(row.start_date&&row.next_due_date&&String(row.next_due_date)<String(row.start_date))throw new Error('Следующий платёж не может быть раньше даты начала');
     if(!['income','expense'].includes(String(row.type||'')))throw new Error('Регулярный платёж должен быть доходом или расходом');
     assertMoneyValue_(row.amount_kopecks,'Сумма регулярного платежа',false);
     if(!['daily','weekly','monthly','yearly','custom'].includes(String(row.frequency||'')))throw new Error('Неизвестная частота регулярного платежа');
     if(row.frequency==='custom'&&(!Number.isSafeInteger(Number(row.custom_interval_days))||Number(row.custom_interval_days)<1))throw new Error('Пользовательский интервал должен быть положительным целым числом дней');
   }
-  if(table==='budgets')assertMoneyValue_(row.limit_kopecks,'Лимит бюджета',false);
-  if(table==='goals')assertMoneyValue_(row.target_kopecks,'Целевая сумма',false);
-  if(table==='planned_purchases')assertMoneyValue_(row.estimated_kopecks,'Стоимость покупки',false);
+  if(table==='budgets'){assertMonthStart_(row.month_date,'Месяц бюджета',!previousRow);assertMoneyValue_(row.limit_kopecks,'Лимит бюджета',false);}
+  if(table==='goals'){assertIsoDate_(row.target_date,'Дата цели',false);assertMoneyValue_(row.target_kopecks,'Целевая сумма',false);}
+  if(table==='planned_purchases'){assertIsoDate_(row.desired_date,'Желаемая дата покупки',false);assertMoneyValue_(row.estimated_kopecks,'Стоимость покупки',false);}
   if(table==='monthly_plans'){
+    assertMonthStart_(row.month_date,'Месяц плана',!previousRow);
     assertMoneyValue_(row.planned_kopecks,'Плановая сумма',false);
     if(!['income','expense','savings'].includes(String(row.type||'')))throw new Error('Неизвестный тип плановой операции');
   }
@@ -1105,6 +1129,7 @@ function rpc_(req,user){
   }
   if(name==='confirm_planned_purchase'){
     const id=String(p.p_purchase_id||'');
+    assertIsoDate_(p.p_operation_date,'Дата покупки',true);
     const purchases=rows_('planned_purchases');
     const purchase=purchases.find(x=>String(x.id)===id&&canAccessRow_('planned_purchases',x,user));
     if(!purchase)throw new Error('Планируемая покупка не найдена');
@@ -1144,6 +1169,8 @@ function rpc_(req,user){
     const r=rows_('recurring_payments').find(x=>String(x.id)===id&&canAccessRow_('recurring_payments',x,user));
     if(!r)throw new Error('Регулярный платёж не найден');
     if(!expectedDue||!p.p_operation_date)throw new Error('Не указана дата подтверждаемого платежа');
+    assertIsoDate_(expectedDue,'Дата запланированного платежа',true);
+    assertIsoDate_(p.p_operation_date,'Дата фактического платежа',true);
     const transactionId='recurring_'+r.id+'_'+expectedDue;
     const txs=rows_('transactions'), existingTx=txs.find(t=>String(t.id)===transactionId);
     if(existingTx && (

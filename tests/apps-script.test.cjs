@@ -2000,3 +2000,35 @@ test('monthly plans enforce one family/month/category/type row across insert, up
   assert.equal(remaining.length, 2);
   assert.equal(remaining[1].category_id, categories[1].id);
 });
+
+
+test('server rejects impossible dates and malformed operation times while accepting valid leap days', () => {
+  const h = makeHarness();
+  const user = h.signup('strict-dates@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка дат' }).data;
+
+  const invalidDate = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-02-30', description: 'Невозможная дата' }
+  });
+  assert.match(invalidDate.error.message, /некорректную календарную дату/);
+
+  const invalidTime = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2028-02-29', operation_time: '25:61', description: 'Неверное время' }
+  });
+  assert.match(invalidTime.error.message, /формате ЧЧ:ММ/);
+
+  const validLeapDay = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2028-02-29', operation_time: '09:05', description: 'Корректная дата' }
+  });
+  assert.equal(validLeapDay.error, null, validLeapDay.error?.message);
+  assert.equal(validLeapDay.data[0].operation_date, '2028-02-29');
+
+  const invalidMonth = h.call({
+    action: 'query', token: user.token, table: 'budgets', mode: 'insert',
+    values: { family_id: family.id, category_id: '', month_date: '2026-11-02', limit_kopecks: 100000 }
+  });
+  assert.match(invalidMonth.error.message, /первое число месяца/);
+});
