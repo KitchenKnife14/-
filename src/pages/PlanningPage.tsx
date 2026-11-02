@@ -85,7 +85,7 @@ export default function PlanningPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Месячное планирование</h1>
+        <h1 className="page-title">Месячное планирование</h1>
         <div className="flex gap-2">
           <button onClick={copyFromPrev} className="btn-secondary"><Copy size={16} /> Из предыдущего</button>
           <button onClick={() => setShowForm(true)} className="btn-primary"><Plus size={18} /> План</button>
