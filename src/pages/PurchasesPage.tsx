@@ -85,7 +85,7 @@ export default function PurchasesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Будущие покупки</h1>
+        <h1 className="page-title">Будущие покупки</h1>
         <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Добавить</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
