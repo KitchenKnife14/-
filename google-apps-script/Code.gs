@@ -646,7 +646,7 @@ function canAccessRow_(table,row,user){
 function assertIsoDate_(value,label,required){
   const raw=String(value===undefined||value===null?'':value).trim();
   if(!raw){if(required)throw new Error(label+' обязательна');return;}
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw))throw new Error(label+' должна быть в формате ГГГГ-ММ-ДД');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))throw new Error(label+' должна быть в формате ГГГГ-ММ-ДД');
   const parts=raw.split('-').map(Number),year=parts[0],month=parts[1],day=parts[2];
   const date=new Date(Date.UTC(year,month-1,day));
   if(year<1900||year>9999||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)throw new Error(label+' содержит некорректную календарную дату');
@@ -656,7 +656,7 @@ function assertMonthStart_(value,label,required){
   if(value&&String(value).slice(-2)!=='01')throw new Error(label+' должна указывать на первое число месяца');
 }
 function assertTime_(value,label){
-  if(value!==undefined&&value!==null&&value!==''&&!/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(String(value)))throw new Error(label+' должна быть в формате ЧЧ:ММ');
+  if(value!==undefined&&value!==null&&value!==''&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(value)))throw new Error(label+' должна быть в формате ЧЧ:ММ');
 }
 function assertMoneyValue_(value, label, allowZero) {
   const amount = Number(value);
