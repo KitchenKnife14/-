@@ -775,6 +775,7 @@ function validatePlannedPurchaseUpdate_(current,next,patch){
 }
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
+  if(mode==='insert'&&(table==='families'||table==='family_members'))throw new Error('Создание семей и изменение состава участников доступны только через безопасные серверные операции');
   let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const filters=req.filters||[];
   const matches=(row)=>filters.every(f=>{

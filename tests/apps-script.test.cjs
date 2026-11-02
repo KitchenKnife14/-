@@ -1716,3 +1716,29 @@ test('registration closes automatically after the second family member joins and
   assert.equal(ownerSignin.error, null, ownerSignin.error?.message);
   assert.equal(memberSignin.error, null, memberSignin.error?.message);
 });
+
+
+test('families and family memberships can only be created through dedicated server operations', () => {
+  const h = makeHarness();
+  const user = h.signup('family-rpc-only@example.com');
+
+  const directFamilyInsert = h.call({
+    action: 'query', token: user.token, table: 'families', mode: 'insert',
+    values: { name: 'Обход onboarding' }
+  });
+  assert.match(directFamilyInsert.error.message, /только через безопасные серверные операции/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'families', mode: 'select' }).data.length, 0);
+
+  const family = h.call({
+    action: 'rpc', token: user.token, name: 'create_family', params: { p_name: 'Правильное создание' }
+  });
+  assert.equal(family.error, null, family.error?.message);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' }).data.length, 1);
+
+  const directMembershipInsert = h.call({
+    action: 'query', token: user.token, table: 'family_members', mode: 'insert',
+    values: { family_id: family.data.id, user_id: user.user.id, role: 'owner' }
+  });
+  assert.match(directMembershipInsert.error.message, /только через безопасные серверные операции/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' }).data.length, 1);
+});
