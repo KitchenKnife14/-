@@ -91,7 +91,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Отчёты</h1>
+        <h1 className="page-title">Отчёты</h1>
         <button onClick={exportCSV} disabled={filteredTxs.length === 0} className="btn-secondary"><Download size={16} /> Экспорт CSV</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
