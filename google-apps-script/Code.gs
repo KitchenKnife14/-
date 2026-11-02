@@ -239,6 +239,8 @@ function doPost(e) {
         finishWriteRevision_();
       } else if (recoveringExistingWrite) {
         // The same idempotent operation can be retried again; keep reads blocked.
+      } else if (REQUEST_WRITE_FAILURE_RECOVERED) {
+        finishWriteRevision_();
       } else if (REQUEST_DATA_MUTATION_STARTED && mayLeavePartialCrudWrite_(req)) {
         const recoveryKey = recoveryRequestKey_(req);
         if (recoveryKey) props.setProperty(DATA_RECOVERY_KEY, recoveryKey);

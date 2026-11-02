@@ -287,7 +287,7 @@ test('recurring payment confirmation can retry after a partial write without dup
   assert.match(failed.error.message, /simulated write failure/);
   assert.equal(h.context.dataRevision_() % 2, 1, 'The incomplete recurring occurrence must block reads');
   const blockedRead = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
-  assert.match(blockedRead.error.message, /Таблица заблокирована/);
+  assert.match(blockedRead.error.message, /заблокированы до восстановления/);
   const alteredRetry = h.call({ ...args, params: { ...args.params, p_operation_date: '2026-10-29' } });
   assert.match(alteredRetry.error.message, /Повторите исходное подтверждение/);
   const retried = h.call(args);
@@ -362,7 +362,7 @@ test('purchase confirmation can retry after a partial write without duplicating 
   assert.match(failed.error.message, /simulated purchase status write failure/);
   assert.equal(h.context.dataRevision_() % 2, 1, 'The unlinked purchase expense must block reads');
   const blockedRead = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
-  assert.match(blockedRead.error.message, /Таблица заблокирована/);
+  assert.match(blockedRead.error.message, /заблокированы до восстановления/);
   const alteredRetry = h.call({ ...args, params: { ...args.params, p_operation_date: '2026-10-29' } });
   assert.match(alteredRetry.error.message, /Повторите исходное подтверждение/);
   const retried = h.call(args);
