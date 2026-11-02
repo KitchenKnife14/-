@@ -91,7 +91,7 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Операции</h1>
+        <h1 className="page-title">Операции</h1>
         <button onClick={() => { setEditing(null); setShowAdd(true) }} className="btn-primary">
           <Plus size={18} /> Добавить
         </button>
