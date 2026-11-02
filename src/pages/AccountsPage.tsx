@@ -94,7 +94,7 @@ export default function AccountsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-xl font-semibold text-slate-900">Счета</h1><p className="text-sm text-slate-500 mt-1">Остатки рассчитываются по начальному балансу и операциям</p></div>
+        <div><h1 className="page-title">Счета</h1><p className="text-sm text-slate-500 mt-1">Остатки рассчитываются по начальному балансу и операциям</p></div>
         <button onClick={openCreate} className="btn-primary"><Plus size={18} /> Добавить счёт</button>
       </div>
       <div className="card">
