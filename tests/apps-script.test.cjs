@@ -1254,3 +1254,130 @@ test('new accounts store PBKDF2 hashes and legacy accounts migrate after success
   row = h.context.authRows_().find(user => user.id === created.user.id);
   assert.equal(row.hash.startsWith('p2$30000$'), true);
 });
+
+
+test('batch aborts and leaves the data revision blocked after a subrequest partially mutates multiple sheets', () => {
+  const h = makeHarness();
+  const user = h.signup('batch-partial-write@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Пакетная частичная запись' }).data;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Цель с историей', target_kopecks: 100000 }
+  }).data[0];
+  h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: goal.id, amount_kopecks: 10000, contribution_date: '2026-11-02' }
+  });
+
+  const originalDeleteRows = h.context.deleteRows_;
+  h.context.deleteRows_ = function(table, rows) {
+    if (table === 'goal_contributions') throw new Error('Искусственный сбой после удаления цели');
+    return originalDeleteRows(table, rows);
+  };
+
+  const response = h.call({
+    action: 'batch', token: user.token,
+    requests: [{
+      action: 'query', table: 'goals', mode: 'delete',
+      filters: [{ column: 'id', op: 'eq', value: goal.id }]
+    }]
+  });
+
+  assert.ok(response.error, 'A partial batch write must fail the whole batch');
+  assert.match(response.error.message, /после начала записи/);
+  assert.equal(h.context.dataRevision_() % 2, 1, 'The revision marker must remain odd until manual integrity review');
+});
+
+test('financial amount fields require positive safe integer kopecks on the server', () => {
+  const h = makeHarness();
+  const user = h.signup('safe-money-values@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка сумм' }).data;
+  const category = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .find(item => item.kind === 'expense' && !item.parent_id);
+  const invalidValues = ['100', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1];
+
+  const cases = [
+    { table: 'transactions', field: 'amount_kopecks', values: { family_id: family.id, type: 'expense', operation_date: '2026-11-02', description: 'Проверка' } },
+    { table: 'recurring_payments', field: 'amount_kopecks', values: { family_id: family.id, type: 'expense', description: 'Подписка', start_date: '2026-11-02', next_due_date: '2026-11-02', frequency: 'monthly', active: true } },
+    { table: 'budgets', field: 'limit_kopecks', values: { family_id: family.id, category_id: category.id, month_date: '2026-11-01' } },
+    { table: 'goals', field: 'target_kopecks', values: { family_id: family.id, name: 'Цель' } },
+    { table: 'planned_purchases', field: 'estimated_kopecks', values: { family_id: family.id, name: 'Покупка', status: 'planned' } },
+    { table: 'monthly_plans', field: 'planned_kopecks', values: { family_id: family.id, month_date: '2026-11-01', category_id: category.id, type: 'expense' } },
+  ];
+
+  for (const item of cases) {
+    for (const amount of invalidValues) {
+      const result = h.call({
+        action: 'query', token: user.token, table: item.table, mode: 'insert',
+        values: { ...item.values, [item.field]: amount }
+      });
+      assert.ok(result.error, item.table + ' accepted invalid amount: ' + String(amount));
+    }
+  }
+});
+
+test('planned purchases can only become bought through the confirmation RPC', () => {
+  const h = makeHarness();
+  const user = h.signup('purchase-state-guard@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка статуса покупки' }).data;
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Телевизор', estimated_kopecks: 6500000, status: 'planned' }
+  }).data[0];
+
+  const directUpdate = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }], values: { status: 'bought' }
+  });
+  assert.match(directUpdate.error.message, /только через подтверждение покупки/);
+
+  const arbitraryLink = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }], values: { linked_transaction_id: 'forged-transaction' }
+  });
+  assert.match(arbitraryLink.error.message, /изменяется только сервером/);
+
+  const directInsert = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert',
+    values: { family_id: family.id, name: 'Поддельно купленная покупка', estimated_kopecks: 1000, status: 'bought' }
+  });
+  assert.match(directInsert.error.message, /только через подтверждение покупки/);
+
+  const cancelled = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Отменённая покупка', estimated_kopecks: 1000, status: 'cancelled' }
+  }).data[0];
+  const cancelledConfirmation = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: cancelled.id, p_operation_date: '2026-11-02' }
+  });
+  assert.match(cancelledConfirmation.error.message, /Отменённую покупку нельзя подтвердить/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
+});
+
+test('linked bought purchases cannot be edited in a way that desynchronizes their expense history', () => {
+  const h = makeHarness();
+  const user = h.signup('bought-purchase-edit@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Синхронизация покупки' }).data;
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Наушники', estimated_kopecks: 250000, status: 'planned' }
+  }).data[0];
+  const confirmed = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-02' }
+  });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+
+  const edited = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }], values: { estimated_kopecks: 300000 }
+  });
+  assert.match(edited.error.message, /Нельзя менять название, стоимость или категорию/);
+
+  const reset = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }], values: { status: 'planned' }
+  });
+  assert.match(reset.error.message, /статус и связь нельзя изменить/);
+});

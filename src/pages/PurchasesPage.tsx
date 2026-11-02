@@ -143,8 +143,8 @@ export default function PurchasesPage() {
                   </div>
                   <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(p.estimated_kopecks)}</div>
                   <div className="flex gap-1 flex-shrink-0">
-                    {p.status !== 'bought' && <button onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
-                    <button onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
+                    {p.status !== 'bought' && p.status !== 'cancelled' && <button onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
+                    {p.status !== 'bought' && <button onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>}
                     <button onClick={() => setDeletingPurchase(p)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                   </div>
                 </div>
@@ -228,7 +228,7 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
         <div><label className="label">Ориентировочная стоимость, ₽</label><input className="input" type="number" step="0.01" min="0" required value={estimated} onChange={(e) => setEstimated(e.target.value)} placeholder="5000" /></div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Приоритет</label><select className="input" value={priority} onChange={(e) => setPriority(e.target.value)}><option value="1">1 — Критически необходимое</option><option value="2">2 — Необходимое</option><option value="3">3 — Важное</option><option value="4">4 — Желательное</option><option value="5">5 — Необязательное</option></select></div>
-          <div><label className="label">Статус</label><select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>{Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+          <div><label className="label">Статус</label><select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>{Object.entries(STATUS_LABELS).filter(([k]) => k !== 'bought').map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Желаемый месяц</label><input className="input" type="month" value={desiredMonth} onChange={(e) => setDesiredMonth(e.target.value)} /></div>
