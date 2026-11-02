@@ -1873,3 +1873,89 @@ test('batch rejects multiple write operations before executing any of them', () 
   assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
   assert.equal(h.context.dataRevision_() % 2, 0);
 });
+
+
+test('transaction and recurring-payment categories must match the operation type', () => {
+  const h = makeHarness();
+  const user = h.signup('category-kind-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Виды категорий' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  const expense = categories.find(c => c.kind === 'expense' && !c.parent_id && !c.archived);
+  const income = categories.find(c => c.kind === 'income' && !c.parent_id && !c.archived);
+
+  const wrongTransaction = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'income', amount_kopecks: 1000, operation_date: '2026-11-03', category_id: expense.id, description: 'Неверная категория' }
+  });
+  assert.match(wrongTransaction.error.message, /Тип категории должен совпадать/);
+
+  const rightTransaction = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'income', amount_kopecks: 1000, operation_date: '2026-11-03', category_id: income.id, description: 'Правильная категория' }
+  });
+  assert.equal(rightTransaction.error, null, rightTransaction.error?.message);
+
+  const wrongRecurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert',
+    values: { family_id: family.id, type: 'income', amount_kopecks: 5000, category_id: expense.id, description: 'Неверная подписка', start_date: '2026-11-03', next_due_date: '2026-11-03', frequency: 'monthly', active: true }
+  });
+  assert.match(wrongRecurring.error.message, /Тип категории должен совпадать/);
+
+  const invalidRecurringType = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert',
+    values: { family_id: family.id, type: 'refund', amount_kopecks: 5000, description: 'Неверный тип', start_date: '2026-11-03', next_due_date: '2026-11-03', frequency: 'monthly', active: true }
+  });
+  assert.match(invalidRecurringType.error.message, /должен быть доходом или расходом/);
+});
+
+test('category type cannot be changed while financial history depends on it', () => {
+  const h = makeHarness();
+  const user = h.signup('immutable-used-category@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'История категорий' }).data;
+  const category = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: null, name: 'Категория с историей', kind: 'expense', icon: 'x', color: '#000000' }
+  }).data[0];
+  h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-03', category_id: category.id, description: 'Историческая запись' }
+  });
+
+  const result = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { kind: 'income' }
+  });
+  assert.match(result.error.message, /пока она используется в финансовой истории/);
+  const persisted = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: category.id }]
+  }).data[0];
+  assert.equal(persisted.kind, 'expense');
+});
+
+test('goal and purchase responsible users must belong to the same family', () => {
+  const h = makeHarness();
+  const owner = h.signup('responsible-owner@example.com');
+  const member = h.signup('responsible-member@example.com');
+  const outsider = h.signup('responsible-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Ответственные' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: member.token, invite_code: family.invite_code }).error, null);
+
+  const wrongGoal = h.call({
+    action: 'query', token: owner.token, table: 'goals', mode: 'insert',
+    values: { family_id: family.id, name: 'Чужой ответственный', target_kopecks: 10000, responsible_user_id: outsider.user.id }
+  });
+  assert.match(wrongGoal.error.message, /должен быть участником этой семьи/);
+
+  const rightGoal = h.call({
+    action: 'query', token: owner.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Ответственный супруг', target_kopecks: 10000, responsible_user_id: member.user.id }
+  });
+  assert.equal(rightGoal.error, null, rightGoal.error?.message);
+
+  const wrongPurchase = h.call({
+    action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert',
+    values: { family_id: family.id, name: 'Покупка', estimated_kopecks: 1000, status: 'planned', responsible_user_id: outsider.user.id }
+  });
+  assert.match(wrongPurchase.error.message, /должен быть участником этой семьи/);
+});

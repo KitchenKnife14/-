@@ -724,7 +724,13 @@ function validateRelations_(table,row,user,previousRow){
     if(row.parent_id&&String(row.parent_id)===String(row.id||''))throw new Error('Категория не может быть родителем самой себе');
     if(previousRow&&String(previousRow.kind)!==String(row.kind)){
       const hasChildren=rows_('categories').some(c=>String(c.parent_id||'')===String(row.id));
+      const hasHistory=rows_('transactions').some(tx=>String(tx.category_id||'')===String(row.id))||
+        rows_('recurring_payments').some(payment=>String(payment.category_id||'')===String(row.id))||
+        rows_('budgets').some(budget=>String(budget.category_id||'')===String(row.id))||
+        rows_('monthly_plans').some(plan=>String(plan.category_id||'')===String(row.id))||
+        rows_('planned_purchases').some(purchase=>String(purchase.category_id||'')===String(row.id));
       if(hasChildren)throw new Error('Нельзя менять тип категории, пока у неё есть подкатегории');
+      if(hasHistory)throw new Error('Нельзя менять тип категории, пока она используется в финансовой истории или планах');
     }
     if(previousRow&&!previousRow.parent_id&&row.parent_id){
       const hasChildren=rows_('categories').some(c=>String(c.parent_id||'')===String(row.id));
@@ -742,7 +748,7 @@ function validateRelations_(table,row,user,previousRow){
     if(row.type!=='transfer'&&row.to_account_id)throw new Error('Счёт зачисления допустим только для перевода');
   }
   if(table==='recurring_payments'){
-    if(row.type==='transfer')throw new Error('Регулярные переводы пока не поддерживаются');
+    if(!['income','expense'].includes(String(row.type||'')))throw new Error('Регулярный платёж должен быть доходом или расходом');
     assertMoneyValue_(row.amount_kopecks,'Сумма регулярного платежа',false);
     if(!['daily','weekly','monthly','yearly','custom'].includes(String(row.frequency||'')))throw new Error('Неизвестная частота регулярного платежа');
     if(row.frequency==='custom'&&(!Number.isSafeInteger(Number(row.custom_interval_days))||Number(row.custom_interval_days)<1))throw new Error('Пользовательский интервал должен быть положительным целым числом дней');
@@ -774,16 +780,33 @@ function validateRelations_(table,row,user,previousRow){
     }
   }
   if(table==='transactions'){
-    check('category_id','categories','Категория');check('account_id','accounts','Счёт списания');check('to_account_id','accounts','Счёт зачисления');check('parent_recurring_id','recurring_payments','Регулярный платёж');
+    const category=check('category_id','categories','Категория');check('account_id','accounts','Счёт списания');check('to_account_id','accounts','Счёт зачисления');check('parent_recurring_id','recurring_payments','Регулярный платёж');
+    if(category&&category.kind!==row.type)throw new Error('Тип категории должен совпадать с типом операции');
     if(row.account_id&&row.to_account_id&&String(row.account_id)===String(row.to_account_id))throw new Error('Счета перевода должны различаться');
   }
-  if(table==='recurring_payments'){check('category_id','categories','Категория');check('account_id','accounts','Счёт');}
+  if(table==='recurring_payments'){
+    const category=check('category_id','categories','Категория');check('account_id','accounts','Счёт');
+    if(category&&category.kind!==row.type)throw new Error('Тип категории должен совпадать с типом регулярного платежа');
+  }
   if(table==='budgets'){
     const category=check('category_id','categories','Категория');
     if(category&&category.kind!=='expense')throw new Error('Бюджет можно создать только для категории расходов');
   }
-  if(table==='monthly_plans')check('category_id','categories','Категория');
-  if(table==='planned_purchases'){check('category_id','categories','Категория');check('goal_id','goals','Цель');check('linked_transaction_id','transactions','Связанная операция');}
+  if(table==='monthly_plans'){
+    const category=check('category_id','categories','Категория');
+    const expectedKind=row.type==='income'?'income':'expense';
+    if(category&&category.kind!==expectedKind)throw new Error('Тип категории должен соответствовать типу месячного плана');
+  }
+  if(table==='planned_purchases'){
+    const category=check('category_id','categories','Категория');check('goal_id','goals','Цель');check('linked_transaction_id','transactions','Связанная операция');
+    if(category&&category.kind!=='expense')throw new Error('Планируемая покупка должна относиться к категории расходов');
+  }
+  const validateResponsibleMember=(field,label)=>{
+    const value=row[field];if(value===undefined||value===null||value==='')return;
+    if(!rows_('family_members').some(m=>String(m.family_id)===familyId&&String(m.user_id)===String(value)))throw new Error(label+' должен быть участником этой семьи');
+  };
+  if(table==='goals')validateResponsibleMember('responsible_user_id','Ответственный пользователь');
+  if(table==='planned_purchases')validateResponsibleMember('responsible_user_id','Ответственный пользователь');
 }
 
 function validatePlannedPurchaseInsert_(row){
