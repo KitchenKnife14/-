@@ -23,6 +23,7 @@ export function parseRublesToKopecks(value, allowNegative = false) {
   const kopecks = whole * 100 + Number(fractionText || '0');
   if (!Number.isSafeInteger(kopecks)) return null;
 
+  if (kopecks === 0) return 0;
   const signed = negative ? -kopecks : kopecks;
   return Number.isSafeInteger(signed) ? signed : null;
 }
