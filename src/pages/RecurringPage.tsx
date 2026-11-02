@@ -18,6 +18,8 @@ export default function RecurringPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [confirming, setConfirming] = useState<RecurringPayment | null>(null)
+  const [deletingPayment, setDeletingPayment] = useState<RecurringPayment | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const load = async () => {
     if (!family) return
@@ -62,7 +64,21 @@ export default function RecurringPage() {
   }
 
   const toggleActive = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').update({ active: !r.active }).eq('id', r.id); if (err) setError(err.message); load() }
-  const remove = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').delete().eq('id', r.id); if (err) setError(err.message); load() }
+  const confirmRemove = async () => {
+    if (!deletingPayment || deleteBusy) return
+    setDeleteBusy(true)
+    setError(null)
+    try {
+      const { error: err } = await googleSheets.from('recurring_payments').delete().eq('id', deletingPayment.id)
+      if (err) throw err
+      setDeletingPayment(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить расписание')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   const overdue = items.filter((r) => r.active && r.next_due_date < todayISO())
   const upcoming = items.filter((r) => r.active && r.next_due_date >= todayISO())
@@ -81,12 +97,21 @@ export default function RecurringPage() {
         <div className="card text-center py-8 text-sm text-slate-500"><Repeat size={24} className="mx-auto mb-2 text-slate-300" />Регулярных платежей пока нет. Добавьте аренду, подписки и другие повторяющиеся расходы.</div>
       ) : (
         <div className="space-y-4">
-          {overdue.length > 0 && <Section title="Просроченные" items={overdue} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} highlight />}
-          {upcoming.length > 0 && <Section title="Предстоящие" items={upcoming} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} />}
-          {paused.length > 0 && <Section title="Приостановленные" items={paused} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} dim />}
+          {overdue.length > 0 && <Section title="Просроченные" items={overdue} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={setDeletingPayment} highlight />}
+          {upcoming.length > 0 && <Section title="Предстоящие" items={upcoming} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={setDeletingPayment} />}
+          {paused.length > 0 && <Section title="Приостановленные" items={paused} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={setDeletingPayment} dim />}
         </div>
       )}
       <RecurringForm open={showForm} onClose={() => setShowForm(false)} onSaved={load} categories={categories} accounts={accounts} familyId={family?.id ?? null} userId={session?.user.id ?? null} />
+      <Modal open={!!deletingPayment} onClose={() => { if (!deleteBusy) setDeletingPayment(null) }} title="Удалить расписание?">
+        <p className="text-sm text-slate-600 mb-4">
+          Расписание «{deletingPayment?.description ?? ''}» будет удалено. Проверь, что будущие платежи по нему больше не нужны.
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setDeletingPayment(null)} disabled={deleteBusy} className="btn-secondary flex-1">Отмена</button>
+          <button type="button" onClick={confirmRemove} disabled={deleteBusy} className="btn-danger flex-1">{deleteBusy ? 'Удаление…' : 'Удалить расписание'}</button>
+        </div>
+      </Modal>
       <Modal open={!!confirming} onClose={() => setConfirming(null)} title="Подтвердить платёж?">
         <p className="text-sm text-slate-600 mb-2">Будет создана операция на сумму <strong>{formatRubles(confirming?.amount_kopecks ?? 0)}</strong> за сегодня. Дата следующего платежа будет перенесена.</p>
         <p className="text-xs text-slate-400 mb-4">Платёж не дублируется автоматически — только ручное подтверждение.</p>

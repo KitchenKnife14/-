@@ -17,6 +17,8 @@ export default function BudgetsPage() {
   const [cursor, setCursor] = useState(currentMoscowMonth)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Budget | null>(null)
+  const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const monthDate = firstDayOfMonth(cursor.year, cursor.month)
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
@@ -65,7 +67,21 @@ export default function BudgetsPage() {
   const totalSpent = budgets.reduce((s, b) => s + (spentByCat.get(b.category_id) ?? 0), 0)
   const totalPct = totalLimit > 0 ? (totalSpent / totalLimit) * 100 : 0
 
-  const remove = async (b: Budget) => { const { error: err } = await googleSheets.from('budgets').delete().eq('id', b.id); if (err) setError(err.message); load() }
+  const confirmRemove = async () => {
+    if (!deletingBudget || deleteBusy) return
+    setDeleteBusy(true)
+    setError(null)
+    try {
+      const { error: err } = await googleSheets.from('budgets').delete().eq('id', deletingBudget.id)
+      if (err) throw err
+      setDeletingBudget(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить бюджет')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
 
@@ -111,7 +127,7 @@ export default function BudgetsPage() {
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-semibold ${getTextColor(pct)}`}>{formatRubles(spent)} / {formatRubles(b.limit_kopecks)}</span>
                     <button onClick={() => { setEditing(b); setShowForm(true) }} className="btn-ghost px-2"><Pencil size={14} /></button>
-                    <button onClick={() => remove(b)} className="btn-ghost px-2 text-danger-600"><Trash2 size={14} /></button>
+                    <button onClick={() => setDeletingBudget(b)} className="btn-ghost px-2 text-danger-600" aria-label="Удалить бюджет"><Trash2 size={14} /></button>
                   </div>
                 </div>
                 <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${getBarColor(pct)}`} style={{ width: `${Math.min(pct, 100)}%` }} /></div>
@@ -121,6 +137,15 @@ export default function BudgetsPage() {
           })}
         </div>
       )}
+      <Modal open={!!deletingBudget} onClose={() => { if (!deleteBusy) setDeletingBudget(null) }} title="Удалить бюджет?">
+        <p className="text-sm text-slate-600 mb-4">
+          Лимит «{categories.find(c => c.id === deletingBudget?.category_id)?.name ?? 'категории'}» за выбранный месяц будет удалён. История расходов и операций не изменится.
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setDeletingBudget(null)} disabled={deleteBusy} className="btn-secondary flex-1">Отмена</button>
+          <button type="button" onClick={confirmRemove} disabled={deleteBusy} className="btn-danger flex-1">{deleteBusy ? 'Удаление…' : 'Удалить бюджет'}</button>
+        </div>
+      </Modal>
       <BudgetForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} categories={categories} familyId={family?.id ?? null} monthDate={monthDate} editing={editing} />
     </div>
   )

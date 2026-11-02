@@ -27,6 +27,8 @@ export default function PurchasesPage() {
   const [sortBy, setSortBy] = useState<SortBy>('date')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [buying, setBuying] = useState<PlannedPurchase | null>(null)
+  const [deletingPurchase, setDeletingPurchase] = useState<PlannedPurchase | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const load = async () => {
     if (!family) return
@@ -65,7 +67,21 @@ export default function PurchasesPage() {
   })
 
   const totalEstimated = filtered.filter((p) => p.status !== 'bought' && p.status !== 'cancelled').reduce((s, p) => s + p.estimated_kopecks, 0)
-  const remove = async (p: PlannedPurchase) => { const { error: err } = await googleSheets.from('planned_purchases').delete().eq('id', p.id); if (err) setError(err.message); load() }
+  const confirmRemove = async () => {
+    if (!deletingPurchase || deleteBusy) return
+    setDeleteBusy(true)
+    setError(null)
+    try {
+      const { error: err } = await googleSheets.from('planned_purchases').delete().eq('id', deletingPurchase.id)
+      if (err) throw err
+      setDeletingPurchase(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить покупку')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   const confirmBuy = async () => {
     if (!buying || !family || !session?.user) return
@@ -129,7 +145,7 @@ export default function PurchasesPage() {
                   <div className="flex gap-1 flex-shrink-0">
                     {p.status !== 'bought' && <button onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
                     <button onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
-                    <button onClick={() => remove(p)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                    <button onClick={() => setDeletingPurchase(p)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                   </div>
                 </div>
               </div>
@@ -138,6 +154,15 @@ export default function PurchasesPage() {
         </div>
       )}
       <PurchaseForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} categories={categories} goals={goals} familyId={family?.id ?? null} userId={session?.user.id ?? null} editing={editing} />
+      <Modal open={!!deletingPurchase} onClose={() => { if (!deleteBusy) setDeletingPurchase(null) }} title="Удалить покупку из плана?">
+        <p className="text-sm text-slate-600 mb-4">
+          «{deletingPurchase?.name ?? ''}» будет удалена из списка будущих покупок. Если по ней уже есть фактическая операция, проверь, что она тебе не нужна в истории.
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setDeletingPurchase(null)} disabled={deleteBusy} className="btn-secondary flex-1">Отмена</button>
+          <button type="button" onClick={confirmRemove} disabled={deleteBusy} className="btn-danger flex-1">{deleteBusy ? 'Удаление…' : 'Удалить покупку'}</button>
+        </div>
+      </Modal>
       <Modal open={!!buying} onClose={() => setBuying(null)} title="Отметить как купленное?">
         <p className="text-sm text-slate-600 mb-2">Будет создан фактический расход на сумму <strong>{formatRubles(buying?.estimated_kopecks ?? 0)}</strong>. Покупка получит статус «Куплено».</p>
         <p className="text-xs text-slate-400 mb-3">Расход не будет учтён дважды — он заменит плановую стоимость, а не добавится поверх.</p>

@@ -19,6 +19,8 @@ export default function GoalsPage() {
   const [editing, setEditing] = useState<Goal | null>(null)
   const [contribGoal, setContribGoal] = useState<Goal | null>(null)
   const [historyGoal, setHistoryGoal] = useState<Goal | null>(null)
+  const [deletingGoal, setDeletingGoal] = useState<Goal | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [contributions, setContributions] = useState<GoalContribution[]>([])
 
   const load = async () => {
@@ -39,7 +41,21 @@ export default function GoalsPage() {
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
-  const remove = async (g: Goal) => { const { error: err } = await googleSheets.from('goals').delete().eq('id', g.id); if (err) setError(err.message); load() }
+  const confirmRemove = async () => {
+    if (!deletingGoal || deleteBusy) return
+    setDeleteBusy(true)
+    setError(null)
+    try {
+      const { error: err } = await googleSheets.from('goals').delete().eq('id', deletingGoal.id)
+      if (err) throw err
+      setDeletingGoal(null)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить цель')
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
   const toggleStatus = async (g: Goal) => {
     const newStatus = g.status === 'active' ? 'paused' : g.status === 'paused' ? 'active' : g.status
     if (newStatus === g.status) return
@@ -105,7 +121,7 @@ export default function GoalsPage() {
                     {g.status === 'paused' && <button onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Возобновить"><Play size={16} /></button>}
                     {g.status !== 'done' && remaining <= 0 && <button onClick={() => markDone(g)} className="btn-ghost px-2 text-accent-600" title="Отметить достигнутой"><Check size={16} /></button>}
                     <button onClick={() => { setEditing(g); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
-                    <button onClick={() => remove(g)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                    <button onClick={() => setDeletingGoal(g)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                   </div>
                 </div>
               </div>
@@ -116,6 +132,16 @@ export default function GoalsPage() {
       <GoalForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} familyId={family?.id ?? null} editing={editing} />
       <ContributionModal goal={contribGoal} onClose={() => setContribGoal(null)} onSaved={load} />
       <HistoryModal goal={historyGoal} contributions={contributions} onClose={() => setHistoryGoal(null)} />
+      <Modal open={!!deletingGoal} onClose={() => { if (!deleteBusy) setDeletingGoal(null) }} title="Удалить цель?">
+        <p className="text-sm text-slate-600 mb-4">
+          Цель «{deletingGoal?.name ?? ''}» будет удалена. Перед продолжением убедись, что история её движений больше не нужна.
+        </p>
+        {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2 mb-3">{error}</div>}
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setDeletingGoal(null)} disabled={deleteBusy} className="btn-secondary flex-1">Отмена</button>
+          <button type="button" onClick={confirmRemove} disabled={deleteBusy} className="btn-danger flex-1">{deleteBusy ? 'Удаление…' : 'Удалить цель'}</button>
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -189,7 +215,11 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
     if (!goal) return
     setError(null)
     const amt = Math.round(parseFloat(amount.replace(',', '.')) * 100)
-    if (!amt || amt === 0) { setError('Введите сумму'); return }
+    if (!Number.isSafeInteger(amt) || amt === 0) { setError('Введите корректную ненулевую сумму'); return }
+    if (amt < 0 && Math.abs(amt) > Number(goal.saved_kopecks || 0)) {
+      setError('Нельзя снять больше, чем сейчас накоплено')
+      return
+    }
     setSaving(true)
     try {
       const { data: prof } = await googleSheets.auth.getUser()
@@ -203,13 +233,13 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
   }
 
   return (
-    <Modal open={!!goal} onClose={onClose} title={`Пополнить: ${goal?.name ?? ''}`}>
+    <Modal open={!!goal} onClose={onClose} title={`Движение по цели: ${goal?.name ?? ''}`}>
       <form onSubmit={submit} className="space-y-3">
-        <div><label className="label">Сумма, ₽ (минус для снятия)</label><input className="input" type="number" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" autoFocus /></div>
+        <div><label className="label">Сумма, ₽ (положительная — пополнение, отрицательная — снятие)</label><input className="input" type="number" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" autoFocus /></div>
         <div><label className="label">Дата</label><input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <div><label className="label">Комментарий</label><input className="input" value={note} onChange={(e) => setNote(e.target.value)} /></div>
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
-        <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : 'Пополнить'}</button></div>
+        <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : Number(amount.replace(',', '.')) < 0 ? 'Снять' : 'Пополнить'}</button></div>
       </form>
     </Modal>
   )
@@ -217,8 +247,8 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
 
 function HistoryModal({ goal, contributions, onClose }: { goal: Goal | null; contributions: GoalContribution[]; onClose: () => void }) {
   return (
-    <Modal open={!!goal} onClose={onClose} title={`История пополнений: ${goal?.name ?? ''}`}>
-      {contributions.length === 0 ? <p className="text-sm text-slate-500">Пополнений пока нет.</p> : (
+    <Modal open={!!goal} onClose={onClose} title={`История движений: ${goal?.name ?? ''}`}>
+      {contributions.length === 0 ? <p className="text-sm text-slate-500">Движений пока нет.</p> : (
         <div className="space-y-2">
           {contributions.map((c) => (
             <div key={c.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
