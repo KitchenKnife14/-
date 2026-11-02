@@ -1959,3 +1959,44 @@ test('goal and purchase responsible users must belong to the same family', () =>
   });
   assert.match(wrongPurchase.error.message, /должен быть участником этой семьи/);
 });
+
+
+test('monthly plans enforce one family/month/category/type row across insert, update and ID upsert', () => {
+  const h = makeHarness();
+  const user = h.signup('monthly-plan-unique@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Уникальность планов' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .filter(category => category.kind === 'expense' && !category.parent_id && !category.archived);
+  const first = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'insert', returning: true,
+    values: { family_id: family.id, month_date: '2026-11-01', category_id: categories[0].id, type: 'expense', planned_kopecks: 10000, note: 'Первая строка' }
+  });
+  assert.equal(first.error, null, first.error?.message);
+  const duplicateInsert = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'insert',
+    values: { family_id: family.id, month_date: '2026-11-01', category_id: categories[0].id, type: 'expense', planned_kopecks: 20000, note: 'Дубликат' }
+  });
+  assert.match(duplicateInsert.error.message, /уже задан план/);
+
+  const second = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'insert', returning: true,
+    values: { family_id: family.id, month_date: '2026-11-01', category_id: categories[1].id, type: 'expense', planned_kopecks: 30000, note: 'Вторая строка' }
+  });
+  assert.equal(second.error, null, second.error?.message);
+
+  const duplicateUpdate = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: second.data[0].id }], values: { category_id: categories[0].id }
+  });
+  assert.match(duplicateUpdate.error.message, /уже задан план/);
+
+  const duplicateUpsert = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'id',
+    values: { ...second.data[0], category_id: categories[0].id }
+  });
+  assert.match(duplicateUpsert.error.message, /уже задан план/);
+
+  const remaining = h.call({ action: 'query', token: user.token, table: 'monthly_plans', mode: 'select' }).data;
+  assert.equal(remaining.length, 2);
+  assert.equal(remaining[1].category_id, categories[1].id);
+});
