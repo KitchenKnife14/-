@@ -649,6 +649,10 @@ function validateRelations_(table,row,user,previousRow){
       const isMember=!!familyId&&rows_('family_members').some(m=>String(m.family_id)===familyId&&String(m.user_id)===String(row.owner_user_id));
       if(!isMember)throw new Error('Владелец счёта должен быть участником этой семьи');
     }
+    if(row.archived===true&&previousRow&&previousRow.archived!==true){
+      const hasActiveSchedule=rows_('recurring_payments').some(payment=>payment.active===true&&String(payment.account_id||'')===String(row.id));
+      if(hasActiveSchedule)throw new Error('Нельзя архивировать счёт: он используется активным регулярным платежом. Сначала приостановите или удалите расписание.');
+    }
   }
   if(table==='categories'){
     if(!String(row.name||'').trim())throw new Error('Введите название категории');
@@ -661,6 +665,10 @@ function validateRelations_(table,row,user,previousRow){
     if(previousRow&&!previousRow.parent_id&&row.parent_id){
       const hasChildren=rows_('categories').some(c=>String(c.parent_id||'')===String(row.id));
       if(hasChildren)throw new Error('Нельзя сделать вложенной категорию, у которой уже есть подкатегории');
+    }
+    if(row.archived===true&&previousRow&&previousRow.archived!==true){
+      const hasActiveSchedule=rows_('recurring_payments').some(payment=>payment.active===true&&String(payment.category_id||'')===String(row.id));
+      if(hasActiveSchedule)throw new Error('Нельзя архивировать категорию: её использует активный регулярный платёж. Сначала приостановите или удалите расписание.');
     }
   }
   if(table==='transactions'){

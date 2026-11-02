@@ -1621,3 +1621,70 @@ test('categories reject invalid hierarchy and mismatched parent kinds', () => {
   });
   assert.match(selfParent.error.message, /самой себе/);
 });
+
+
+test('accounts used by active recurring payments cannot be archived until the schedule is paused or removed', () => {
+  const h = makeHarness();
+  const user = h.signup('archive-account-recurring@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Архив счёта и регулярный платёж' }).data;
+  const account = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Счёт для подписки', kind: 'bank', starting_balance_kopecks: 0 }
+  }).data[0];
+  const payment = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, description: 'Подписка', account_id: account.id, start_date: '2026-11-02', next_due_date: '2026-11-02', frequency: 'monthly', active: true }
+  }).data[0];
+  assert.equal(payment.account_id, account.id);
+
+  const blockedArchive = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: account.id }], values: { archived: true }
+  });
+  assert.match(blockedArchive.error.message, /используется активным регулярным платежом/);
+
+  const paused = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: payment.id }], values: { active: false }
+  });
+  assert.equal(paused.error, null, paused.error?.message);
+
+  const archived = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: account.id }], values: { archived: true }
+  });
+  assert.equal(archived.error, null, archived.error?.message);
+});
+
+test('categories used by active recurring payments cannot be archived until the schedule is paused', () => {
+  const h = makeHarness();
+  const user = h.signup('archive-category-recurring@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Архив категории и регулярный платёж' }).data;
+  const category = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: null, name: 'Подписки тест', kind: 'expense', icon: 'x', color: '#000000' }
+  }).data[0];
+  const payment = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, description: 'Подписка', category_id: category.id, start_date: '2026-11-02', next_due_date: '2026-11-02', frequency: 'monthly', active: true }
+  }).data[0];
+  assert.equal(payment.category_id, category.id);
+
+  const blockedArchive = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true }
+  });
+  assert.match(blockedArchive.error.message, /использует активный регулярный платёж/);
+
+  const paused = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: payment.id }], values: { active: false }
+  });
+  assert.equal(paused.error, null, paused.error?.message);
+
+  const archived = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true }
+  });
+  assert.equal(archived.error, null, archived.error?.message);
+});
