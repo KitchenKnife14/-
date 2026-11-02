@@ -118,10 +118,19 @@ test('signup and signin return the token and user in the API data envelope', () 
 });
 
 
+function prepareAllSheetsForReadTests(h) {
+  [
+    'profiles', 'families', 'family_members', 'categories', 'accounts', 'transactions',
+    'recurring_payments', 'budgets', 'goals', 'goal_contributions', 'planned_purchases',
+    'monthly_plans', 'notifications'
+  ].forEach(name => h.context.sheet_(name));
+}
+
 test('read-only requests do not wait for the global script lock; writes remain serialized', () => {
   const h = makeHarness();
   const user = h.signup('read-lock@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Чтение без блокировки' }).data;
+  prepareAllSheetsForReadTests(h);
   const waitsBeforeRead = h.lockStats.waits;
   const read = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
   assert.equal(read.error, null, read.error?.message);
@@ -139,6 +148,7 @@ test('read-only requests retry when a writer changes the revision during the sna
   const h = makeHarness();
   const user = h.signup('read-retry@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор чтения' }).data;
+  prepareAllSheetsForReadTests(h);
   let attempts = 0;
   const originalQuery = h.context.query_;
   h.context.query_ = function(req, authenticatedUser) {
@@ -159,6 +169,7 @@ test('an odd revision blocks reads until manual integrity verification', () => {
   const h = makeHarness();
   const user = h.signup('stale-revision@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Проверка ревизии' });
+  prepareAllSheetsForReadTests(h);
   h.context.PropertiesService.getScriptProperties().setProperty('BUDGET_DATA_REVISION_V1', '7');
   const result = h.call({ action: 'query', token: user.token, table: 'families', mode: 'select' });
   assert.match(result.error.message, /заблокирована после прерванной записи/i);
@@ -171,6 +182,7 @@ test('a failed mutation after a sheet write leaves reads blocked for manual revi
   const h = makeHarness();
   const user = h.signup('partial-write@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Частичная запись' }).data;
+  prepareAllSheetsForReadTests(h);
   const append = h.context.appendRows_;
   h.context.appendRows_ = function(name, rows) { append(name, rows); throw new Error('simulated failure after write'); };
   const failed = h.call({
@@ -921,7 +933,7 @@ test('deleting a recurring payment preserves history and detaches its transactio
   assert.equal(h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data.length, 0);
 });
 
-test('goal contributions require positive integer kopecks and deletion recalculates totals', () => {
+test('goal contributions require nonzero integer kopecks and deletion recalculates totals', () => {
   const h = makeHarness();
   const user = h.signup('goal-contribution-validation@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка пополнений' }).data;
@@ -929,13 +941,18 @@ test('goal contributions require positive integer kopecks and deletion recalcula
     action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Резерв', target_kopecks: 1000000 }
   }).data[0];
-  for (const amount of [0, -100, 12.5]) {
+  for (const amount of [0, 12.5]) {
     const rejected = h.call({
       action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
       values: { goal_id: goal.id, amount_kopecks: amount, contribution_date: '2026-10-31' }
     });
-    assert.match(rejected.error.message, /положительным целым числом копеек/);
+    assert.match(rejected.error.message, /ненулевым целым числом копеек/);
   }
+  const overdraft = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: goal.id, amount_kopecks: -100, contribution_date: '2026-10-31' }
+  });
+  assert.match(overdraft.error.message, /не может быть отрицательным/i);
   const contribution = h.call({
     action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true,
     values: { goal_id: goal.id, amount_kopecks: 45000, contribution_date: '2026-10-31' }

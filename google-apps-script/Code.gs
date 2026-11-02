@@ -104,6 +104,15 @@ function finishWriteRevision_() {
   }
 }
 
+function mayLeavePartialCrudWrite_(req) {
+  if (!req || typeof req !== 'object') return false;
+  if (req.action === 'query') return (req.mode || 'select') !== 'select';
+  if (req.action === 'batch') {
+    return Array.isArray(req.requests) && req.requests.some(mayLeavePartialCrudWrite_);
+  }
+  return false;
+}
+
 function runConsistentRead_(work, lock) {
   for (let attempt = 0; attempt < READ_CONSISTENCY_RETRIES; attempt++) {
     const before = dataRevision_();
@@ -190,7 +199,9 @@ function doPost(e) {
       } finally {
         // If a write was attempted and then failed, keep the revision odd.
         // Reads remain blocked until the owner audits the potentially partial write.
-        if (succeeded || SHEET_WRITES === 0) finishWriteRevision_();
+        // RPC handlers and dedicated auth/family actions provide rollback or idempotent retry semantics.
+        // Generic CRUD mutations do not, so a failed write must block reads until integrity is checked.
+        if (succeeded || SHEET_WRITES === 0 || !mayLeavePartialCrudWrite_(req)) finishWriteRevision_();
       }
     } finally {
       lock.releaseLock();
