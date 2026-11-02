@@ -260,7 +260,9 @@ function normal_(v,col) {
 function safeCell_(value) {
   // Never let user-controlled text be interpreted as a spreadsheet formula.
   // Numeric negative values remain numbers; only strings are escaped.
-  return typeof value==='string' && /^\\s*[=+\\-@]/.test(value) ? "'"+value : value;
+  if (typeof value !== 'string') return value;
+  const first = value.trimStart().charAt(0);
+  return ['=', '+', '-', '@'].includes(first) ? "'"+value : value;
 }
 function appendRows_(name, data) {
   if (!data.length) return;
