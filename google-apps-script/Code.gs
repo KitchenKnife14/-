@@ -470,8 +470,21 @@ function loginAttemptKey_(email){
   const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(email).toLowerCase(),Utilities.Charset.UTF_8);
   return 'loginfail:'+Utilities.base64Encode(digest).replace(/[+/=]/g,'');
 }
+function familyHasTwoMembers_(){
+  const counts=new Map();
+  rows_('family_members').forEach(member=>{
+    const id=String(member.family_id||'');
+    if(id)counts.set(id,(counts.get(id)||0)+1);
+  });
+  for(const count of counts.values())if(count>=2)return true;
+  return false;
+}
 function signup_(req){
-  if(PropertiesService.getScriptProperties().getProperty('SIGNUP_DISABLED')==='1')throw new Error('Регистрация закрыта');
+  const props=PropertiesService.getScriptProperties();
+  if(props.getProperty('SIGNUP_DISABLED')==='1'||familyHasTwoMembers_()){
+    props.setProperty('SIGNUP_DISABLED','1');
+    throw new Error('Регистрация закрыта');
+  }
   pruneSessions_();
   const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||''), name=String(req.name||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Введите корректный email');
@@ -555,10 +568,17 @@ function route_(req,user){
     if(!f)throw new Error('Код приглашения не найден');
     setProfileName_(user.id,req.display_name);
     const members=rows_('family_members').filter(m=>m.family_id===f.id);
-    if(members.some(m=>m.user_id===user.id))return f;
-    if(members.length>=2)throw new Error('В семье уже два участника');
+    if(members.some(m=>m.user_id===user.id)){
+      if(members.length>=2)PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED','1');
+      return f;
+    }
+    if(members.length>=2){
+      PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED','1');
+      throw new Error('В семье уже два участника');
+    }
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Вы уже состоите в другой семье');
     const member={id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()};appendRows_('family_members',[member]);
+    if(members.length+1>=2)PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED','1');
     return f;
   }
   if(req.action==='query')return query_(req,user);

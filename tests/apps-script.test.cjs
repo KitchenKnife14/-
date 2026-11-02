@@ -1688,3 +1688,31 @@ test('categories used by active recurring payments cannot be archived until the 
   });
   assert.equal(archived.error, null, archived.error?.message);
 });
+
+
+test('registration closes automatically after the second family member joins and stays closed if the setting is missing', () => {
+  const h = makeHarness();
+  const owner = h.signup('signup-close-owner@example.com');
+  const member = h.signup('signup-close-member@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Закрытие регистрации' }).data;
+
+  const joined = h.call({ action: 'joinFamily', token: member.token, invite_code: family.invite_code });
+  assert.equal(joined.error, null, joined.error?.message);
+
+  const thirdSignup = h.call({
+    action: 'signup', email: 'signup-close-third@example.com', password: 'correct-horse-battery'
+  });
+  assert.match(thirdSignup.error.message, /Регистрация закрыта/);
+
+  // Even if the script property is accidentally removed, the server derives the limit from family membership.
+  h.context.PropertiesService.getScriptProperties().deleteProperty('SIGNUP_DISABLED');
+  const fourthSignup = h.call({
+    action: 'signup', email: 'signup-close-fourth@example.com', password: 'correct-horse-battery'
+  });
+  assert.match(fourthSignup.error.message, /Регистрация закрыта/);
+
+  const ownerSignin = h.call({ action: 'signin', email: 'signup-close-owner@example.com', password: 'correct-horse-battery' });
+  const memberSignin = h.call({ action: 'signin', email: 'signup-close-member@example.com', password: 'correct-horse-battery' });
+  assert.equal(ownerSignin.error, null, ownerSignin.error?.message);
+  assert.equal(memberSignin.error, null, memberSignin.error?.message);
+});
