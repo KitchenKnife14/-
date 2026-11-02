@@ -773,19 +773,59 @@ function validatePlannedPurchaseUpdate_(current,next,patch){
     throw new Error('Неизвестный статус покупки');
   }
 }
+function validateQueryFilters_(table,filters,mode,values){
+  if(!Array.isArray(filters))throw new Error('Фильтры запроса должны быть массивом');
+  const supported=new Set(['eq','neq','gte','lte','gt','lt','in','is']);
+  filters.forEach(filter=>{
+    if(!filter||typeof filter.column!=='string'||!TABLES[table].includes(filter.column)){
+      throw new Error('Недопустимое поле фильтра для таблицы '+table);
+    }
+    if(!supported.has(filter.op))throw new Error('Фильтр не поддерживается');
+    if(filter.op==='in'&&(!Array.isArray(filter.values)||!filter.values.length||filter.values.length>500)){
+      throw new Error('Список значений фильтра должен содержать от 1 до 500 элементов');
+    }
+    if(filter.op!=='in'&&!Object.prototype.hasOwnProperty.call(filter,'value')){
+      throw new Error('Для фильтра не указано значение');
+    }
+  });
+  if(mode==='update'||mode==='delete'){
+    const hasIdFilter=filters.some(filter=>
+      filter.column==='id'&&(
+        (filter.op==='eq'&&filter.value!==null&&filter.value!==undefined&&String(filter.value)!=='')||
+        (filter.op==='in'&&Array.isArray(filter.values)&&filter.values.length>0)
+      )
+    );
+    const isReadAllNotifications=table==='notifications'&&mode==='update'&&
+      values&&typeof values==='object'&&!Array.isArray(values)&&
+      Object.keys(values).length===1&&values.read===true&&
+      filters.some(filter=>filter.column==='family_id'&&filter.op==='eq'&&String(filter.value||'')!=='')&&
+      filters.some(filter=>filter.column==='read'&&filter.op==='eq'&&filter.value===false);
+    if(!hasIdFilter&&!isReadAllNotifications){
+      throw new Error('Для изменения или удаления требуется фильтр по ID записи');
+    }
+  }
+}
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
   if(mode==='insert'&&(table==='families'||table==='family_members'))throw new Error('Создание семей и изменение состава участников доступны только через безопасные серверные операции');
+  if(!['select','insert','update','delete','upsert'].includes(mode))throw new Error('Неизвестный режим запроса');
+  const filters=req.filters===undefined?[]:req.filters;
+  validateQueryFilters_(table,filters,mode,req.values);
+  if(mode==='update'&&table==='notifications'){
+    const patch=req.values||{};
+    if(Object.keys(patch).some(key=>key!=='read')||typeof patch.read!=='boolean')throw new Error('В уведомлениях разрешено изменять только статус прочтения');
+  }
   let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
-  const filters=req.filters||[];
   const matches=(row)=>filters.every(f=>{
     const a=row[f.column], b=f.value;
     switch(f.op){case 'eq':return String(a??'')===String(b??'');case 'neq':return String(a??'')!==String(b??'');case 'gte':return a>=b;case 'lte':return a<=b;case 'gt':return a>b;case 'lt':return a<b;case 'in':return (f.values||[]).map(String).includes(String(a));case 'is':return b===null?(a===null||a===''):String(a)===String(b);default:throw new Error('Фильтр не поддерживается');}
   });
   if(mode==='select'){
     all=all.filter(r=>matches(r)&&canAccessRow_(table,r,user));
-    const orders=Array.isArray(req.orders)&&req.orders.length?req.orders:(req.order?[req.order]:[]);if(orders.length)all.sort((a,b)=>{for(const order of orders){const x=a[order.column],y=b[order.column];const cmp=String(x??'').localeCompare(String(y??''),undefined,{numeric:true});if(cmp)return order.ascending===false?-cmp:cmp;}return 0;});
-    if(req.limit)all=all.slice(0,req.limit);
+    const orders=Array.isArray(req.orders)&&req.orders.length?req.orders:(req.order?[req.order]:[]);
+    orders.forEach(order=>{if(!order||typeof order.column!=='string'||!TABLES[table].includes(order.column))throw new Error('Недопустимое поле сортировки для таблицы '+table);});
+    if(orders.length)all.sort((a,b)=>{for(const order of orders){const x=a[order.column],y=b[order.column];const cmp=String(x??'').localeCompare(String(y??''),undefined,{numeric:true});if(cmp)return order.ascending===false?-cmp:cmp;}return 0;});
+    if(req.limit!==undefined){if(!Number.isSafeInteger(req.limit)||req.limit<1||req.limit>10000)throw new Error('Лимит выборки должен быть целым числом от 1 до 10000');all=all.slice(0,req.limit);}
     return all.map(({__row,...r})=>r);
   }
   if(mode==='insert'){
@@ -901,6 +941,9 @@ function query_(req,user){
   }
   if(mode==='upsert'){
     const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table).map(row=>Object.assign({},row));
+    const conflictKeys=String(req.onConflict||'id').split(',').map(key=>key.trim());
+    const conflictSpec=conflictKeys.join(',');
+    if(conflictSpec!=='id'&&!(table==='monthly_plans'&&conflictSpec==='family_id,month_date,category_id,type'))throw new Error('Для этой таблицы не поддерживается указанный ключ upsert');
     const contributionBaseline=table==='goal_contributions'?existing.map(strip_):null;
     if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
     const affectedGoalIds=new Set(), updatedRows=[], insertedRows=[];
@@ -911,8 +954,7 @@ function query_(req,user){
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(raw.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}
       else if(table!=='profiles'&&(!raw.family_id||!allowedFamilyIds_(user).includes(String(raw.family_id))))throw new Error('Нет доступа к этой семье');
-      const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());
-      const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
+      const found=existing.find(r=>conflictKeys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(raw.id!==undefined&&existing.some(r=>String(r.id)===String(raw.id))&&(!found||String(found.id)!==String(raw.id)))throw new Error('Запись с таким ID уже существует или недоступна');
       if(found){

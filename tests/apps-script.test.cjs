@@ -1742,3 +1742,105 @@ test('families and family memberships can only be created through dedicated serv
   assert.match(directMembershipInsert.error.message, /только через безопасные серверные операции/);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' }).data.length, 1);
 });
+
+
+test('update and delete reject unknown columns and unbounded filters without changing family data', () => {
+  const h = makeHarness();
+  const user = h.signup('strict-mutation-filters@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Строгие фильтры' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, operation_date: '2026-11-02', description: 'Не менять' }
+  }).data[0];
+
+  const unknownUpdate = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'nonexistent_column', op: 'eq', value: null }], values: { description: 'Массовая подмена' }
+  });
+  assert.match(unknownUpdate.error.message, /Недопустимое поле фильтра/);
+
+  const unboundedUpdate = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'family_id', op: 'eq', value: family.id }], values: { description: 'Массовая подмена' }
+  });
+  assert.match(unboundedUpdate.error.message, /фильтр по ID/);
+
+  const unknownDelete = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'missing', op: 'eq', value: null }]
+  });
+  assert.match(unknownDelete.error.message, /Недопустимое поле фильтра/);
+
+  const unboundedDelete = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'family_id', op: 'eq', value: family.id }]
+  });
+  assert.match(unboundedDelete.error.message, /фильтр по ID/);
+
+  const unchanged = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: created.id }]
+  }).data[0];
+  assert.equal(unchanged.description, 'Не менять');
+  assert.equal(unchanged.amount_kopecks, 12500);
+});
+
+test('bulk notification read updates are allowed but cannot reassign or rewrite notification content', () => {
+  const h = makeHarness();
+  const owner = h.signup('notification-bulk-owner@example.com');
+  const member = h.signup('notification-bulk-member@example.com');
+  const outsider = h.signup('notification-bulk-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Уведомления' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: member.token, invite_code: family.invite_code }).error, null);
+  const otherFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Другая семья' }).data;
+
+  const ownerNotification = h.call({
+    action: 'query', token: owner.token, table: 'notifications', mode: 'insert', returning: true,
+    values: { family_id: family.id, kind: 'budget_warning', title: 'Лимит', body: 'Порог', read: false }
+  }).data[0];
+  h.call({
+    action: 'query', token: member.token, table: 'notifications', mode: 'insert',
+    values: { family_id: family.id, kind: 'goal_progress', title: 'Цель', body: 'Прогресс', read: false }
+  });
+  h.call({
+    action: 'query', token: outsider.token, table: 'notifications', mode: 'insert',
+    values: { family_id: otherFamily.id, kind: 'goal_progress', title: 'Чужое', body: 'Данные', read: false }
+  });
+
+  const bulk = h.call({
+    action: 'query', token: owner.token, table: 'notifications', mode: 'update',
+    filters: [{ column: 'family_id', op: 'eq', value: family.id }, { column: 'read', op: 'eq', value: false }],
+    values: { read: true }
+  });
+  assert.equal(bulk.error, null, bulk.error?.message);
+
+  const ownerRows = h.call({ action: 'query', token: owner.token, table: 'notifications', mode: 'select' }).data;
+  const memberRows = h.call({ action: 'query', token: member.token, table: 'notifications', mode: 'select' }).data;
+  assert.equal(ownerRows.length, 1);
+  assert.equal(ownerRows[0].read, true);
+  assert.equal(ownerRows[0].title, 'Лимит');
+  assert.equal(memberRows.length, 1);
+  assert.equal(memberRows[0].read, false);
+
+  const rewrite = h.call({
+    action: 'query', token: owner.token, table: 'notifications', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: ownerNotification.id }], values: { title: 'Подмена' }
+  });
+  assert.match(rewrite.error.message, /только изменять статус прочтения/);
+});
+
+test('upsert accepts only the supported unique keys', () => {
+  const h = makeHarness();
+  const user = h.signup('upsert-keys@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Ключи upsert' }).data;
+  const invalid = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'upsert',
+    onConflict: 'family_id', values: { family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-11-02', description: 'Не сохранять' }
+  });
+  assert.match(invalid.error.message, /не поддерживается указанный ключ upsert/);
+  const valid = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'upsert', onConflict: 'id',
+    values: { id: 'valid-expense', family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-11-02', description: 'Сохранить' }
+  });
+  assert.equal(valid.error, null, valid.error?.message);
+});
