@@ -4,7 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDateShort, monthRange, monthLabel, currentMoscowDate } from '../lib/dates'
-import { Plus, TrendingUp, TrendingDown, Wallet, ArrowRight } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, Wallet, ArrowRight, CalendarDays } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import TransactionForm from '../components/TransactionForm'
 
@@ -58,7 +58,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family?.id, range.start, range.end])
 
-  // Polling: refresh when the adapter detects a changed transaction snapshot.
+  // Refresh the dashboard when the shared transaction snapshot changes.
   useEffect(() => {
     if (!family) return
     const channel = googleSheets
@@ -79,109 +79,152 @@ export default function DashboardPage() {
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
   const recent = realized.slice(0, 6)
 
-  const quickActions = [
-    { label: 'Добавить расход', icon: TrendingDown, color: 'text-danger-600', action: () => { setNewTransactionType('expense'); setShowAdd(true) } },
-    { label: 'Добавить доход', icon: TrendingUp, color: 'text-accent-600', action: () => { setNewTransactionType('income'); setShowAdd(true) } },
-  ]
+  const openForm = (type: 'expense' | 'income' | 'transfer') => {
+    setNewTransactionType(type)
+    setShowAdd(true)
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-7">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{monthLabel(year, month)}</h1>
-          <p className="text-sm text-slate-500">Обзор семейного бюджета</p>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-800">
+            <CalendarDays size={14} />
+            Ваш бюджет · {monthLabel(year, month)}
+          </div>
+          <h1 className="page-title">Деньги дома. Спокойно, вместе.</h1>
+          <p className="page-subtitle">Общая картина доходов, расходов и планов семьи.</p>
         </div>
-        <button onClick={() => { setNewTransactionType('expense'); setShowAdd(true) }} className="btn-primary">
-          <Plus size={18} /> Операция
+        <button onClick={() => openForm('expense')} className="btn-primary">
+          <Plus size={17} /> Добавить операцию
         </button>
       </div>
 
-      {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 text-sm">
-            <TrendingUp size={16} className="text-accent-600" /> Доходы
-          </div>
-          <div className="mt-1 text-2xl font-semibold text-slate-900">{formatRubles(income)}</div>
-        </div>
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 text-sm">
-            <TrendingDown size={16} className="text-danger-600" /> Расходы
-          </div>
-          <div className="mt-1 text-2xl font-semibold text-slate-900">{formatRubles(expense)}</div>
-        </div>
-        <div className="card">
-          <div className="flex items-center gap-2 text-slate-500 text-sm">
-            <Wallet size={16} className="text-primary-600" /> Разница за месяц
-          </div>
-          <div className={`mt-1 text-2xl font-semibold ${income - expense >= 0 ? 'text-slate-900' : 'text-danger-600'}`}>
-            {formatRubles(income - expense)}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {quickActions.map((a) => (
-          <button key={a.label} onClick={a.action} className="card text-left hover:bg-slate-50 transition-colors">
-            <a.icon size={18} className={a.color} />
-            <div className="mt-2 text-sm font-medium text-slate-700">{a.label}</div>
-          </button>
-        ))}
-        <Link to="/transactions" className="card hover:bg-slate-50 transition-colors">
-          <ArrowRight size={18} className="text-slate-400" />
-          <div className="mt-2 text-sm font-medium text-slate-700">Все операции</div>
-        </Link>
-        <Link to="/categories" className="card hover:bg-slate-50 transition-colors">
-          <ArrowRight size={18} className="text-slate-400" />
-          <div className="mt-2 text-sm font-medium text-slate-700">Категории</div>
-        </Link>
-      </div>
-
-      {plannedExpense > 0 && (
-        <div className="card bg-warn-50 border-warn-100">
-          <div className="text-sm text-warn-600 font-medium">Запланированные платежи на месяц</div>
-          <div className="text-lg font-semibold text-slate-900 mt-1">{formatRubles(plannedExpense)}</div>
-          <p className="text-xs text-slate-500 mt-1">Это плановые суммы. Они учитываются как расход только после подтверждения оплаты.</p>
+      {error && (
+        <div role="alert" className="rounded-xl border border-danger-100 bg-danger-50 px-4 py-3 text-sm text-danger-700">
+          {error}
         </div>
       )}
 
-      <div>
-        <h2 className="font-medium text-slate-700 mb-3">Последние операции</h2>
-        {loading ? (
-          <div className="text-sm text-slate-400">Загрузка…</div>
-        ) : recent.length === 0 ? (
-          <div className="card text-center py-8">
-            <p className="text-sm text-slate-500 mb-3">Пока нет ни одной операции.</p>
-            <button onClick={() => { setNewTransactionType('expense'); setShowAdd(true) }} className="btn-primary">
-              <Plus size={18} /> Добавить первую запись
-            </button>
+      <section aria-label="Итоги месяца" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="card">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-50 text-accent-700"><TrendingUp size={18} /></span>
+              Доходы
+            </div>
+            <span className="rounded-full bg-accent-50 px-2.5 py-1 text-[11px] font-medium text-accent-700">За месяц</span>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {recent.map((t) => {
-              const cat = t.category_id ? catMap.get(t.category_id) : null
-              const isIncome = t.type === 'income'
-              const isTransfer = t.type === 'transfer'
-              const operationLabel = isTransfer
-                ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}`
-                : `${formatDateShort(t.operation_date)} · ${cat?.name ?? 'Без категории'}`
-              return (
-                <div key={t.id} className="card flex items-center gap-3 py-3">
-                  <div className="text-xl w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center">{cat?.icon ?? '📝'}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-900 truncate">{t.description || cat?.name || 'Операция'}</div>
-                    <div className="text-xs text-slate-400">{operationLabel}</div>
-                  </div>
-                  <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : isTransfer ? 'text-primary-600' : 'text-slate-900'}`}>
-                    {isTransfer ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
-                  </div>
-                </div>
-              )
-            })}
+          <div className="mt-4 text-2xl font-semibold tracking-tight text-ink">{formatRubles(income)}</div>
+          <div className="mt-1 text-xs text-muted">Поступления семьи</div>
+        </div>
+        <div className="card">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-danger-50 text-danger-600"><TrendingDown size={18} /></span>
+              Расходы
+            </div>
+            <span className="rounded-full bg-danger-50 px-2.5 py-1 text-[11px] font-medium text-danger-600">За месяц</span>
           </div>
-        )}
-      </div>
+          <div className="mt-4 text-2xl font-semibold tracking-tight text-ink">{formatRubles(expense)}</div>
+          <div className="mt-1 text-xs text-muted">Подтверждённые траты</div>
+        </div>
+        <div className="card border-primary-100 bg-primary-50/60">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-primary-700"><Wallet size={18} /></span>
+            Остаток за месяц
+          </div>
+          <div className={`mt-4 text-2xl font-semibold tracking-tight ${income - expense >= 0 ? 'text-primary-800' : 'text-danger-600'}`}>
+            {formatRubles(income - expense)}
+          </div>
+          <div className="mt-1 text-xs text-muted">Доходы минус расходы</div>
+        </div>
+      </section>
+
+      <section aria-label="Быстрые действия">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="section-title">Быстрые действия</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <button onClick={() => openForm('expense')} className="group rounded-2xl border border-line bg-surface p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-soft">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-danger-50 text-danger-600"><TrendingDown size={19} /></span>
+            <span className="mt-3 block text-sm font-semibold text-ink">Добавить расход</span>
+            <span className="mt-1 block text-xs text-muted">Записать покупку или платёж</span>
+          </button>
+          <button onClick={() => openForm('income')} className="group rounded-2xl border border-line bg-surface p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-soft">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-700"><TrendingUp size={19} /></span>
+            <span className="mt-3 block text-sm font-semibold text-ink">Добавить доход</span>
+            <span className="mt-1 block text-xs text-muted">Зарплата и поступления</span>
+          </button>
+          <Link to="/calendar" className="group rounded-2xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-soft">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><CalendarDays size={19} /></span>
+            <span className="mt-3 block text-sm font-semibold text-ink">Календарь</span>
+            <span className="mt-1 block text-xs text-muted">Платежи и планы по датам</span>
+          </Link>
+          <Link to="/goals" className="group rounded-2xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-soft">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-700"><Wallet size={19} /></span>
+            <span className="mt-3 block text-sm font-semibold text-ink">Общие цели</span>
+            <span className="mt-1 block text-xs text-muted">То, к чему идёте вместе</span>
+          </Link>
+        </div>
+      </section>
+
+      {plannedExpense > 0 && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warn-100 bg-warn-50 px-4 py-4 sm:px-5">
+          <div>
+            <div className="text-sm font-semibold text-ink">Запланированные платежи</div>
+            <p className="mt-1 text-xs text-muted">Плановые суммы не попадут в расходы, пока вы не подтвердите оплату.</p>
+          </div>
+          <div className="text-xl font-semibold tracking-tight text-ink">{formatRubles(plannedExpense)}</div>
+        </section>
+      )}
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="section-title">Последние операции</h2>
+            <p className="mt-1 text-xs text-muted">Недавние движения семейного бюджета</p>
+          </div>
+          <Link to="/transactions" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-primary-800 transition-colors hover:bg-primary-50">
+            Все операции <ArrowRight size={15} />
+          </Link>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+          {loading ? (
+            <div className="px-4 py-10 text-center text-sm text-muted">Загружаем операции…</div>
+          ) : recent.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-50 text-primary-700"><Wallet size={22} /></div>
+              <p className="mt-3 text-sm font-medium text-ink">Пока нет операций за этот месяц</p>
+              <p className="mt-1 text-xs text-muted">Добавьте первую запись — и общая картина появится здесь.</p>
+              <button onClick={() => openForm('expense')} className="btn-primary mt-4"><Plus size={16} /> Добавить расход</button>
+            </div>
+          ) : (
+            <div className="divide-y divide-line">
+              {recent.map((t) => {
+                const cat = t.category_id ? catMap.get(t.category_id) : null
+                const isIncome = t.type === 'income'
+                const isTransfer = t.type === 'transfer'
+                const operationLabel = isTransfer
+                  ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}`
+                  : `${formatDateShort(t.operation_date)} · ${cat?.name ?? 'Без категории'}`
+                return (
+                  <div key={t.id} className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-canvas/70 sm:px-5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-canvas text-lg">{cat?.icon ?? '•'}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-ink">{t.description || cat?.name || 'Операция'}</div>
+                      <div className="mt-0.5 truncate text-xs text-muted">{operationLabel}</div>
+                    </div>
+                    <div className={`shrink-0 text-sm font-semibold tabular-nums ${isIncome ? 'text-accent-700' : isTransfer ? 'text-primary-700' : 'text-ink'}`}>
+                      {isTransfer ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </section>
 
       <TransactionForm open={showAdd} onClose={() => setShowAdd(false)} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} initialType={newTransactionType} />
     </div>
