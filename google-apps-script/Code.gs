@@ -801,7 +801,7 @@ function validateQueryFilters_(table,filters,mode,values){
       filters.some(filter=>filter.column==='family_id'&&filter.op==='eq'&&String(filter.value||'')!=='')&&
       filters.some(filter=>filter.column==='read'&&filter.op==='eq'&&filter.value===false);
     if(!hasIdFilter&&!isReadAllNotifications){
-      throw new Error('Для изменения или удаления требуется фильтр по ID записи');
+      throw new Error('Для изменения или удаления нужен хотя бы один фильтр по ID записи');
     }
   }
 }
@@ -813,7 +813,8 @@ function query_(req,user){
   validateQueryFilters_(table,filters,mode,req.values);
   if(mode==='update'&&table==='notifications'){
     const patch=req.values||{};
-    if(Object.keys(patch).some(key=>key!=='read')||typeof patch.read!=='boolean')throw new Error('В уведомлениях разрешено изменять только статус прочтения');
+    if(Object.prototype.hasOwnProperty.call(patch,'user_id'))throw new Error('Нельзя менять получателя уведомления');
+    if(Object.keys(patch).some(key=>key!=='read')||typeof patch.read!=='boolean')throw new Error('В уведомлениях разрешено только изменять статус прочтения');
   }
   let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const matches=(row)=>filters.every(f=>{
