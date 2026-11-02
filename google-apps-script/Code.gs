@@ -63,7 +63,8 @@ function dataRevision_() {
 function allDataSheetsExist_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss || !ss.getSheetByName(AUTH_SHEET)) return false;
-  return Object.keys(TABLES).every(name => !!ss.getSheetByName(name));
+  const optionalTables = ['telegram_links', 'telegram_link_codes', 'telegram_updates'];
+  return Object.keys(TABLES).filter(name => !optionalTables.includes(name)).every(name => !!ss.getSheetByName(name));
 }
 
 function isReadOnlyRequest_(req) {
