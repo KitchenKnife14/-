@@ -1331,9 +1331,13 @@ test('planned purchases can only become bought through the confirmation RPC', ()
   });
   assert.match(directUpdate.error.message, /только через подтверждение покупки/);
 
+  const validTransaction = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 5000, operation_date: '2026-11-02', description: 'Свободная операция' }
+  }).data[0];
   const arbitraryLink = h.call({
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'update',
-    filters: [{ column: 'id', op: 'eq', value: purchase.id }], values: { linked_transaction_id: 'forged-transaction' }
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }], values: { linked_transaction_id: validTransaction.id }
   });
   assert.match(arbitraryLink.error.message, /изменяется только сервером/);
 
