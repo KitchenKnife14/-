@@ -9,6 +9,7 @@ async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
   if(!API_URL)throw new Error('Не настроен VITE_GOOGLE_APPS_SCRIPT_URL')
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),45000)
   let result={} as {data?:T;error?:{message:string}}
+  inFlight++
   try{
     const response=await fetch(API_URL,{method:'POST',redirect:'follow',signal:controller.signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,token:readSession()?.access_token})})
     const text=await response.text()
@@ -17,7 +18,7 @@ async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
     if(e instanceof DOMException&&e.name==='AbortError')throw new Error('Сервер не ответил вовремя. Попробуйте ещё раз')
     if(e instanceof TypeError)throw new Error('Не удалось связаться с сервером. Проверьте интернет и адрес Apps Script')
     throw e
-  }finally{clearTimeout(timer)}
+  }finally{clearTimeout(timer);inFlight--}
   if(result.error){
     const message=result.error.message
     if(AUTH_ERRORS.some(m=>message.startsWith(m))&&readSession()){saveSession(null);notify('SIGNED_OUT',null)}
@@ -27,9 +28,30 @@ async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
 }
 type Pending={payload:Record<string,unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void}
 let batchingSupported=true,queue:Pending[]=[],flushTimer:ReturnType<typeof setTimeout>|null=null
+let inFlight=0
 const BATCH_DELAY_MS=20,BATCH_MAX=25
 function request<T>(payload:Record<string,unknown>):Promise<T>{const action=payload.action;if(!batchingSupported||(action!=='query'&&action!=='rpc'))return rawRequest<T>(payload);return new Promise<T>((resolve,reject)=>{queue.push({payload,resolve,reject});if(queue.length>=BATCH_MAX)void flushQueue();else if(flushTimer===null)flushTimer=setTimeout(()=>void flushQueue(),BATCH_DELAY_MS)})}
 async function flushQueue(){if(flushTimer!==null){clearTimeout(flushTimer);flushTimer=null}const items=queue;queue=[];if(!items.length)return;if(items.length===1){rawRequest(items[0].payload).then(items[0].resolve,items[0].reject);return}try{const results=await rawRequest<{data?:unknown;error?:{message:string}|null}[]>({action:'batch',requests:items.map(i=>i.payload)});items.forEach((it,idx)=>{const r=results[idx];if(!r)it.reject(new Error('Сервер вернул неполный ответ'));else if(r.error)it.reject(new Error(r.error.message));else it.resolve(r.data)})}catch(e){if(e instanceof Error&&e.message.startsWith('Неизвестное действие')){batchingSupported=false;items.forEach(it=>rawRequest(it.payload).then(it.resolve,it.reject))}else items.forEach(it=>it.reject(e))}}
+
+// Чтение: одинаковые запросы в течение 30 с берутся из памяти, одинаковые запросы «в полёте» объединяются в один.
+// Любая запись (и вход/выход) сбрасывает память целиком, ошибки не запоминаются.
+const READ_TTL_MS=30000
+const readCache=new Map<string,{at:number;promise:Promise<unknown>}>()
+const cloneData=<V,>(v:V):V=>v==null?v:JSON.parse(JSON.stringify(v))
+function invalidateReads(){readCache.clear()}
+function cachedRead<V>(payload:Record<string,unknown>):Promise<V>{
+  const key=JSON.stringify(payload)
+  const hit=readCache.get(key)
+  if(hit&&Date.now()-hit.at<READ_TTL_MS)return hit.promise.then(cloneData) as Promise<V>
+  const promise=request<V>(payload)
+  readCache.set(key,{at:Date.now(),promise})
+  promise.catch(()=>{if(readCache.get(key)?.promise===promise)readCache.delete(key)})
+  return promise.then(cloneData) as Promise<V>
+}
+async function writeThrough<V>(payload:Record<string,unknown>):Promise<V>{
+  invalidateReads()
+  try{return await request<V>(payload)}finally{invalidateReads()}
+}
 
 class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|null;error:{message:string}|null}>{
  private mode='select';private filters:Filter[]=[];private values:Record<string,unknown>|Record<string,unknown>[]={};private returning=false;private limitValue?:number;private orderValues:{column:string;ascending:boolean}[]=[];private conflict?:string;private singleMode:'single'|'maybeSingle'|null=null;
@@ -37,13 +59,13 @@ class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|nu
  select(_columns='*'){this.returning=true;return this} insert(v:Record<string,unknown>|Record<string,unknown>[]){this.mode='insert';this.values=v;return this} update(v:Record<string,unknown>){this.mode='update';this.values=v;return this} delete(){this.mode='delete';return this} upsert(v:Record<string,unknown>|Record<string,unknown>[],o?:{onConflict?:string}){this.mode='upsert';this.values=v;this.conflict=o?.onConflict;return this}
  eq(column:string,value:unknown){this.filters.push({column,op:'eq',value});return this} neq(column:string,value:unknown){this.filters.push({column,op:'neq',value});return this} gt(column:string,value:unknown){this.filters.push({column,op:'gt',value});return this} gte(column:string,value:unknown){this.filters.push({column,op:'gte',value});return this} lt(column:string,value:unknown){this.filters.push({column,op:'lt',value});return this} lte(column:string,value:unknown){this.filters.push({column,op:'lte',value});return this} in(column:string,values:unknown[]){this.filters.push({column,op:'in',values});return this} is(column:string,value:unknown){this.filters.push({column,op:'is',value});return this}
  order(column:string,o?:{ascending?:boolean}){this.orderValues.push({column,ascending:o?.ascending!==false});return this} limit(n:number){this.limitValue=n;return this} single(){this.singleMode='single';return this.execute() as Promise<{data:T|null;error:{message:string}|null}>} maybeSingle(){this.singleMode='maybeSingle';return this.execute() as Promise<{data:T|null;error:{message:string}|null}>}
- private async execute():Promise<{data:any;error:{message:string}|null}>{try{const d=await request<any>({action:'query',table:this.table,mode:this.mode,filters:this.filters,values:this.values,returning:this.returning,limit:this.limitValue,orders:this.orderValues,onConflict:this.conflict});if(this.singleMode){const a=Array.isArray(d)?d:d==null?[]:[d];if(!a.length&&this.singleMode==='single')throw new Error('Запись не найдена');if(a.length>1)throw new Error('Найдено несколько записей');return{data:a[0]??null,error:null}}return{data:d,error:null}}catch(e){return{data:null,error:new Error(e instanceof Error?e.message:'Ошибка запроса')}}}
+ private async execute():Promise<{data:any;error:{message:string}|null}>{try{const payload={action:'query',table:this.table,mode:this.mode,filters:this.filters,values:this.values,returning:this.returning,limit:this.limitValue,orders:this.orderValues,onConflict:this.conflict};const d=this.mode==='select'?await cachedRead<any>(payload):await writeThrough<any>(payload);if(this.singleMode){const a=Array.isArray(d)?d:d==null?[]:[d];if(!a.length&&this.singleMode==='single')throw new Error('Запись не найдена');if(a.length>1)throw new Error('Найдено несколько записей');return{data:a[0]??null,error:null}}return{data:d,error:null}}catch(e){return{data:null,error:new Error(e instanceof Error?e.message:'Ошибка запроса')}}}
  then<A= {data:T[]|null;error:{message:string}|null},B=never>(ok?:((v:{data:T[]|null;error:{message:string}|null})=>A|PromiseLike<A>)|null,bad?:((e:unknown)=>B|PromiseLike<B>)|null):PromiseLike<A|B>{return this.execute().then(ok,bad)}
 }
-const listeners=new Set<(event:string,session:GoogleSession|null)=>void>();function notify(event:string,s:GoogleSession|null){listeners.forEach(f=>f(event,s))}
+const listeners=new Set<(event:string,session:GoogleSession|null)=>void>();function notify(event:string,s:GoogleSession|null){invalidateReads();listeners.forEach(f=>f(event,s))}
 export const googleSheets={
  from:(table:string)=>new QueryBuilder<any>(table),
- rpc:async(name:string,params:Record<string,unknown>={})=>{try{return{data:await request({action:'rpc',name,params}),error:null}}catch(e){return{data:null,error:new Error(e instanceof Error?e.message:'Ошибка RPC')}}},
+ rpc:async(name:string,params:Record<string,unknown>={})=>{try{const payload={action:'rpc',name,params};return{data:name==='get_my_context'?await cachedRead<unknown>(payload):await writeThrough<unknown>(payload),error:null}}catch(e){return{data:null,error:new Error(e instanceof Error?e.message:'Ошибка RPC')}}},
  channel:(_name:string)=>{
   const subs:{table:string;filters:Filter[];callback:()=>void;previous:string}[]=[]
   let timer:ReturnType<typeof setInterval>|null=null
@@ -60,11 +82,11 @@ export const googleSheets={
     subscribe:()=>{
       let running=false
       const poll=async()=>{
-        if(running||!subs.length||!readSession()||document.hidden)return
+        if(running||!subs.length||!readSession()||document.hidden||inFlight>0||queue.length>0)return
         running=true
         try{
           await Promise.all(subs.map(async sub=>{
-            try{const data=await request<unknown[]>({action:'query',table:sub.table,mode:'select',filters:sub.filters});const signature=JSON.stringify(data);if(sub.previous&&signature!==sub.previous)sub.callback();sub.previous=signature}catch{}
+            try{const data=await request<unknown[]>({action:'query',table:sub.table,mode:'select',filters:sub.filters});const signature=JSON.stringify(data);if(sub.previous&&signature!==sub.previous){invalidateReads();sub.callback()};sub.previous=signature}catch{}
           }))
         }finally{running=false}
       }
