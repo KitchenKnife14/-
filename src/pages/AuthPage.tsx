@@ -29,18 +29,19 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-canvas">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-slate-900">Бюджет для двоих</h1>
-          <p className="text-sm text-slate-500 mt-1">Семейный финансовый менеджер</p>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-100 text-2xl font-semibold text-primary-800 shadow-sm">Б</div>
+          <h1 className="page-title">Бюджет для двоих</h1>
+          <p className="text-sm text-slate-500 mt-1">Общее пространство для ваших финансов</p>
         </div>
 
         <div className="card">
-          <div className="flex gap-1 mb-4 p-1 bg-slate-100 rounded-lg">
+          <div className="flex gap-1 mb-5 p-1 bg-slate-100 rounded-xl">
             <button
               onClick={() => setMode('signin')}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${mode === 'signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mode === 'signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
             >
               Вход
             </button>
