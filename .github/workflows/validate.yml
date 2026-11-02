@@ -24,6 +24,8 @@ jobs:
         run: npm run build
       - name: Account balance regression tests
         run: npm run test:balances
+      - name: Exact monetary input regression tests
+        run: npm run test:money
       - name: Apps Script syntax check
         run: node --check < google-apps-script/Code.gs
       - name: Apps Script API regression tests
