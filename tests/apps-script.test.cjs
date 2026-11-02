@@ -8,6 +8,7 @@ function makeHarness() {
   const sheets = new Map();
   const properties = new Map();
   let uuidCounter = 0;
+  const lockStats = { waits: 0, releases: 0 };
   class Range {
     constructor(sheet, row, col, rows, cols) { Object.assign(this, { sheet, row, col, rows, cols }); }
     getValues() {
@@ -64,12 +65,13 @@ function makeHarness() {
   };
   const context = {
     console,
+    Logger: { log: () => {} },
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, },
     ContentService: {
       MimeType: { JSON: 'application/json' },
       createTextOutput: text => ({ text, setMimeType() { return this; }, getContent() { return this.text; } })
     },
-    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {}, hasLock: () => false }) },
+    LockService: { getScriptLock: () => ({ waitLock() { lockStats.waits++; }, releaseLock() { lockStats.releases++; }, hasLock: () => false }) },
     PropertiesService: { getScriptProperties: () => ({
       getProperty: key => properties.get(key) ?? null,
       setProperty: (key, value) => { properties.set(key, value); return this; },
@@ -82,6 +84,7 @@ function makeHarness() {
       computeDigest: (_algorithm, value) => [...crypto.createHash('sha256').update(Buffer.isBuffer(value) ? value : Buffer.from(value)).digest()],
       base64Encode: bytes => Buffer.from(bytes).toString('base64'),
       getUuid: () => `00000000-0000-4000-8000-${String(++uuidCounter).padStart(12, '0')}`,
+      sleep: () => {},
       formatDate: (date, _tz, format) => format === 'yyyy-MM-dd' ? date.toISOString().slice(0, 10) : date.toISOString()
     }
   };
@@ -96,7 +99,7 @@ function makeHarness() {
     assert.equal(response.error, null, response.error?.message);
     return response.data;
   };
-  return { context, call, signup };
+  return { context, call, signup, lockStats };
 }
 
 test('signup and signin return the token and user in the API data envelope', () => {
@@ -113,6 +116,120 @@ test('signup and signin return the token and user in the API data envelope', () 
   assert.equal(signin.data.user.id, signup.data.user.id);
   assert.equal(signin.data.data, undefined);
 });
+
+
+test('read-only requests do not wait for the global script lock; writes remain serialized', () => {
+  const h = makeHarness();
+  const user = h.signup('read-lock@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Чтение без блокировки' }).data;
+  const waitsBeforeRead = h.lockStats.waits;
+  const read = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(read.error, null, read.error?.message);
+  assert.equal(h.lockStats.waits, waitsBeforeRead);
+  const write = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-02', description: 'Тест блокировки' }
+  });
+  assert.equal(write.error, null, write.error?.message);
+  assert.equal(h.lockStats.waits, waitsBeforeRead + 1);
+  assert.equal(h.context.dataRevision_() % 2, 0);
+});
+
+test('read-only requests retry when a writer changes the revision during the snapshot', () => {
+  const h = makeHarness();
+  const user = h.signup('read-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор чтения' }).data;
+  let attempts = 0;
+  const originalQuery = h.context.query_;
+  h.context.query_ = function(req, authenticatedUser) {
+    const result = originalQuery(req, authenticatedUser);
+    attempts++;
+    if (attempts === 1) {
+      h.context.PropertiesService.getScriptProperties().setProperty('BUDGET_DATA_REVISION_V1', String(h.context.dataRevision_() + 2));
+    }
+    return result;
+  };
+  const result = h.call({ action: 'query', token: user.token, table: 'families', mode: 'select' });
+  assert.equal(result.error, null, result.error?.message);
+  assert.equal(attempts, 2);
+  assert.equal(result.data[0].id, family.id);
+});
+
+test('an odd revision blocks reads until manual integrity verification', () => {
+  const h = makeHarness();
+  const user = h.signup('stale-revision@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Проверка ревизии' });
+  h.context.PropertiesService.getScriptProperties().setProperty('BUDGET_DATA_REVISION_V1', '7');
+  const result = h.call({ action: 'query', token: user.token, table: 'families', mode: 'select' });
+  assert.match(result.error.message, /заблокирована после прерванной записи/i);
+  assert.equal(h.context.dataRevision_(), 7);
+  h.context.confirmDataIntegrityAfterManualAudit();
+  assert.equal(h.context.dataRevision_(), 8);
+});
+
+test('a failed mutation after a sheet write leaves reads blocked for manual review', () => {
+  const h = makeHarness();
+  const user = h.signup('partial-write@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Частичная запись' }).data;
+  const append = h.context.appendRows_;
+  h.context.appendRows_ = function(name, rows) { append(name, rows); throw new Error('simulated failure after write'); };
+  const failed = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 900, operation_date: '2026-11-02', description: 'Частично записано' }
+  });
+  assert.match(failed.error.message, /simulated failure/i);
+  assert.equal(h.context.dataRevision_() % 2, 1);
+  const blockedRead = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.match(blockedRead.error.message, /заблокирована после прерванной записи/i);
+});
+
+test('goal contributions allow withdrawals but reject a negative final balance', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-withdrawal@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Снятие с цели' }).data;
+  const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true, values: { family_id: family.id, name: 'Накопление', target_kopecks: 1000000, status: 'active' } }).data[0];
+  const deposit = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true, values: { goal_id: goal.id, amount_kopecks: 500000, contribution_date: '2026-11-02', note: 'Пополнение' } });
+  assert.equal(deposit.error, null, deposit.error?.message);
+  const withdrawal = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true, values: { goal_id: goal.id, amount_kopecks: -125000, contribution_date: '2026-11-02', note: 'Снятие' } });
+  assert.equal(withdrawal.error, null, withdrawal.error?.message);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks, 375000);
+  const excessive = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', values: { goal_id: goal.id, amount_kopecks: -400000, contribution_date: '2026-11-02' } });
+  assert.match(excessive.error.message, /не может быть отрицательным/i);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'select' }).data.length, 2);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks, 375000);
+});
+
+test('bulk goal movements cannot overdraw a goal', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-bulk@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Пакетные снятия' }).data;
+  const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true, values: { family_id: family.id, name: 'Накопление', target_kopecks: 1000000, status: 'active' } }).data[0];
+  h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', values: { goal_id: goal.id, amount_kopecks: 10000, contribution_date: '2026-11-02' } });
+  const result = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: [
+      { goal_id: goal.id, amount_kopecks: -6000, contribution_date: '2026-11-02' },
+      { goal_id: goal.id, amount_kopecks: -6000, contribution_date: '2026-11-02' }
+    ]
+  });
+  assert.match(result.error.message, /не может быть отрицательным/i);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'select' }).data.length, 1);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks, 10000);
+});
+
+test('deleting a contribution cannot make the remaining goal balance negative', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-delete@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Удаление пополнения' }).data;
+  const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true, values: { family_id: family.id, name: 'Накопление', target_kopecks: 1000000, status: 'active' } }).data[0];
+  const deposit = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true, values: { goal_id: goal.id, amount_kopecks: 500000, contribution_date: '2026-11-02' } }).data[0];
+  h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', values: { goal_id: goal.id, amount_kopecks: -100000, contribution_date: '2026-11-02' } });
+  const result = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'delete', filters: [{ column: 'id', op: 'eq', value: deposit.id }] });
+  assert.match(result.error.message, /не может быть отрицательным/i);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'select' }).data.length, 2);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks, 400000);
+});
+
 
 test('family data is hidden until a user joins the family', () => {
   const h = makeHarness();

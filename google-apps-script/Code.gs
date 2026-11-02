@@ -25,6 +25,9 @@ const SESSION_TTL = 60 * 60 * 24 * 14;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 const API_VERSION=6, BATCH_MAX=25;
+const DATA_REVISION_KEY = 'BUDGET_DATA_REVISION_V1';
+const READ_CONSISTENCY_RETRIES = 8;
+const READ_RETRY_DELAY_MS = 40;
 let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0; // кэш открытой таблицы и счётчики для замера (на время ОДНОГО запроса)
 const DEFAULT_CATEGORIES=[{"name":"Жильё и обязательные платежи","kind":"expense","icon":"🏠","color":"#2563eb","children":[{"name":"Аренда квартиры","icon":"🔑","color":"#2563eb"},{"name":"Ипотека","icon":"🏦","color":"#2563eb"},{"name":"Коммунальные услуги","icon":"💡","color":"#2563eb"},{"name":"Интернет","icon":"🌐","color":"#2563eb"},{"name":"Мобильная связь","icon":"📱","color":"#2563eb"},{"name":"Обслуживание жилья","icon":"🧰","color":"#2563eb"},{"name":"Ремонт","icon":"🛠️","color":"#2563eb"},{"name":"Мебель и предметы интерьера","icon":"🛋️","color":"#2563eb"}]},{"name":"Продукты и питание","kind":"expense","icon":"🛒","color":"#16a34a","children":[{"name":"Продукты домой","icon":"🥦","color":"#16a34a"},{"name":"Кафе и рестораны","icon":"🍽️","color":"#16a34a"},{"name":"Доставка еды","icon":"🛵","color":"#16a34a"},{"name":"Кофе и перекусы на работе","icon":"☕","color":"#16a34a"}]},{"name":"Быт","kind":"expense","icon":"🧴","color":"#0891b2","children":[{"name":"Бытовая химия","icon":"🧼","color":"#0891b2"},{"name":"Средства гигиены","icon":"🪥","color":"#0891b2"},{"name":"Товары для дома","icon":"🏠","color":"#0891b2"},{"name":"Расходные материалы","icon":"📦","color":"#0891b2"},{"name":"Мелкие бытовые покупки","icon":"🧺","color":"#0891b2"}]},{"name":"Транспорт","kind":"expense","icon":"🚌","color":"#ea580c","children":[{"name":"Общественный транспорт","icon":"🚇","color":"#ea580c"},{"name":"Такси","icon":"🚕","color":"#ea580c"},{"name":"Бензин","icon":"⛽","color":"#ea580c"},{"name":"Обслуживание автомобиля","icon":"🚗","color":"#ea580c"},{"name":"Ремонт автомобиля","icon":"🔧","color":"#ea580c"},{"name":"Страхование и документы","icon":"📄","color":"#ea580c"},{"name":"Парковка","icon":"🅿️","color":"#ea580c"}]},{"name":"Здоровье","kind":"expense","icon":"🩺","color":"#dc2626","children":[{"name":"Врачи","icon":"👨‍⚕️","color":"#dc2626"},{"name":"Анализы и обследования","icon":"🧪","color":"#dc2626"},{"name":"Лекарства","icon":"💊","color":"#dc2626"},{"name":"Стоматология","icon":"🦷","color":"#dc2626"},{"name":"Медицинские процедуры","icon":"💉","color":"#dc2626"}]},{"name":"Личные расходы","kind":"expense","icon":"👕","color":"#7c3aed","children":[{"name":"Одежда и обувь","icon":"👕","color":"#7c3aed"},{"name":"Косметика","icon":"💄","color":"#7c3aed"},{"name":"Уход за собой","icon":"💆","color":"#7c3aed"},{"name":"Личные покупки","icon":"🛍️","color":"#7c3aed"}]},{"name":"Развлечения","kind":"expense","icon":"🎮","color":"#db2777","children":[{"name":"Кино и мероприятия","icon":"🎬","color":"#db2777"},{"name":"Игры","icon":"🎮","color":"#db2777"},{"name":"Подписки","icon":"📺","color":"#db2777"},{"name":"Музыка","icon":"🎵","color":"#db2777"},{"name":"Хобби","icon":"🎨","color":"#db2777"},{"name":"Путешествия и отдых","icon":"✈️","color":"#db2777"}]},{"name":"Техника","kind":"expense","icon":"💻","color":"#0f766e","children":[{"name":"Смартфоны","icon":"📱","color":"#0f766e"},{"name":"Компьютеры и комплектующие","icon":"💻","color":"#0f766e"},{"name":"Телевизоры","icon":"📺","color":"#0f766e"},{"name":"Бытовая техника","icon":"🔌","color":"#0f766e"},{"name":"Аудиотехника","icon":"🎧","color":"#0f766e"},{"name":"Аксессуары","icon":"🎮","color":"#0f766e"}]},{"name":"Семья и подарки","kind":"expense","icon":"🎁","color":"#c026d3","children":[{"name":"Подарки","icon":"🎁","color":"#c026d3"},{"name":"Праздники","icon":"🎉","color":"#c026d3"},{"name":"Совместные мероприятия","icon":"🥳","color":"#c026d3"},{"name":"Расходы на родственников","icon":"👨‍👩‍👧","color":"#c026d3"}]},{"name":"Финансовые операции","kind":"transfer","icon":"🔁","color":"#64748b","children":[{"name":"Погашение кредитов","icon":"💳","color":"#64748b"},{"name":"Проценты по кредитам","icon":"📈","color":"#64748b"},{"name":"Комиссии","icon":"💸","color":"#64748b"},{"name":"Банковские услуги","icon":"🏦","color":"#64748b"},{"name":"Переводы между счетами","icon":"🔁","color":"#64748b"}]},{"name":"Накопления","kind":"expense","icon":"🐷","color":"#059669","children":[{"name":"Резервный фонд","icon":"🛟","color":"#059669"},{"name":"Накопления на квартиру","icon":"🏢","color":"#059669"},{"name":"Накопления на автомобиль","icon":"🚙","color":"#059669"},{"name":"Накопления на крупные покупки","icon":"💰","color":"#059669"},{"name":"Другие цели","icon":"🎯","color":"#059669"}]},{"name":"Прочее","kind":"expense","icon":"📦","color":"#6b7280","children":[{"name":"Непредвиденные расходы","icon":"⚠️","color":"#6b7280"},{"name":"Неопределённая категория","icon":"❓","color":"#6b7280"}]},{"name":"Доходы","kind":"income","icon":"💵","color":"#16a34a","children":[{"name":"Зарплата первого участника","icon":"👨","color":"#16a34a"},{"name":"Зарплата второго участника","icon":"👩","color":"#16a34a"},{"name":"Премии","icon":"🌟","color":"#16a34a"},{"name":"Подработки","icon":"🛠️","color":"#16a34a"},{"name":"Возвраты и компенсации","icon":"↩️","color":"#16a34a"},{"name":"Доходы от продажи вещей","icon":"🏷️","color":"#16a34a"},{"name":"Проценты и инвестиционный доход","icon":"📈","color":"#16a34a"},{"name":"Прочие доходы","icon":"➕","color":"#16a34a"}]}];
 // Кэш чтения листов на время ОДНОГО запроса (сбрасывается в doPost и после каждой записи).
@@ -40,34 +43,176 @@ function doGet() {
   if(PropertiesService.getScriptProperties().getProperty('DEBUG_INFO')==='1')out.spreadsheet=SpreadsheetApp.getActiveSpreadsheet().getName();
   return json_(out);
 }
+function resetRequestState_() {
+  ROWS_CACHE = {};
+  TZ_CACHE = null;
+  SS_CACHE = null;
+  SHEET_READS = 0;
+  SHEET_WRITES = 0;
+}
+
+function dataRevision_() {
+  const revision = Number(PropertiesService.getScriptProperties().getProperty(DATA_REVISION_KEY) || 0);
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+}
+
+function allDataSheetsExist_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss || !ss.getSheetByName(AUTH_SHEET)) return false;
+  return Object.keys(TABLES).every(name => !!ss.getSheetByName(name));
+}
+
+function isReadOnlyRequest_(req) {
+  if (!req || typeof req !== 'object') return false;
+  if (req.action === 'query') return (req.mode || 'select') === 'select';
+  if (req.action === 'rpc') return req.name === 'get_my_context';
+  if (req.action === 'batch') {
+    return Array.isArray(req.requests) &&
+      req.requests.length > 0 &&
+      req.requests.every(item =>
+        item && (
+          (item.action === 'query' && (item.mode || 'select') === 'select') ||
+          (item.action === 'rpc' && item.name === 'get_my_context')
+        )
+      );
+  }
+  return false;
+}
+
+function processRequest_(req) {
+  if (req.action === 'signup') return signup_(req);
+  if (req.action === 'signin') return signin_(req);
+  if (req.action === 'signout') return signout_(req);
+  if (req.action === 'batch') return batch_(req);
+  const user = requireUser_(req.token);
+  return route_(req, user);
+}
+
+function beginWriteRevision_() {
+  const props = PropertiesService.getScriptProperties();
+  const revision = dataRevision_();
+  if (revision % 2 === 1) {
+    throw new Error('Предыдущая запись была прервана. Необходимо проверить целостность таблицы перед продолжением.');
+  }
+  props.setProperty(DATA_REVISION_KEY, String(revision + 1));
+}
+
+function finishWriteRevision_() {
+  const revision = dataRevision_();
+  if (revision % 2 === 1) {
+    PropertiesService.getScriptProperties().setProperty(DATA_REVISION_KEY, String(revision + 1));
+  }
+}
+
+function runConsistentRead_(work, lock) {
+  for (let attempt = 0; attempt < READ_CONSISTENCY_RETRIES; attempt++) {
+    const before = dataRevision_();
+    if (before % 2 === 1) {
+      Utilities.sleep(READ_RETRY_DELAY_MS);
+      continue;
+    }
+
+    resetRequestState_();
+    let value, failure = null;
+    try {
+      value = work();
+    } catch (err) {
+      failure = err;
+    }
+
+    const after = dataRevision_();
+    if (before === after && after % 2 === 0) {
+      if (failure) throw failure;
+      return value;
+    }
+    Utilities.sleep(READ_RETRY_DELAY_MS);
+  }
+
+  // Fallback: serialize with writers; an odd marker means the previous write
+  // may have been interrupted after changing only part of the spreadsheet.
+  lock.waitLock(20000);
+  try {
+    if (dataRevision_() % 2 === 1) {
+      throw new Error('Таблица заблокирована после прерванной записи. Нужна проверка целостности владельцем.');
+    }
+    resetRequestState_();
+    return work();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function confirmDataIntegrityAfterManualAudit() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const revision = dataRevision_();
+    if (revision % 2 === 0) {
+      Logger.log('Метка целостности уже в нормальном состоянии.');
+      return;
+    }
+    PropertiesService.getScriptProperties().setProperty(DATA_REVISION_KEY, String(revision + 1));
+    Logger.log('Метка чтения восстановлена. Вызывать эту функцию можно только после ручной проверки таблицы и связанных записей.');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function doPost(e) {
-  const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
+  const t0 = Date.now();
+  let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
   const lock = LockService.getScriptLock();
   try {
-    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0;
+    resetRequestState_();
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
-    // Serialize authentication too: concurrent signups must not create duplicate emails.
+
+    // Concurrent reads are safe only after all sheets exist. A read that would
+    // trigger automatic sheet creation stays on the serialized initialization path.
+    if (allDataSheetsExist_() && isReadOnlyRequest_(req)) {
+      const data = runConsistentRead_(() => processRequest_(req), lock);
+      return json_({data, error:null});
+    }
+
     lockAttempted = true;
     lock.waitLock(20000);
     lockAcquired = true;
-    tLocked = Date.now(); lockMs = tLocked - t0;
+    tLocked = Date.now();
+    lockMs = tLocked - t0;
+
     try {
-      if (req.action === 'signup') return json_({data:signup_(req),error:null});
-      if (req.action === 'signin') return json_({data:signin_(req),error:null});
-      if (req.action === 'signout') return json_({data:signout_(req),error:null});
-      if (req.action === 'batch') return json_({data:batch_(req),error:null});
-      const user = requireUser_(req.token);
-      return json_({data: route_(req, user), error:null});
-    } finally { lock.releaseLock(); }
+      beginWriteRevision_();
+      let succeeded = false;
+      try {
+        const data = processRequest_(req);
+        succeeded = true;
+        return json_({data, error:null});
+      } finally {
+        // If a write was attempted and then failed, keep the revision odd.
+        // Reads remain blocked until the owner audits the potentially partial write.
+        if (succeeded || SHEET_WRITES === 0) finishWriteRevision_();
+      }
+    } finally {
+      lock.releaseLock();
+    }
   } catch (err) {
     if (lockAttempted && !lockAcquired) lockMs = Date.now() - t0;
     try { if (lock.hasLock()) lock.releaseLock(); } catch (_) {}
     return json_({data:null, error:{message:String(err && err.message || err)}});
   } finally {
-    // Одна строка в журнале выполнения: только названия действий и числа, без данных пользователей.
     const ended = Date.now();
-    try { console.log(JSON.stringify({act:req&&req.action,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES})); } catch (_) {}
+    try {
+      console.log(JSON.stringify({
+        act:req&&req.action,
+        n:(req&&req.requests)?req.requests.length:undefined,
+        lockMs,
+        workMs:ended-tLocked,
+        locked:lockAcquired,
+        totalMs:ended-t0,
+        reads:SHEET_READS,
+        writes:SHEET_WRITES
+      }));
+    } catch (_) {}
   }
 }
 function batch_(req){
@@ -113,9 +258,9 @@ function normal_(v,col) {
   return Utilities.formatDate(v,tz_(),'yyyy-MM-dd');
 }
 function safeCell_(value) {
-  // setValues treats strings beginning with '=' as formulas even when the cell is formatted as text.
-  // A leading apostrophe makes Sheets store the content as literal text.
-  return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
+  // Never let user-controlled text be interpreted as a spreadsheet formula.
+  // Numeric negative values remain numbers; only strings are escaped.
+  return typeof value==='string' && /^\\s*[=+\\-@]/.test(value) ? "'"+value : value;
 }
 function appendRows_(name, data) {
   if (!data.length) return;
@@ -123,8 +268,8 @@ function appendRows_(name, data) {
   const need=start+data.length-1;
   if(sh.getMaxRows()<need){sh.insertRowsAfter(sh.getMaxRows(),need-sh.getMaxRows()+500);formatSheet_(sh,name);}
   delete ROWS_CACHE[name];
-  sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
   SHEET_WRITES++;
+  sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
 }
 function updateRows_(name, data) {
   if (!data.length) return;
@@ -136,12 +281,12 @@ function updateRows_(name, data) {
   let group=[];
   const flush=()=>{
     if(!group.length)return;
+    SHEET_WRITES++;
     sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
     group=[];
   };
   sorted.forEach(row=>{if(group.length&&row.__row!==group[group.length-1].__row+1)flush();group.push(row);});
   flush();
-  SHEET_WRITES++;
 }
 function deleteRows_(name, data) {
   const rowNumbers=[...new Set(data.map(r=>Number(r.__row)).filter(n=>Number.isInteger(n)&&n>=2))].sort((a,b)=>b-a);
@@ -152,9 +297,9 @@ function deleteRows_(name, data) {
   while(i<rowNumbers.length){
     const high=rowNumbers[i];let low=high;i++;
     while(i<rowNumbers.length&&rowNumbers[i]===low-1){low=rowNumbers[i];i++;}
+    SHEET_WRITES++;
     sh.deleteRows(low,high-low+1);
   }
-  SHEET_WRITES++;
 }
 function writeRows_(name, data) {
   SHEET_WRITES++;
@@ -394,6 +539,48 @@ function canAccessRow_(table,row,user){
   if(table==='goal_contributions'){const g=rows_('goals').find(g=>g.id===row.goal_id);return !!g&&fams.includes(String(g.family_id));}
   return false;
 }
+function assertMoneyValue_(value, label, allowZero) {
+  const amount = Number(value);
+  if (typeof value !== 'number' || !Number.isSafeInteger(amount) || (allowZero ? amount < 0 : amount <= 0)) {
+    throw new Error(label + (allowZero
+      ? ' должен быть неотрицательным целым числом копеек'
+      : ' должен быть положительным целым числом копеек'));
+  }
+}
+
+function assertGoalContributionTotals_(baselineRows, proposedRows, deletedIds) {
+  const byId = new Map(), affectedGoals = new Set();
+  (baselineRows || []).forEach(row => byId.set(String(row.id), row));
+  (deletedIds || []).forEach(id => {
+    const oldRow = byId.get(String(id));
+    if (oldRow) affectedGoals.add(String(oldRow.goal_id || ''));
+    byId.delete(String(id));
+  });
+  (proposedRows || []).forEach(row => {
+    const id = String(row.id), oldRow = byId.get(id);
+    if (oldRow) affectedGoals.add(String(oldRow.goal_id || ''));
+    affectedGoals.add(String(row.goal_id || ''));
+    byId.set(id, row);
+  });
+
+  const totals = new Map();
+  byId.forEach(row => {
+    const goalId = String(row.goal_id || '');
+    if (!affectedGoals.has(goalId)) return;
+    const amount = row.amount_kopecks;
+    if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount === 0) {
+      throw new Error('Сумма движения по цели должна быть ненулевым целым числом копеек');
+    }
+    const total = (totals.get(goalId) || 0) + amount;
+    if (!Number.isSafeInteger(total)) throw new Error('Общая сумма движений по цели превышает безопасный диапазон');
+    totals.set(goalId, total);
+  });
+
+  for (const total of totals.values()) {
+    if (total < 0) throw new Error('Нельзя снять больше накопленной суммы. Остаток цели не может быть отрицательным.');
+  }
+}
+
 function assertUniqueBudget_(rows,row,excludeId){
   if(String(row.family_id||'')===''||String(row.category_id||'')===''||String(row.month_date||'')==='')return;
   const duplicate=rows.some(x=>String(x.id)!==String(excludeId||'')&&
@@ -405,7 +592,8 @@ function assertUniqueBudget_(rows,row,excludeId){
 function validateRelations_(table,row,user){
   const familyId=String(row.family_id||'');
   if(table==='goal_contributions'){
-    if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма пополнения должна быть положительным целым числом копеек');
+    const amount=row.amount_kopecks;
+    if(typeof amount!=='number'||!Number.isSafeInteger(amount)||amount===0)throw new Error('Сумма движения по цели должна быть ненулевым целым числом копеек');
     const goal=rows_('goals').find(x=>String(x.id)===String(row.goal_id));
     if(!goal)throw new Error('Связанная цель не найдена');
     if(!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
@@ -460,6 +648,7 @@ function query_(req,user){
     const input=Array.isArray(req.values)?req.values:[req.values];
     const needsExisting=table==='budgets'||table==='profiles'||input.some(raw=>raw&&raw.id);
     const existing=needsExisting?rows_(table):[];
+    const contributionBaseline=table==='goal_contributions'?rows_(table).map(strip_):null;
     const createdIds_=new Set();
     const created=input.map(raw=>{
       const r=Object.assign({},raw);
@@ -493,12 +682,14 @@ function query_(req,user){
       if(table==='budgets')assertUniqueBudget_(existing,r);
       existing.push(r);return r;
     });
+    if(contributionBaseline)assertGoalContributionTotals_(contributionBaseline,created,[]);
     appendRows_(table,created);
     if(table==='goal_contributions')syncGoalTotals_(created.map(r=>r.goal_id));
     return req.returning?created.map(r=>strip_(r)):null;
   }
   if(mode==='update'||mode==='delete'){
     if(!filters.length)throw new Error('Для изменения или удаления нужен хотя бы один фильтр');
+    const contributionBaseline=table==='goal_contributions'?all.map(strip_):null;
     if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');if(mode==='delete'&&(table==='families'||table==='profiles'))throw new Error('Удаление системных записей запрещено');
     if(mode==='delete'&&table==='accounts'){
       const accountIds=new Set(all.filter(r=>matches(r)&&canAccessRow_(table,r,user)).map(r=>String(r.id)));
@@ -514,6 +705,10 @@ function query_(req,user){
         else {const patch=req.values||{};if(table==='goals'&&Object.prototype.hasOwnProperty.call(patch,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(table==='notifications'&&Object.prototype.hasOwnProperty.call(patch,'user_id')&&String(patch.user_id)!==String(r.user_id))throw new Error('Нельзя менять получателя уведомления');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(table==='goal_contributions')affectedGoalIds.add(String(next.goal_id));if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(TABLES[table].includes('created_at')&&Object.prototype.hasOwnProperty.call(patch,'created_at')&&String(patch.created_at)!==String(r.created_at))throw new Error('Нельзя менять дату создания записи');validateRelations_(table,next,user);if(table==='budgets')assertUniqueBudget_(all,next,r.id);if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}next.__row=r.__row;changed.push(next);}
       }
     });
+    if(contributionBaseline){
+      if(mode==='delete')assertGoalContributionTotals_(contributionBaseline,[],changed.map(r=>r.id));
+      else assertGoalContributionTotals_(contributionBaseline,changed.map(strip_),[]);
+    }
     if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
     if(table==='recurring_payments'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(payment=>String(payment.id)));
@@ -550,6 +745,7 @@ function query_(req,user){
   }
   if(mode==='upsert'){
     const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
+    const contributionBaseline=table==='goal_contributions'?existing.map(strip_):null;
     if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
     const affectedGoalIds=new Set(), updatedRows=[], insertedRows=[];
     input.forEach(raw=>{
@@ -589,6 +785,7 @@ function query_(req,user){
         if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
       }
     });
+    if(contributionBaseline)assertGoalContributionTotals_(contributionBaseline,updatedRows.concat(insertedRows).map(strip_),[]);
     updateRows_(table,updatedRows);
     appendRows_(table,insertedRows);
     if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
