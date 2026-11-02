@@ -1475,3 +1475,149 @@ test('failed batched upsert validation does not mutate cached rows before commit
   assert.equal(Number(result.data[1].data[0].planned_kopecks), 10000, 'The cached row must still match the persisted row');
   assert.equal(h.context.dataRevision_() % 2, 0, 'No sheet write happened, so the revision remains readable');
 });
+
+
+test('archived categories and accounts cannot be assigned to new records but remain valid on historical edits', () => {
+  const h = makeHarness();
+  const user = h.signup('archived-relations@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Архивные связи' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  const category = categories.find(item => item.kind === 'expense' && !item.parent_id && !item.archived);
+  const secondCategory = categories.find(item => item.kind === 'expense' && !item.parent_id && item.id !== category.id && !item.archived);
+  const account = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Основной счёт', kind: 'bank', starting_balance_kopecks: 0 }
+  }).data[0];
+
+  const historical = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-02', category_id: category.id, account_id: account.id, description: 'Старая операция' }
+  }).data[0];
+  const changeRelationLater = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 500, operation_date: '2026-11-02', description: 'Операция без счёта и категории' }
+  }).data[0];
+
+  assert.equal(h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true }
+  }).error, null);
+  assert.equal(h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: account.id }], values: { archived: true }
+  }).error, null);
+
+  const newWithArchivedCategory = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-11-02', category_id: category.id, description: 'Новая операция' }
+  });
+  assert.match(newWithArchivedCategory.error.message, /находится в архиве/);
+
+  const newWithArchivedAccount = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-11-02', account_id: account.id, description: 'Новая операция' }
+  });
+  assert.match(newWithArchivedAccount.error.message, /находится в архиве/);
+
+  const historicalEdit = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: historical.id }], values: { description: 'Исправлено описание' }
+  });
+  assert.equal(historicalEdit.error, null, historicalEdit.error?.message);
+
+  const attachArchivedCategory = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: changeRelationLater.id }], values: { category_id: category.id }
+  });
+  assert.match(attachArchivedCategory.error.message, /находится в архиве/);
+
+  const attachArchivedAccount = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: changeRelationLater.id }], values: { account_id: account.id }
+  });
+  assert.match(attachArchivedAccount.error.message, /находится в архиве/);
+  assert.equal(secondCategory.archived, false);
+});
+
+test('account owner must be a member of the same family', () => {
+  const h = makeHarness();
+  const owner = h.signup('account-owner-member@example.com');
+  const member = h.signup('account-owner-valid@example.com');
+  const outsider = h.signup('account-owner-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Владельцы счетов' }).data;
+  const joined = h.call({ action: 'joinFamily', token: member.token, invite_code: family.invite_code });
+  assert.equal(joined.error, null, joined.error?.message);
+
+  const invalidOwner = h.call({
+    action: 'query', token: owner.token, table: 'accounts', mode: 'insert',
+    values: { family_id: family.id, name: 'Чужой владелец', kind: 'bank', starting_balance_kopecks: 0, owner_user_id: outsider.user.id }
+  });
+  assert.match(invalidOwner.error.message, /участником этой семьи/);
+
+  const validOwner = h.call({
+    action: 'query', token: owner.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Счёт супруга', kind: 'bank', starting_balance_kopecks: 0, owner_user_id: member.user.id }
+  });
+  assert.equal(validOwner.error, null, validOwner.error?.message);
+  assert.equal(validOwner.data[0].owner_user_id, member.user.id);
+});
+
+test('categories referenced by history or child categories cannot be deleted', () => {
+  const h = makeHarness();
+  const user = h.signup('category-delete-guard@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита категорий' }).data;
+  const root = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: null, name: 'Тестовая категория', kind: 'expense', icon: 'x', color: '#000000' }
+  }).data[0];
+  const child = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: root.id, name: 'Подкатегория', kind: 'expense', icon: 'x', color: '#000000' }
+  }).data[0];
+
+  const referencedByChild = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: root.id }]
+  });
+  assert.match(referencedByChild.error.message, /Архивируйте её вместо удаления/);
+
+  const transaction = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-02', category_id: child.id, description: 'Исторический расход' }
+  });
+  assert.equal(transaction.error, null, transaction.error?.message);
+
+  const referencedByHistory = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'delete',
+    filters: [{ column: 'id', op: 'in', values: [root.id, child.id] }]
+  });
+  assert.match(referencedByHistory.error.message, /Архивируйте её вместо удаления/);
+
+  const stillExists = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'select',
+    filters: [{ column: 'id', op: 'in', values: [root.id, child.id] }]
+  });
+  assert.equal(stillExists.data.length, 2);
+});
+
+test('categories reject invalid hierarchy and mismatched parent kinds', () => {
+  const h = makeHarness();
+  const user = h.signup('category-hierarchy@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Иерархия категорий' }).data;
+  const expenseRoot = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: null, name: 'Расходы тест', kind: 'expense', icon: 'x', color: '#000000' }
+  }).data[0];
+
+  const mismatchedChild = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert',
+    values: { family_id: family.id, parent_id: expenseRoot.id, name: 'Доход под расходом', kind: 'income', icon: 'x', color: '#000000' }
+  });
+  assert.match(mismatchedChild.error.message, /должен совпадать/);
+
+  const selfParent = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: expenseRoot.id }], values: { parent_id: expenseRoot.id }
+  });
+  assert.match(selfParent.error.message, /самой себе/);
+});
