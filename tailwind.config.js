@@ -4,6 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
+        slate: {
+          50: '#f5f6f1', 100: '#eef1ea', 200: '#e4e9e0', 300: '#d2dbcf',
+          400: '#9aa497', 500: '#7b857b', 600: '#626e62', 700: '#465348',
+          800: '#374438', 900: '#2f3b32', 950: '#202a23',
+        },
         canvas: '#f5f6f1',
         surface: '#ffffff',
         ink: '#2f3b32',
