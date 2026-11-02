@@ -30,7 +30,11 @@ type Pending={payload:Record<string,unknown>;resolve:(v:any)=>void;reject:(e:unk
 let batchingSupported=true,queue:Pending[]=[],flushTimer:ReturnType<typeof setTimeout>|null=null
 let inFlight=0
 const BATCH_DELAY_MS=20,BATCH_MAX=25
-function request<T>(payload:Record<string,unknown>):Promise<T>{const action=payload.action;if(!batchingSupported||(action!=='query'&&action!=='rpc'))return rawRequest<T>(payload);return new Promise<T>((resolve,reject)=>{queue.push({payload,resolve,reject});if(queue.length>=BATCH_MAX)void flushQueue();else if(flushTimer===null)flushTimer=setTimeout(()=>void flushQueue(),BATCH_DELAY_MS)})}
+function request<T>(payload:Record<string,unknown>):Promise<T>{
+  const canBatchRead=(payload.action==='query'&&(payload.mode||'select')==='select')||(payload.action==='rpc'&&payload.name==='get_my_context');
+  if(!batchingSupported||!canBatchRead)return rawRequest<T>(payload);
+  return new Promise<T>((resolve,reject)=>{queue.push({payload,resolve,reject});if(queue.length>=BATCH_MAX)void flushQueue();else if(flushTimer===null)flushTimer=setTimeout(()=>void flushQueue(),BATCH_DELAY_MS)})
+}
 async function flushQueue(){if(flushTimer!==null){clearTimeout(flushTimer);flushTimer=null}const items=queue;queue=[];if(!items.length)return;if(items.length===1){rawRequest(items[0].payload).then(items[0].resolve,items[0].reject);return}try{const results=await rawRequest<{data?:unknown;error?:{message:string}|null}[]>({action:'batch',requests:items.map(i=>i.payload)});items.forEach((it,idx)=>{const r=results[idx];if(!r)it.reject(new Error('Сервер вернул неполный ответ'));else if(r.error)it.reject(new Error(r.error.message));else it.resolve(r.data)})}catch(e){if(e instanceof Error&&e.message.startsWith('Неизвестное действие')){batchingSupported=false;items.forEach(it=>rawRequest(it.payload).then(it.resolve,it.reject))}else items.forEach(it=>it.reject(e))}}
 
 // Чтение: одинаковые запросы в течение 30 с берутся из памяти, одинаковые запросы «в полёте» объединяются в один.

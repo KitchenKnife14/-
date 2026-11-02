@@ -285,6 +285,11 @@ test('recurring payment confirmation can retry after a partial write without dup
   }};
   const failed = h.call(args);
   assert.match(failed.error.message, /simulated write failure/);
+  assert.equal(h.context.dataRevision_() % 2, 1, 'The incomplete recurring occurrence must block reads');
+  const blockedRead = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.match(blockedRead.error.message, /Таблица заблокирована/);
+  const alteredRetry = h.call({ ...args, params: { ...args.params, p_operation_date: '2026-10-29' } });
+  assert.match(alteredRetry.error.message, /Повторите исходное подтверждение/);
   const retried = h.call(args);
   assert.equal(retried.error, null, retried.error?.message);
   const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
@@ -292,6 +297,7 @@ test('recurring payment confirmation can retry after a partial write without dup
   assert.equal(txs[0].id, `recurring_${recurring.id}_2026-10-28`);
   const after = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
   assert.equal(after.next_due_date, '2026-11-28');
+  assert.equal(h.context.dataRevision_() % 2, 0, 'A successful exact retry releases the data lock');
 });
 
 
@@ -354,6 +360,11 @@ test('purchase confirmation can retry after a partial write without duplicating 
   }};
   const failed = h.call(args);
   assert.match(failed.error.message, /simulated purchase status write failure/);
+  assert.equal(h.context.dataRevision_() % 2, 1, 'The unlinked purchase expense must block reads');
+  const blockedRead = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.match(blockedRead.error.message, /Таблица заблокирована/);
+  const alteredRetry = h.call({ ...args, params: { ...args.params, p_operation_date: '2026-10-29' } });
+  assert.match(alteredRetry.error.message, /Повторите исходное подтверждение/);
   const retried = h.call(args);
   assert.equal(retried.error, null, retried.error?.message);
   const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
@@ -362,6 +373,7 @@ test('purchase confirmation can retry after a partial write without duplicating 
   const after = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
   assert.equal(after.status, 'bought');
   assert.equal(after.linked_transaction_id, txs[0].id);
+  assert.equal(h.context.dataRevision_() % 2, 0, 'A successful exact retry releases the data lock');
 });
 
 
@@ -1843,4 +1855,21 @@ test('upsert accepts only the supported unique keys', () => {
     values: { id: 'valid-expense', family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-11-02', description: 'Сохранить' }
   });
   assert.equal(valid.error, null, valid.error?.message);
+});
+
+
+test('batch rejects multiple write operations before executing any of them', () => {
+  const h = makeHarness();
+  const user = h.signup('batch-multiple-writes@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Пакет записей' }).data;
+  const result = h.call({
+    action: 'batch', token: user.token,
+    requests: [
+      { action: 'query', table: 'transactions', mode: 'insert', values: { family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-11-02', description: 'Первая' } },
+      { action: 'query', table: 'transactions', mode: 'insert', values: { family_id: family.id, type: 'expense', amount_kopecks: 200, operation_date: '2026-11-02', description: 'Вторая' } }
+    ]
+  });
+  assert.match(result.error.message, /не более одной изменяющей CRUD-операции/);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
+  assert.equal(h.context.dataRevision_() % 2, 0);
 });

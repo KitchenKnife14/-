@@ -26,6 +26,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 const API_VERSION=6, BATCH_MAX=25;
 const DATA_REVISION_KEY = 'BUDGET_DATA_REVISION_V1';
+const DATA_RECOVERY_KEY = 'BUDGET_DATA_RECOVERY_V1';
 const READ_CONSISTENCY_RETRIES = 8;
 const READ_RETRY_DELAY_MS = 40;
 let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0; // кэш открытой таблицы и счётчики для замера (на время ОДНОГО запроса)
@@ -99,6 +100,7 @@ function beginWriteRevision_() {
   if (revision % 2 === 1) {
     throw new Error('Предыдущая запись была прервана. Необходимо проверить целостность таблицы перед продолжением.');
   }
+  props.deleteProperty(DATA_RECOVERY_KEY);
   props.setProperty(DATA_REVISION_KEY, String(revision + 1));
 }
 
@@ -112,12 +114,26 @@ function finishWriteRevision_() {
 function mayLeavePartialCrudWrite_(req) {
   if (!req || typeof req !== 'object') return false;
   if (req.action === 'query') return (req.mode || 'select') !== 'select';
-  if (req.action === 'rpc') return !['get_my_context', 'join_family_by_invite', 'confirm_planned_purchase', 'confirm_recurring_payment'].includes(req.name);
+  if (req.action === 'rpc') return req.name !== 'get_my_context';
   if (['signup', 'createFamily', 'joinFamily'].includes(req.action)) return true;
   if (req.action === 'batch') {
     return Array.isArray(req.requests) && req.requests.some(mayLeavePartialCrudWrite_);
   }
   return false;
+}
+function recoveryRequestKey_(req) {
+  if (!req || req.action !== 'rpc') return '';
+  const params = req.params || {};
+  if (req.name === 'join_family_by_invite' && params.p_invite_code) {
+    return JSON.stringify({ name: req.name, invite_code: String(params.p_invite_code).trim().toUpperCase(), display_name: String(params.p_display_name || '').trim() });
+  }
+  if (req.name === 'confirm_planned_purchase' && params.p_purchase_id && params.p_operation_date) {
+    return JSON.stringify({ name: req.name, purchase_id: String(params.p_purchase_id), operation_date: String(params.p_operation_date), account_id: String(params.p_account_id || '') });
+  }
+  if (req.name === 'confirm_recurring_payment' && params.p_recurring_id && params.p_expected_due_date && params.p_operation_date) {
+    return JSON.stringify({ name: req.name, recurring_id: String(params.p_recurring_id), expected_due_date: String(params.p_expected_due_date), operation_date: String(params.p_operation_date) });
+  }
+  return '';
 }
 
 function runConsistentRead_(work, lock) {
@@ -162,6 +178,7 @@ function confirmDataIntegrityAfterManualAudit() {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    PropertiesService.getScriptProperties().deleteProperty(DATA_RECOVERY_KEY);
     const revision = dataRevision_();
     if (revision % 2 === 0) {
       Logger.log('Метка целостности уже в нормальном состоянии.');
@@ -196,20 +213,39 @@ function doPost(e) {
     tLocked = Date.now();
     lockMs = tLocked - t0;
 
-    try {
-      beginWriteRevision_();
-      let succeeded = false;
-      try {
-        const data = processRequest_(req);
-        succeeded = true;
-        return json_({data, error:null});
-      } finally {
-        // If a write was attempted and then failed, keep the revision odd.
-        // Reads remain blocked until the owner audits the potentially partial write.
-        // RPC handlers and dedicated auth/family actions provide rollback or idempotent retry semantics.
-        // Generic CRUD mutations do not, so a failed write must block reads until integrity is checked.
-        if (succeeded || !REQUEST_DATA_MUTATION_STARTED || REQUEST_WRITE_FAILURE_RECOVERED || !mayLeavePartialCrudWrite_(req)) finishWriteRevision_();
+    let recoveringExistingWrite = false;
+    const props = PropertiesService.getScriptProperties();
+    const currentRevision = dataRevision_();
+    if (currentRevision % 2 === 1) {
+      const expectedRecoveryKey = recoveryRequestKey_(req);
+      const savedRecoveryKey = props.getProperty(DATA_RECOVERY_KEY) || '';
+      if (!expectedRecoveryKey || !savedRecoveryKey || expectedRecoveryKey !== savedRecoveryKey) {
+        throw new Error('Предыдущая запись была прервана. Повторите исходное подтверждение с теми же параметрами; остальные операции заблокированы до восстановления.');
       }
+      recoveringExistingWrite = true;
+    } else {
+      beginWriteRevision_();
+    }
+
+    let succeeded = false;
+    try {
+      const data = processRequest_(req);
+      succeeded = true;
+      return json_({data, error:null});
+    } finally {
+      if (succeeded) {
+        if (recoveringExistingWrite) props.deleteProperty(DATA_RECOVERY_KEY);
+        finishWriteRevision_();
+      } else if (recoveringExistingWrite) {
+        // The same idempotent operation can be retried again; keep reads blocked.
+      } else if (REQUEST_DATA_MUTATION_STARTED && mayLeavePartialCrudWrite_(req)) {
+        const recoveryKey = recoveryRequestKey_(req);
+        if (recoveryKey) props.setProperty(DATA_RECOVERY_KEY, recoveryKey);
+        // No recovery key means a generic partial write: manual integrity audit is required.
+      } else if (!REQUEST_DATA_MUTATION_STARTED || REQUEST_WRITE_FAILURE_RECOVERED || !mayLeavePartialCrudWrite_(req)) {
+        finishWriteRevision_();
+      }
+    }
     } finally {
       lock.releaseLock();
     }
@@ -236,6 +272,11 @@ function doPost(e) {
 function batch_(req){
  const list=req.requests;if(!Array.isArray(list)||!list.length)throw new Error('Пустой пакет запросов');
  if(list.length>BATCH_MAX)throw new Error('Слишком много запросов в пакете');
+ const mutatingQueries=list.filter(item=>item&&item.action==='query'&&(item.mode||'select')!=='select');
+ const mutatingRpcs=list.filter(item=>item&&item.action==='rpc'&&item.name!=='get_my_context');
+ if(mutatingQueries.length>1)throw new Error('В одном пакете допускается не более одной изменяющей CRUD-операции');
+ if(mutatingRpcs.length)throw new Error('Изменяющие RPC должны выполняться отдельным запросом вне пакета');
+ if(list.some(item=>item&&['createFamily','joinFamily','ensureProfile'].includes(item.action)))throw new Error('Создание семьи и изменение состава семьи выполняются отдельным запросом вне пакета');
  const user=requireUser_(req.token), results=[];
  for(const item of list){
   REQUEST_WRITE_FAILURE_RECOVERED=false;
@@ -1047,6 +1088,7 @@ function rpc_(req,user){
       String(tx.category_id||'')!==String(purchase.category_id||'') ||
       String(tx.description||'')!==String(purchase.name||'') ||
       String(tx.account_id||'')!==accountId ||
+      String(tx.operation_date||'')!==String(p.p_operation_date||'') ||
       String(tx.parent_recurring_id||'')!==''
     ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
     if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
@@ -1060,13 +1102,12 @@ function rpc_(req,user){
     return {transaction_id:transactionId};
   }
   if(name==='confirm_recurring_payment'){
-    const id=p.p_recurring_id, r=rows_('recurring_payments').find(x=>x.id===id&&canAccessRow_('recurring_payments',x,user));
+    const id=String(p.p_recurring_id||''), expectedDue=String(p.p_expected_due_date||'');
+    const r=rows_('recurring_payments').find(x=>String(x.id)===id&&canAccessRow_('recurring_payments',x,user));
     if(!r)throw new Error('Регулярный платёж не найден');
-    if(r.next_due_date!==p.p_expected_due_date)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
-    if(r.end_date && r.next_due_date>r.end_date){r.active=false;updateRows_('recurring_payments',[r]);return true;}
-    const txs=rows_('transactions'), transactionId='recurring_'+r.id+'_'+r.next_due_date;
-    // Deterministic ID makes retries safe only when the existing row is the same recurring occurrence.
-    const existingTx=txs.find(t=>String(t.id)===transactionId);
+    if(!expectedDue||!p.p_operation_date)throw new Error('Не указана дата подтверждаемого платежа');
+    const transactionId='recurring_'+r.id+'_'+expectedDue;
+    const txs=rows_('transactions'), existingTx=txs.find(t=>String(t.id)===transactionId);
     if(existingTx && (
       String(existingTx.family_id)!==String(r.family_id) ||
       String(existingTx.parent_recurring_id||'')!==String(r.id) ||
@@ -1074,10 +1115,20 @@ function rpc_(req,user){
       Number(existingTx.amount_kopecks)!==Number(r.amount_kopecks) ||
       String(existingTx.category_id||'')!==String(r.category_id||'') ||
       String(existingTx.account_id||'')!==String(r.account_id||'') ||
-      String(existingTx.description||'')!==String(r.description||'')
+      String(existingTx.description||'')!==String(r.description||'') ||
+      String(existingTx.operation_date||'')!==String(p.p_operation_date)
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
+
+    // Retry after both writes succeeded but the response was interrupted.
+    const expectedNextDate=nextDate_(expectedDue,r.frequency,r.custom_interval_days,r.start_date);
+    if(String(r.next_due_date)!==expectedDue){
+      if(existingTx&&String(r.next_due_date)===expectedNextDate)return true;
+      throw new Error('Дата платежа уже изменилась. Обновите страницу.');
+    }
+    if(r.active!==true)throw new Error('Регулярный платёж приостановлен. Сначала возобновите его.');
+    if(r.end_date && r.next_due_date>r.end_date){r.active=false;updateRows_('recurring_payments',[r]);return true;}
     if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
-    r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
+    r.next_due_date=expectedNextDate;
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     updateRows_('recurring_payments',[r]);return true;
   }
