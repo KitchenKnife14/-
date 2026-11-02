@@ -62,3 +62,43 @@ button, input, select, textarea {
     @apply text-base font-semibold text-ink;
   }
 }
+
+@layer base {
+  h1, h2, h3 {
+    @apply tracking-tight text-ink;
+  }
+  h1 {
+    @apply font-semibold;
+  }
+  h2, h3 {
+    @apply font-semibold;
+  }
+  :focus-visible {
+    outline: 2px solid #879f7e;
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: #dce9de;
+    color: #2f3b32;
+  }
+}
+
+@layer components {
+  .page-section {
+    @apply rounded-2xl border border-line bg-surface p-4 sm:p-5;
+    box-shadow: 0 2px 12px rgba(47, 59, 48, 0.035);
+  }
+  .page-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-3;
+  }
+  .table-wrap {
+    @apply max-w-full overflow-x-auto rounded-2xl border border-line bg-surface;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 640px) {
+  input, select, textarea {
+    max-width: 100%;
+  }
+}
