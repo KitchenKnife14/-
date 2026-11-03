@@ -122,6 +122,17 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     ],
   },
   {
+    name: 'Сигареты', kind: 'expense', icon: '🚬', color: '#78716c',
+  },
+  {
+    name: 'Кредиты', kind: 'expense', icon: '💳', color: '#64748b',
+    children: [
+      { name: 'Погашение основного долга', icon: '💳', color: '#64748b' },
+      { name: 'Проценты по кредиту', icon: '📈', color: '#64748b' },
+      { name: 'Комиссии по кредиту', icon: '💸', color: '#64748b' },
+    ],
+  },
+  {
     name: 'Прочее', kind: 'expense', icon: '📦', color: '#6b7280',
     children: [
       { name: 'Непредвиденные расходы', icon: '⚠️', color: '#6b7280' },

@@ -1120,3 +1120,156 @@ test('new accounts store PBKDF2 hashes and legacy accounts migrate after success
   row = h.context.authRows_().find(user => user.id === created.user.id);
   assert.equal(row.hash.startsWith('p2$30000$'), true);
 });
+
+
+test('Telegram one-time linking records transactions through the existing family authorization path', () => {
+  const h = makeHarness();
+  const owner = h.signup('telegram-owner@example.com');
+  const partner = h.signup('telegram-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Telegram семья' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret');
+  const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  assert.equal(generated.data.code.length, 12);
+
+  const linked = h.call({
+    action: 'telegramWebhook',
+    telegramSecret: 'test-backend-secret',
+    update: { update_id: 7001, message: {
+      chat: { id: 700, type: 'private' }, from: { id: 700 },
+      text: '/link ' + generated.data.code
+    }}
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+  assert.match(linked.data.text, /успешно привязан/);
+
+  const added = h.call({
+    action: 'telegramWebhook',
+    telegramSecret: 'test-backend-secret',
+    update: { update_id: 7002, message: {
+      chat: { id: 700, type: 'private' }, from: { id: 700 },
+      text: 'Проезд 45 рублей'
+    }}
+  });
+  assert.equal(added.error, null, added.error?.message);
+  assert.match(added.data.text, /45,00 ₽/);
+
+  const transactions = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].type, 'expense');
+  assert.equal(transactions[0].amount_kopecks, 4500);
+  assert.equal(transactions[0].description, 'Проезд');
+  const categories = h.call({ action: 'query', token: owner.token, table: 'categories', mode: 'select' }).data;
+  assert.equal(categories.find(x => x.id === transactions[0].category_id).name, 'Общественный транспорт');
+
+  // A Telegram retry with the same update_id returns the cached reply and does not append again.
+  const retried = h.call({
+    action: 'telegramWebhook',
+    telegramSecret: 'test-backend-secret',
+    update: { update_id: 7002, message: {
+      chat: { id: 700, type: 'private' }, from: { id: 700 },
+      text: 'Проезд 45 рублей'
+    }}
+  });
+  assert.equal(retried.error, null, retried.error?.message);
+  assert.equal(h.call({ action: 'query', token: partner.token, table: 'transactions', mode: 'select' }).data.length, 1);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data.length, 1);
+});
+
+test('Telegram webhook rejects an invalid backend secret and prevents reuse of a link code', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-code-owner@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Одноразовый код' });
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'correct-secret');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+
+  const invalidSecret = h.call({
+    action: 'telegramWebhook', telegramSecret: 'wrong-secret',
+    update: { update_id: 7101, message: { chat: { id: 701, type: 'private' }, from: { id: 701 }, text: '/link ' + generated.data.code }}
+  });
+  assert.match(invalidSecret.error.message, /authentication failed/i);
+
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: 'correct-secret',
+    update: { update_id: 7102, message: { chat: { id: 701, type: 'private' }, from: { id: 701 }, text: '/link ' + generated.data.code }}
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  const reused = h.call({
+    action: 'telegramWebhook', telegramSecret: 'correct-secret',
+    update: { update_id: 7103, message: { chat: { id: 702, type: 'private' }, from: { id: 702 }, text: '/link ' + generated.data.code }}
+  });
+  assert.match(reused.error.message, /код не найден/i);
+});
+
+
+test('Telegram link tables cannot be forged through the public generic data API', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-table-guard@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита Telegram' }).data;
+  const forgedLink = h.call({
+    action: 'query', token: user.token, table: 'telegram_links', mode: 'insert',
+    values: { family_id: family.id, user_id: user.user.id, telegram_user_id: '999999999', telegram_chat_id: '999999999' }
+  });
+  assert.match(forgedLink.error.message, /служебная Telegram-таблица/i);
+  const forgedCode = h.call({
+    action: 'query', token: user.token, table: 'telegram_link_codes', mode: 'insert',
+    values: { family_id: family.id, user_id: user.user.id, code_hash: 'forged', expires_at: '2099-01-01T00:00:00.000Z' }
+  });
+  assert.match(forgedCode.error.message, /служебная Telegram-таблица/i);
+});
+
+
+test('Telegram salary expenses are assigned to the linked family member category', () => {
+  const h = makeHarness();
+  const owner = h.signup('telegram-salary-owner@example.com');
+  const partner = h.signup('telegram-salary-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья зарплат' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'salary-secret');
+  const generated = h.call({ action: 'rpc', token: partner.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const link = h.call({
+    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    update: { update_id: 7201, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: '/link ' + generated.data.code }}
+  });
+  assert.equal(link.error, null, link.error?.message);
+
+  const added = h.call({
+    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    update: { update_id: 7202, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: 'Доход 5000 рублей зарплата' }}
+  });
+  assert.equal(added.error, null, added.error?.message);
+  const transactions = h.call({ action: 'query', token: partner.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].type, 'income');
+  assert.equal(transactions[0].amount_kopecks, 500000);
+  const categories = h.call({ action: 'query', token: partner.token, table: 'categories', mode: 'select' }).data;
+  assert.equal(categories.find(x => x.id === transactions[0].category_id).name, 'Зарплата второго участника');
+});
+
+
+test('Telegram rejects ambiguous messages containing multiple numbers without writing a transaction', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-ambiguous@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Без неоднозначных операций' });
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'ambiguous-secret');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  h.call({
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    update: { update_id: 7301, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: '/link ' + generated.data.code }}
+  });
+  const ambiguous = h.call({
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    update: { update_id: 7302, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: 'Продукты 45 и 50 рублей' }}
+  });
+  assert.match(ambiguous.error.message, /несколько чисел/i);
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 0);
+});

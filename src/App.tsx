@@ -17,6 +17,7 @@ const PlanningPage = lazy(() => import('./pages/PlanningPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
+const TelegramPage = lazy(() => import('./pages/TelegramPage'))
 const AccountsPage = lazy(() => import('./pages/AccountsPage'))
 
 function PageFallback() {
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="reports" element={<ReportsPage />} />
           <Route path="analysis" element={<AnalysisPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="telegram" element={<TelegramPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

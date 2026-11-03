@@ -28,7 +28,24 @@ async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
 type Pending={payload:Record<string,unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void}
 let batchingSupported=true,queue:Pending[]=[],flushTimer:ReturnType<typeof setTimeout>|null=null
 const BATCH_DELAY_MS=20,BATCH_MAX=25
-function request<T>(payload:Record<string,unknown>):Promise<T>{const action=payload.action;if(!batchingSupported||(action!=='query'&&action!=='rpc'))return rawRequest<T>(payload);return new Promise<T>((resolve,reject)=>{queue.push({payload,resolve,reject});if(queue.length>=BATCH_MAX)void flushQueue();else if(flushTimer===null)flushTimer=setTimeout(()=>void flushQueue(),BATCH_DELAY_MS)})}
+function requestUncached<T>(payload:Record<string,unknown>):Promise<T>{const action=payload.action;if(!batchingSupported||(action!=='query'&&action!=='rpc'))return rawRequest<T>(payload);return new Promise<T>((resolve,reject)=>{queue.push({payload,resolve,reject});if(queue.length>=BATCH_MAX)void flushQueue();else if(flushTimer===null)flushTimer=setTimeout(()=>void flushQueue(),BATCH_DELAY_MS)})}
+const READ_CACHE_TTL_MS=2000
+const readCache=new Map<string,{expiresAt:number;value:unknown}>()
+const inFlightReads=new Map<string,Promise<unknown>>()
+let readCacheVersion=0
+function request<T>(payload:Record<string,unknown>):Promise<T>{
+  const isRead=payload.action==='query'&&payload.mode==='select'
+  if(!isRead){readCache.clear();inFlightReads.clear();readCacheVersion++;return requestUncached<T>(payload)}
+  const key=JSON.stringify(payload)
+  const cached=readCache.get(key)
+  if(cached&&cached.expiresAt>Date.now())return Promise.resolve(cached.value as T)
+  const pending=inFlightReads.get(key)
+  if(pending)return pending as Promise<T>
+  const version=readCacheVersion
+  const current=requestUncached<T>(payload).then(value=>{if(version===readCacheVersion)readCache.set(key,{expiresAt:Date.now()+READ_CACHE_TTL_MS,value});return value}).finally(()=>{if(inFlightReads.get(key)===current)inFlightReads.delete(key)})
+  inFlightReads.set(key,current)
+  return current
+}
 async function flushQueue(){if(flushTimer!==null){clearTimeout(flushTimer);flushTimer=null}const items=queue;queue=[];if(!items.length)return;if(items.length===1){rawRequest(items[0].payload).then(items[0].resolve,items[0].reject);return}try{const results=await rawRequest<{data?:unknown;error?:{message:string}|null}[]>({action:'batch',requests:items.map(i=>i.payload)});items.forEach((it,idx)=>{const r=results[idx];if(!r)it.reject(new Error('Сервер вернул неполный ответ'));else if(r.error)it.reject(new Error(r.error.message));else it.resolve(r.data)})}catch(e){if(e instanceof Error&&e.message.startsWith('Неизвестное действие')){batchingSupported=false;items.forEach(it=>rawRequest(it.payload).then(it.resolve,it.reject))}else items.forEach(it=>it.reject(e))}}
 
 class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|null;error:{message:string}|null}>{

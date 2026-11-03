@@ -18,7 +18,9 @@ const TABLES = {
   goal_contributions: ['id','goal_id','amount_kopecks','contribution_date','note','created_by','created_at'],
   planned_purchases: ['id','family_id','name','category_id','estimated_kopecks','priority','desired_month','desired_date','url','comment','status','responsible_user_id','goal_id','linked_transaction_id','created_by','created_at'],
   monthly_plans: ['id','family_id','month_date','category_id','type','planned_kopecks','note'],
-  notifications: ['id','family_id','user_id','kind','title','body','read','created_at']
+  notifications: ['id','family_id','user_id','kind','title','body','read','created_at'],
+  telegram_links: ['id','telegram_user_id','telegram_chat_id','user_id','family_id','linked_at'],
+  telegram_link_codes: ['id','user_id','family_id','code_hash','expires_at','used_at','created_at']
 };
 const AUTH_SHEET = '_auth';
 const SESSION_TTL = 60 * 60 * 24 * 14;
@@ -32,7 +34,7 @@ let ROWS_CACHE = {};
 let TZ_CACHE = null;
 // Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
 // а строки, начинающиеся с "=", в формулы).
-const TEXT_COLS = ['created_at','updated_at','joined_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name'];
+const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash'];
 
 function doGet() {
   const out={status:'ok', message:'Сервер работает', version:API_VERSION};
@@ -47,6 +49,15 @@ function doPost(e) {
     ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0;
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
+    if (req.action === 'telegramWebhook') {
+      // Serialize webhook updates so Telegram retries cannot race and insert duplicates.
+      lockAttempted = true;
+      lock.waitLock(20000);
+      lockAcquired = true;
+      tLocked = Date.now(); lockMs = tLocked - t0;
+      try { return json_({data:telegramWebhook_(req),error:null}); }
+      finally { lock.releaseLock(); }
+    }
     // Serialize authentication too: concurrent signups must not create duplicate emails.
     lockAttempted = true;
     lock.waitLock(20000);
@@ -387,6 +398,7 @@ function canAccessRow_(table,row,user){
     if(!row.family_id || !fams.includes(String(row.family_id)))return false;
     return String(row.user_id||'')===user.id;
   }
+  if(table==='telegram_links'||table==='telegram_link_codes')return String(row.user_id||'')===user.id&&fams.includes(String(row.family_id));
   if(row.family_id!==undefined && row.family_id!=='') return fams.includes(String(row.family_id));
   if(table==='profiles') return String(row.id)===user.id || fams.some(fid=>rows_('family_members').some(m=>m.family_id===fid&&m.user_id===row.id));
   if(table==='families') return String(row.created_by)===user.id || fams.includes(String(row.id));
@@ -444,6 +456,7 @@ function validateRelations_(table,row,user){
 }
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
+  if(table==='telegram_links'||table==='telegram_link_codes')throw new Error('Служебная Telegram-таблица недоступна через обычный API');
   let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const filters=req.filters||[];
   const matches=(row)=>filters.every(f=>{
@@ -619,6 +632,29 @@ function syncGoalTotals_(goalIds){
 }
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
+  if(name==='create_telegram_link_code'){
+    const members=rows_('family_members').filter(m=>String(m.user_id)===user.id);
+    if(!members.length)throw new Error('Сначала создайте семью или присоединитесь к ней');
+    const familyId=String(members[0].family_id);
+    const existing=rows_('telegram_links').find(x=>String(x.user_id)===user.id&&String(x.family_id)===familyId);
+    if(existing)throw new Error('К Telegram уже привязан аккаунт. Сначала отвяжите его.');
+    const code=code_().slice(0,12), expires=new Date(Date.now()+15*60*1000).toISOString();
+    const old=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id&&!x.used_at);
+    if(old.length)deleteRows_('telegram_link_codes',old);
+    appendRows_('telegram_link_codes',[{id:id_(),user_id:user.id,family_id:familyId,code_hash:telegramCodeHash_(code),expires_at:expires,used_at:'',created_at:now_()}]);
+    return {code,expires_at:expires};
+  }
+  if(name==='get_telegram_link_status'){
+    const link=rows_('telegram_links').find(x=>String(x.user_id)===user.id);
+    return link?{linked:true,linked_at:link.linked_at,telegram_chat_id:link.telegram_chat_id}:{linked:false};
+  }
+  if(name==='unlink_telegram'){
+    const links=rows_('telegram_links').filter(x=>String(x.user_id)===user.id);
+    if(links.length)deleteRows_('telegram_links',links);
+    const codes=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id);
+    if(codes.length)deleteRows_('telegram_link_codes',codes);
+    return true;
+  }
   if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code,display_name:p.p_display_name},user);return true;}
   if(name==='create_family')return route_({action:'createFamily',name:p.p_name,display_name:p.p_display_name},user);
   if(name==='get_my_context'){
@@ -701,6 +737,114 @@ function nextDate_(iso,freq,days,anchorIso){
     return nextMonth.toISOString().slice(0,10);
   }
   return d.toISOString().slice(0,10);
+}
+
+
+/* ===== Telegram webhook: вход только через доверенный Vercel endpoint ===== */
+function telegramCodeHash_(code){
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(code).trim().toUpperCase(),Utilities.Charset.UTF_8);
+  return Utilities.base64Encode(digest).split('+').join('-').split('/').join('_').replace(/=+$/,'');
+}
+function telegramWebhook_(req){
+  const props=PropertiesService.getScriptProperties();
+  const expected=props.getProperty('TELEGRAM_BACKEND_SECRET');
+  if(!expected||expected.length<32||!safeEqual_(String(req.telegramSecret||''),expected))throw new Error('Webhook authentication failed');
+  const update=req.update||{}, updateId=String(update.update_id||'');
+  const lastPrune=Number(props.getProperty('telegram:last_prune')||0);
+  if(Date.now()-lastPrune>21600000){
+    const all=props.getProperties();
+    Object.keys(all).forEach(key=>{if(!key.startsWith('telegram:update:'))return;try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=Date.now())props.deleteProperty(key);}catch(_){props.deleteProperty(key);}});
+    props.setProperty('telegram:last_prune',String(Date.now()));
+  }
+  const updateKey=updateId?'telegram:update:'+updateId:'';
+  if(updateKey){
+    const saved=props.getProperty(updateKey);
+    if(saved){try{const cached=JSON.parse(saved);if(cached.expires>Date.now())return cached.reply;props.deleteProperty(updateKey);}catch(_){props.deleteProperty(updateKey);}}
+  }
+  const message=update.message;
+  if(!message||!message.chat||!message.from||String(message.chat.type)!=='private')return {skip:true};
+  const chatId=String(message.chat.id), telegramUserId=String(message.from.id), text=String(message.text||'').trim();
+  if(!text)return {chat_id:chatId,text:'Отправьте текстовое сообщение или команду /help.'};
+  let reply;
+  const linkCommand=text.match(/^\/link(?:@\w+)?\s+([A-Z0-9]{6,16})$/i);
+  if(/^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)){
+    const linked=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\\n\\nПример записи: Проезд 45 рублей\\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\\n/link ВАШ_КОД\\n\\nКод действует 15 минут.'};
+  }else if(/^\/help(?:@\w+)?$/i.test(text)){
+    reply={chat_id:chatId,text:'Команды:\\n/link КОД — привязать аккаунт приложения\\n/balance — сводка за текущий месяц\\n/unlink — отвязать Telegram\\n/help — помощь\\n\\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
+  }else if(linkCommand){
+    const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
+    const candidate=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash&&!x.used_at&&String(x.expires_at)>now);
+    if(!candidate)throw new Error('Код не найден, уже использован или истёк. Создайте новый код в приложении.');
+    const membership=rows_('family_members').find(x=>String(x.user_id)===String(candidate.user_id)&&String(x.family_id)===String(candidate.family_id));
+    if(!membership)throw new Error('Пользователь больше не состоит в этой семье.');
+    const links=rows_('telegram_links');
+    const byTelegram=links.find(x=>String(x.telegram_user_id)===telegramUserId);
+    const byUser=links.find(x=>String(x.user_id)===String(candidate.user_id));
+    if(byTelegram&&String(byTelegram.user_id)!==String(candidate.user_id))throw new Error('Этот Telegram уже привязан к другому аккаунту.');
+    if(byUser&&String(byUser.telegram_user_id)!==telegramUserId)throw new Error('К аккаунту приложения уже привязан другой Telegram. Сначала отвяжите его в приложении.');
+    if(byTelegram){
+      byTelegram.telegram_chat_id=chatId;
+      updateRows_('telegram_links',[byTelegram]);
+    }else{
+      appendRows_('telegram_links',[{id:id_(),telegram_user_id:telegramUserId,telegram_chat_id:chatId,user_id:candidate.user_id,family_id:candidate.family_id,linked_at:now_()}]);
+    }
+    candidate.used_at=now_();updateRows_('telegram_link_codes',[candidate]);
+    reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\\n\\nТеперь отправьте, например: Проезд 45 рублей\\nКоманды: /help и /balance'};
+  }else if(/^\/unlink(?:@\w+)?$/i.test(text)){
+    const links=rows_('telegram_links').filter(x=>String(x.telegram_user_id)===telegramUserId);
+    if(links.length)deleteRows_('telegram_links',links);
+    reply={chat_id:chatId,text:links.length?'Telegram отвязан. Доступ к бюджету через бота закрыт.':'Этот Telegram не был привязан.'};
+  }else if(/^\/balance(?:@\w+)?$/i.test(text)){
+    const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    if(!link)throw new Error('Сначала привяжите аккаунт командой /link КОД.');
+    const members=rows_('family_members').filter(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
+    if(!members.length)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
+    const month=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM');
+    const txs=rows_('transactions').filter(x=>String(x.family_id)===String(link.family_id)&&String(x.operation_date||'').slice(0,7)===month);
+    const income=txs.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
+    const expense=txs.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
+    const rubles=n=>(n/100).toFixed(2).replace('.',',')+' ₽';
+    reply={chat_id:chatId,text:'Семейный бюджет за '+month+':\\nДоходы: '+rubles(income)+'\\nРасходы: '+rubles(expense)+'\\nРазница: '+rubles(income-expense)};
+  }else{
+    const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    if(!link)throw new Error('Сначала привяжите аккаунт в приложении и отправьте /link КОД.');
+    const member=rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
+    if(!member)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
+    const amountMatch=text.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?:\s*(?:₽|руб(?:лей|ля|ль|\.?)?|р\.?))?(?=\s|$)/i);
+    if(!amountMatch)throw new Error('Не нашёл сумму. Пример: Проезд 45 рублей.');
+    const numericTokens=text.match(/\d+(?:[.,]\d{1,2})?/g)||[];
+    if(numericTokens.length!==1)throw new Error('В сообщении несколько чисел. Отправьте одну операцию одним сообщением, например: Проезд 45 рублей.');
+    const parts=amountMatch[1].replace(',','.').split('.');
+    const amountKopecks=Number(parts[0])*100+Number(((parts[1]||'')+'00').slice(0,2));
+    if(!Number.isSafeInteger(amountKopecks)||amountKopecks<=0||amountKopecks>1000000000000)throw new Error('Проверьте сумму операции.');
+    let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)\s+/i,' ').replace(/\s+/g,' ').trim();
+    if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
+    const isIncome=/^(?:доход|получил|получила|зарплата|поступило)\b/i.test(text);
+    const kind=isIncome?'income':'expense';
+    const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
+    const aliases=[
+      [/(?:проезд|автобус|метро|трамвай|маршрутка|транспорт)/i,'Общественный транспорт'],
+      [/такси/i,'Такси'],[/бензин|заправк/i,'Бензин'],[/продукт|магазин|пятерочк|магнит/i,'Продукты домой'],
+      [/кафе|ресторан|обед|ужин/i,'Кафе и рестораны'],[/кофе/i,'Кофе и перекусы на работе'],
+      [/аренд/i,'Аренда квартиры'],[/коммунал|жкх/i,'Коммунальные услуги'],[/интернет/i,'Интернет'],
+      [/зарплат/i,(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника'],[/преми/i,'Премии'],[/подработ/i,'Подработки']
+    ];
+    let categoryName='';
+    for(const pair of aliases){if(pair[0].test(description)){categoryName=pair[1];break;}}
+    let category=categoryName?categories.find(x=>x.name===categoryName):null;
+    if(!category)category=categories.find(x=>String(description).toLowerCase().includes(String(x.name).toLowerCase())||String(x.name).toLowerCase().includes(String(description).toLowerCase()));
+    if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
+    const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
+    const accountId=accounts.length===1?accounts[0].id:null;
+    const operationDate=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM-dd');
+    const operationTime=Utilities.formatDate(new Date(),'Europe/Moscow','HH:mm');
+    query_({table:'transactions',mode:'insert',returning:true,values:{family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,description:description,planned:false}}, {id:String(link.user_id)});
+    const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
+    reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\\nКатегория: '+category.name:'\\nКатегория не определена; проверьте её в приложении.')};
+  }
+  if(updateKey)props.setProperty(updateKey,JSON.stringify({expires:Date.now()+86400000,reply}));
+  return reply;
 }
 
 /* ===== Служебные функции: запускаются вручную в редакторе Apps Script (меню «Выполнить») ===== */

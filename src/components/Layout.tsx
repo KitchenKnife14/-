@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users, Wallet } from 'lucide-react'
+import { Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users, Wallet, MessageCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 
@@ -17,6 +17,7 @@ const navItems = [
   { to: '/analysis', label: 'Анализ по участникам', icon: Users, end: false },
   { to: '/notifications', label: 'Уведомления', icon: Bell, end: false },
   { to: '/categories', label: 'Категории', icon: Tag, end: false },
+  { to: '/telegram', label: 'Telegram', icon: MessageCircle, end: false },
 ]
 
 function Navigation({ mobile = false }: { mobile?: boolean }) {
