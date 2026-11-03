@@ -35,7 +35,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN || ''
   const appsScriptUrl = process.env.TELEGRAM_APPS_SCRIPT_URL || ''
 
-  if (!webhookSecret || !backendSecret || !botToken || !appsScriptUrl) {
+  if (!webhookSecret || !backendSecret || !botToken || !appsScriptUrl || webhookSecret.length < 32 || backendSecret.length < 32) {
     return res.status(503).json({ ok: false, error: 'Telegram integration is not configured' })
   }
 
@@ -43,6 +43,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const receivedSecret = Array.isArray(header) ? header[0] : header || ''
   if (!secretMatches(receivedSecret, webhookSecret)) {
     return res.status(401).json({ ok: false, error: 'Unauthorized' })
+  }
+
+  try {
+    const backendUrl = new URL(appsScriptUrl)
+    if (backendUrl.protocol !== 'https:' || backendUrl.hostname !== 'script.google.com' || !/^\\/macros\\/s\\/[^/]+\\/exec$/.test(backendUrl.pathname)) {
+      return res.status(503).json({ ok: false, error: 'Telegram backend URL is invalid' })
+    }
+  } catch {
+    return res.status(503).json({ ok: false, error: 'Telegram backend URL is invalid' })
   }
 
   let update: TelegramUpdate
