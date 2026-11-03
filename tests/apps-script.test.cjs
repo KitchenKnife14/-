@@ -1252,3 +1252,24 @@ test('Telegram salary expenses are assigned to the linked family member category
   const categories = h.call({ action: 'query', token: partner.token, table: 'categories', mode: 'select' }).data;
   assert.equal(categories.find(x => x.id === transactions[0].category_id).name, 'Зарплата второго участника');
 });
+
+
+test('Telegram rejects ambiguous messages containing multiple numbers without writing a transaction', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-ambiguous@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Без неоднозначных операций' });
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'ambiguous-secret');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  h.call({
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    update: { update_id: 7301, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: '/link ' + generated.data.code }}
+  });
+  const ambiguous = h.call({
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    update: { update_id: 7302, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: 'Продукты 45 и 50 рублей' }}
+  });
+  assert.match(ambiguous.error.message, /несколько чисел/i);
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 0);
+});
