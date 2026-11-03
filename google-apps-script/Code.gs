@@ -49,7 +49,15 @@ function doPost(e) {
     ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0;
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
-    if (req.action === 'telegramWebhook') return json_({data:telegramWebhook_(req),error:null});
+    if (req.action === 'telegramWebhook') {
+      // Serialize webhook updates so Telegram retries cannot race and insert duplicates.
+      lockAttempted = true;
+      lock.waitLock(20000);
+      lockAcquired = true;
+      tLocked = Date.now(); lockMs = tLocked - t0;
+      try { return json_({data:telegramWebhook_(req),error:null}); }
+      finally { lock.releaseLock(); }
+    }
     // Serialize authentication too: concurrent signups must not create duplicate emails.
     lockAttempted = true;
     lock.waitLock(20000);
