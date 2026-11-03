@@ -141,7 +141,7 @@ function safeCell_(value) {
   return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
 }
 function touchTableRevision_(name){
-  try{PropertiesService.getScriptProperties().setProperty('table_revision:'+name,String(Date.now())+':'+String(SHEET_WRITES));}catch(_){}
+  try{PropertiesService.getScriptProperties().setProperty('table_revision:'+name,String(Date.now())+':'+Utilities.getUuid());}catch(_){}
 }
 function appendRows_(name, data) {
   if (!data.length) return;

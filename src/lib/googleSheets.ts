@@ -33,8 +33,9 @@ const READ_CACHE_TTL_MS=2000
 const readCache=new Map<string,{expiresAt:number;value:unknown}>()
 const inFlightReads=new Map<string,Promise<unknown>>()
 let readCacheVersion=0
+const READ_ONLY_RPCS = new Set(['get_table_revision', 'get_my_context', 'get_telegram_link_status'])
 function request<T>(payload:Record<string,unknown>):Promise<T>{
-  const isRead=payload.action==='query'&&payload.mode==='select'
+  const isRead=(payload.action==='query'&&payload.mode==='select') || (payload.action==='rpc'&&READ_ONLY_RPCS.has(String(payload.name||'')))
   if(!isRead){readCache.clear();inFlightReads.clear();readCacheVersion++;return requestUncached<T>(payload)}
   const key=JSON.stringify(payload)
   const cached=readCache.get(key)
@@ -44,7 +45,10 @@ function request<T>(payload:Record<string,unknown>):Promise<T>{
   const version=readCacheVersion
   const loadRead=async(expectedVersion:number,attempt=0):Promise<T>=>{
     const value=await requestUncached<T>(payload)
-    if(expectedVersion!==readCacheVersion&&attempt<3)return loadRead(readCacheVersion,attempt+1)
+    if(expectedVersion!==readCacheVersion){
+      if(attempt>=3)throw new Error('Данные продолжают обновляться. Повторите загрузку.')
+      return loadRead(readCacheVersion,attempt+1)
+    }
     if(expectedVersion===readCacheVersion){
       readCache.set(key,{expiresAt:Date.now()+READ_CACHE_TTL_MS,value})
       if(readCache.size>100){
