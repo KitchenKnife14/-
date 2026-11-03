@@ -98,7 +98,7 @@ export async function ensureProfile(userId: string, displayName: string): Promis
 /** Adds only the two newly introduced default sections to existing families.
  * Existing categories (including archived or customized ones) are never modified.
  */
-export async function ensureSupplementalCategories(familyId: string): Promise<void> {
+async function addSupplementalCategories(familyId: string): Promise<void> {
   const definitions = [
     { name: 'Сигареты', kind: 'expense', icon: '🚬', color: '#78716c', children: [] as { name: string; icon: string; color: string }[] },
     {
@@ -144,4 +144,20 @@ export async function ensureSupplementalCategories(familyId: string): Promise<vo
       existing.push(...(created as ExistingCategory[]))
     }
   }
+}
+
+const supplementalCategoryFamilies = new Set<string>()
+const supplementalCategoryTasks = new Map<string, Promise<void>>()
+
+export async function ensureSupplementalCategories(familyId: string): Promise<void> {
+  if (supplementalCategoryFamilies.has(familyId)) return
+  const pending = supplementalCategoryTasks.get(familyId)
+  if (pending) return pending
+  const task = addSupplementalCategories(familyId).then(() => {
+    supplementalCategoryFamilies.add(familyId)
+  }).finally(() => {
+    supplementalCategoryTasks.delete(familyId)
+  })
+  supplementalCategoryTasks.set(familyId, task)
+  return task
 }
