@@ -110,7 +110,6 @@ function sheet_(name) {
     if(!safePrefix)throw new Error('Не совпадает структура листа '+name+'; автоматическое изменение небезопасно');
     const missing=expected.slice(current.length);
     sh.getRange(1,current.length+1,1,missing.length).setValues([missing]);
-    sh.getRange(2,current.length+1,Math.max(sh.getMaxRows()-1,1),missing.length).setNumberFormat('@');
     SHEET_WRITES++;
   }
   if (cache) { try{cache.put(hdrKey,'1',21600);}catch(_){} }

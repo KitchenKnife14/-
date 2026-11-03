@@ -1359,10 +1359,14 @@ test('schema migration appends transaction participant column without changing p
   const oldHeaders = ['id', 'family_id', 'type', 'amount_kopecks', 'operation_date', 'operation_time', 'category_id', 'account_id', 'to_account_id', 'description', 'created_by', 'updated_by', 'planned', 'parent_recurring_id', 'created_at', 'updated_at'];
   const sheet = spreadsheet.insertSheet('transactions');
   sheet.getRange(1, 1, 1, oldHeaders.length).setValues([oldHeaders]);
+  const preservedRow = ['legacy-id', 'family-1', 'expense', 4500, '2026-11-03', '', '', '', '', 'Старый расход', 'user-1', 'user-1', false, '', '2026-11-03T10:00:00.000Z', '2026-11-03T10:00:00.000Z'];
+  sheet.getRange(2, 1, 1, oldHeaders.length).setValues([preservedRow]);
   const result = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
   assert.equal(result.error, null, result.error?.message);
   assert.deepEqual(sheet.getRange(1, 1, 1, oldHeaders.length).getValues()[0], oldHeaders);
   assert.equal(sheet.getRange(1, oldHeaders.length + 1, 1, 1).getValues()[0][0], 'responsible_user_id');
+  assert.deepEqual(sheet.getRange(2, 1, 1, oldHeaders.length).getValues()[0], preservedRow);
+  assert.equal(sheet.getRange(2, oldHeaders.length + 1, 1, 1).getValues()[0][0], '');
 });
 
 test('table revision polling changes after a successful write', () => {
