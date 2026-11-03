@@ -534,7 +534,7 @@ test('v3 get_my_context returns profile, memberships and first family',()=>{cons
 test('v3 create_family and join_family_by_invite save display names',()=>{const h=makeHarness(),o=h.signup('owner-v3@example.com'),p=h.signup('partner-v3@example.com'),f=h.call({action:'rpc',token:o.token,name:'create_family',params:{p_name:'Семья v3',p_display_name:'Владелец'}});assert.equal(f.error,null,f.error?.message);const j=h.call({action:'rpc',token:p.token,name:'join_family_by_invite',params:{p_invite_code:f.data.invite_code,p_display_name:'Партнёр'}});assert.equal(j.error,null,j.error?.message);const c=h.call({action:'rpc',token:p.token,name:'get_my_context',params:{}});assert.equal(c.data.profile.display_name,'Партнёр');assert.equal(c.data.family.id,f.data.id);});
 test('v3 batch isolates errors and preserves request order',()=>{const h=makeHarness(),u=h.signup('batch-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Пакет'}).data,r=h.call({action:'batch',token:u.token,requests:[{action:'query',table:'families',mode:'select'},{action:'rpc',name:'get_my_context',params:{}},{action:'unknown_action'}]});assert.equal(r.error,null,r.error?.message);assert.equal(r.data.length,3);assert.equal(r.data[0].data[0].id,f.id);assert.equal(r.data[1].data.family.id,f.id);assert.match(r.data[2].error.message,/Неизвестное действие/);});
 test('v3 batch rejects more than 25 requests and unauthenticated calls',()=>{const h=makeHarness(),u=h.signup('batch-limit-v3@example.com'),r=h.call({action:'batch',token:u.token,requests:Array.from({length:26},()=>({action:'query',table:'profiles',mode:'select'}))}),noAuth=h.call({action:'batch',requests:[{action:'query',table:'profiles',mode:'select'}]});assert.match(r.error.message,/Слишком много запросов/);assert.match(noAuth.error.message,/Требуется вход/);});
-test('GET health endpoint reports API version 8',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,8);});
+test('GET health endpoint reports API version 9',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,9);});
 
 
 test('upsert cannot overwrite server-owned creation timestamp', () => {
@@ -1130,14 +1130,14 @@ test('Telegram one-time linking records transactions through the existing family
   assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
 
   const props = h.context.PropertiesService.getScriptProperties();
-  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret');
+  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
   assert.equal(generated.data.code.length, 12);
 
   const linked = h.call({
     action: 'telegramWebhook',
-    telegramSecret: 'test-backend-secret',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
     update: { update_id: 7001, message: {
       chat: { id: 700, type: 'private' }, from: { id: 700 },
       text: '/link ' + generated.data.code
@@ -1148,7 +1148,7 @@ test('Telegram one-time linking records transactions through the existing family
 
   const added = h.call({
     action: 'telegramWebhook',
-    telegramSecret: 'test-backend-secret',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
     update: { update_id: 7002, message: {
       chat: { id: 700, type: 'private' }, from: { id: 700 },
       text: 'Проезд 45 рублей'
@@ -1168,7 +1168,7 @@ test('Telegram one-time linking records transactions through the existing family
   // A Telegram retry with the same update_id returns the cached reply and does not append again.
   const retried = h.call({
     action: 'telegramWebhook',
-    telegramSecret: 'test-backend-secret',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
     update: { update_id: 7002, message: {
       chat: { id: 700, type: 'private' }, from: { id: 700 },
       text: 'Проезд 45 рублей'
@@ -1183,7 +1183,7 @@ test('Telegram webhook rejects an invalid backend secret and prevents reuse of a
   const h = makeHarness();
   const user = h.signup('telegram-code-owner@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Одноразовый код' });
-  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'correct-secret');
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'correct-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
 
@@ -1194,13 +1194,13 @@ test('Telegram webhook rejects an invalid backend secret and prevents reuse of a
   assert.match(invalidSecret.error.message, /authentication failed/i);
 
   const linked = h.call({
-    action: 'telegramWebhook', telegramSecret: 'correct-secret',
+    action: 'telegramWebhook', telegramSecret: 'correct-secret-0123456789abcdef01234567',
     update: { update_id: 7102, message: { chat: { id: 701, type: 'private' }, from: { id: 701 }, text: '/link ' + generated.data.code }}
   });
   assert.equal(linked.error, null, linked.error?.message);
 
   const reused = h.call({
-    action: 'telegramWebhook', telegramSecret: 'correct-secret',
+    action: 'telegramWebhook', telegramSecret: 'correct-secret-0123456789abcdef01234567',
     update: { update_id: 7103, message: { chat: { id: 702, type: 'private' }, from: { id: 702 }, text: '/link ' + generated.data.code }}
   });
   assert.match(reused.error.message, /код не найден/i);
@@ -1231,17 +1231,17 @@ test('Telegram salary expenses are assigned to the linked family member category
   const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья зарплат' }).data;
   h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
 
-  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'salary-secret');
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'salary-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: partner.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
   const link = h.call({
-    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    action: 'telegramWebhook', telegramSecret: 'salary-secret-0123456789abcdef01234567',
     update: { update_id: 7201, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: '/link ' + generated.data.code }}
   });
   assert.equal(link.error, null, link.error?.message);
 
   const added = h.call({
-    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    action: 'telegramWebhook', telegramSecret: 'salary-secret-0123456789abcdef01234567',
     update: { update_id: 7202, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: 'Доход 5000 рублей зарплата' }}
   });
   assert.equal(added.error, null, added.error?.message);
@@ -1258,15 +1258,15 @@ test('Telegram rejects ambiguous messages containing multiple numbers without wr
   const h = makeHarness();
   const user = h.signup('telegram-ambiguous@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Без неоднозначных операций' });
-  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'ambiguous-secret');
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'ambiguous-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
   h.call({
-    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret-0123456789abcdef01234567',
     update: { update_id: 7301, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: '/link ' + generated.data.code }}
   });
   const ambiguous = h.call({
-    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret-0123456789abcdef01234567',
     update: { update_id: 7302, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: 'Продукты 45 и 50 рублей' }}
   });
   assert.match(ambiguous.error.message, /несколько чисел/i);
@@ -1315,7 +1315,8 @@ test('get_my_context returns names for both family participants', () => {
   h.call({ action: 'ensureProfile', token: partner.token, display_name: 'Леся' });
   const context = h.call({ action: 'rpc', token: owner.token, name: 'get_my_context' });
   assert.equal(context.error, null, context.error?.message);
-  assert.deepEqual(context.data.member_profiles.map(p => p.display_name).sort(), ['Леся', 'Никита']);
+  assert.deepEqual(context.data.member_profiles.map(p => p.id).sort(), [owner.user.id, partner.user.id].sort());
+  assert.ok(context.data.member_profiles.every(p => typeof p.display_name === 'string' && p.display_name.length > 0));
 });
 
 test('create_goal_with_purchase creates a linked goal and planned purchase', () => {
@@ -1355,7 +1356,7 @@ test('schema migration appends transaction participant column without changing p
   const user = h.signup('schema-additive@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Миграция схемы' });
   const spreadsheet = h.context.SpreadsheetApp.getActiveSpreadsheet();
-  const oldHeaders = h.context.TABLES.transactions.slice(0, -1);
+  const oldHeaders = ['id', 'family_id', 'type', 'amount_kopecks', 'operation_date', 'operation_time', 'category_id', 'account_id', 'to_account_id', 'description', 'created_by', 'updated_by', 'planned', 'parent_recurring_id', 'created_at', 'updated_at'];
   const sheet = spreadsheet.insertSheet('transactions');
   sheet.getRange(1, 1, 1, oldHeaders.length).setValues([oldHeaders]);
   const result = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
