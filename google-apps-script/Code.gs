@@ -910,7 +910,7 @@ function telegramWebhook_(req){
     if(!Number.isSafeInteger(amountKopecks)||amountKopecks<=0||amountKopecks>1000000000000)throw new Error('Проверьте сумму операции.');
     let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)\s+/i,' ').replace(/\s+/g,' ').trim();
     if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
-    const isIncome=/^(?:доход|получил|получила|зарплата|поступило)\b/i.test(text);
+    const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило)(?=\s|$)/i.test(text);
     const kind=isIncome?'income':'expense';
     const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
     const aliases=[
