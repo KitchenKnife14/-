@@ -47,7 +47,70 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const backendUrl = new URL(appsScriptUrl)
-    if (backendUrl.protocol !== 'https:' || backendUrl.hostname !== 'script.google.com' || !/^\\/macros\\/s\\/[^/]+\\/exec$/.test(backendUrl.pathname)) {
+    if (backendUrl.protocol !== 'https:' || backendUrl.hostname !== 'script.google.com' || !new RegExp('^/macros/s/[^/]+/exec) {
+      return res.status(503).json({ ok: false, error: 'Telegram backend URL is invalid' })
+    }
+  } catch {
+    return res.status(503).json({ ok: false, error: 'Telegram backend URL is invalid' })
+  }
+
+  let update: TelegramUpdate
+  try {
+    update = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as TelegramUpdate
+    if (!update || typeof update !== 'object') throw new Error('Invalid update')
+  } catch {
+    return res.status(400).json({ ok: false, error: 'Invalid JSON body' })
+  }
+
+  try {
+    const backendResponse = await fetch(appsScriptUrl, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'telegramWebhook',
+        telegramSecret: backendSecret,
+        update,
+      }),
+    })
+
+    if (!backendResponse.ok) throw new Error('Apps Script request failed')
+    const raw = await backendResponse.text()
+    let result: BackendResponse
+    try {
+      result = JSON.parse(raw) as BackendResponse
+    } catch {
+      throw new Error('Apps Script returned a non-JSON response')
+    }
+
+    const chatId = update.message?.chat?.id
+    const reply = result.error
+      ? { chat_id: chatId, text: result.error.message || 'Не удалось обработать сообщение.' }
+      : result.data
+
+    if (reply?.chat_id && reply.text && !reply.skip) {
+      const telegramResponse = await fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: reply.chat_id,
+          text: reply.text,
+          disable_web_page_preview: true,
+        }),
+      })
+      const telegramResult = await telegramResponse.json() as { ok?: boolean }
+      if (!telegramResponse.ok || !telegramResult.ok) {
+        throw new Error('Telegram sendMessage failed')
+      }
+    }
+
+    return res.status(200).json({ ok: true })
+  } catch {
+    // No secrets, message contents, or financial data are written to logs.
+    return res.status(502).json({ ok: false, error: 'Webhook processing failed; Telegram may retry safely' })
+  }
+}
+).test(backendUrl.pathname)) {
       return res.status(503).json({ ok: false, error: 'Telegram backend URL is invalid' })
     }
   } catch {
