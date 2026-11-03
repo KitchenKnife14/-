@@ -24,9 +24,24 @@ function PageFallback() {
 }
 
 export default function App() {
-  const { session, family, loading } = useAuth()
+  const { session, family, loading, error, refresh } = useAuth()
 
   if (loading) return <div className="flex min-h-screen items-center justify-center text-slate-400">Загрузка…</div>
+  if (session && error) return (
+    <main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-8">
+      <section role="alert" className="w-full max-w-md rounded-3xl border border-line bg-surface p-6 shadow-sm">
+        <h1 className="text-lg font-semibold text-ink">Не удалось загрузить семейное пространство</h1>
+        <p className="mt-2 text-sm leading-6 text-muted">{error}</p>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+        >
+          Повторить загрузку
+        </button>
+      </section>
+    </main>
+  )
   if (!session) return <Routes><Route path="*" element={<AuthPage />} /></Routes>
   if (!family) return <Routes><Route path="*" element={<OnboardingPage />} /></Routes>
 
