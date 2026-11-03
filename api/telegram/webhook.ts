@@ -65,6 +65,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }),
     })
 
+    if (!backendResponse.ok) throw new Error('Apps Script request failed')
     const raw = await backendResponse.text()
     let result: BackendResponse
     try {
