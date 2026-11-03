@@ -4,6 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import type { Category, CategoryKind } from '../lib/types'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Archive, Folder } from 'lucide-react'
+import { ensureSupplementalCategories } from '../lib/categories'
 
 export default function CategoriesPage() {
   const { family } = useAuth()
@@ -19,6 +20,7 @@ export default function CategoriesPage() {
     setLoading(true)
     setError(null)
     try {
+      await ensureSupplementalCategories(family.id)
       const { data, error: err } = await googleSheets.from('categories').select('*').eq('family_id', family.id).order('sort_order').order('name')
       if (err) throw err
       setCats(data as Category[])
@@ -36,8 +38,26 @@ export default function CategoriesPage() {
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
-  const roots = cats.filter((c) => !c.parent_id && !c.archived)
-  const childrenOf = (id: string) => cats.filter((c) => c.parent_id === id && !c.archived)
+  const roots = cats.filter((c) => !c.parent_id && !c.archived).sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
+  const letters = [...new Set(roots.map((c) => c.name.trim().charAt(0).toLocaleUpperCase('ru-RU')))]
+  const childrenOf = (id: string) => cats.filter((c) => c.parent_id === id && !c.archived).sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
+
+  useEffect(() => {
+    const jumpToLetter = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const letter = event.key.toLocaleUpperCase('ru-RU')
+      if (!/^[А-ЯЁ]$/u.test(letter)) return
+      const section = document.getElementById(`category-letter-${letter}`)
+      if (section) {
+        event.preventDefault()
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }
+    window.addEventListener('keydown', jumpToLetter)
+    return () => window.removeEventListener('keydown', jumpToLetter)
+  }, [])
 
   const archive = async (c: Category) => {
     const { error: err } = await googleSheets.from('categories').update({ archived: true }).eq('id', c.id)
@@ -61,11 +81,19 @@ export default function CategoriesPage() {
       ) : roots.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500">Категорий пока нет.</div>
       ) : (
+        <>
+        <nav aria-label="Переход к категории по букве" className="sticky top-0 z-10 flex flex-wrap gap-1 rounded-xl border border-line bg-surface/95 p-2 shadow-sm backdrop-blur">
+          {letters.map((letter) => (
+            <button key={letter} type="button" onClick={() => document.getElementById(`category-letter-${letter}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="min-w-8 rounded-lg px-2 py-1 text-sm font-medium text-primary-800 transition-colors hover:bg-primary-50" aria-label={`Перейти к категории на букву ${letter}`}>
+              {letter}
+            </button>
+          ))}
+        </nav>
         <div className="space-y-3">
           {roots.map((root) => {
             const kids = childrenOf(root.id)
             return (
-              <div key={root.id} className="card">
+              <div key={root.id} id={`category-letter-${root.name.trim().charAt(0).toLocaleUpperCase('ru-RU')}`} className="card scroll-mt-20">
                 <div className="flex items-center gap-3">
                   <div className="text-xl w-9 h-9 rounded-full flex items-center justify-center" style={{ background: root.color + '22' }}>{root.icon}</div>
                   <div className="flex-1">
@@ -95,6 +123,7 @@ export default function CategoriesPage() {
             )
           })}
         </div>
+        </>
       )}
 
       <CategoryForm
