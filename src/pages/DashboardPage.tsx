@@ -7,6 +7,7 @@ import { formatDateShort, monthRange, monthLabel, currentMoscowDate } from '../l
 import { Plus, TrendingUp, TrendingDown, Wallet, ArrowRight, CalendarDays } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import TransactionForm from '../components/TransactionForm'
+import { ensureSupplementalCategories } from '../lib/categories'
 
 export default function DashboardPage() {
   const { family, session } = useAuth()
@@ -28,6 +29,7 @@ export default function DashboardPage() {
     setLoading(true)
     setError(null)
     try {
+      await ensureSupplementalCategories(family.id)
       const [txRes, catRes, accountRes] = await Promise.all([
         googleSheets
           .from('transactions')
