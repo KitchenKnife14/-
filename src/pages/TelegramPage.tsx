@@ -102,6 +102,9 @@ export default function TelegramPage() {
             <div className="rounded-xl border border-line p-4">
               <div className="text-sm font-medium text-ink">2. Отправьте код боту</div>
               <p className="mt-1 text-sm leading-6 text-muted">Откройте чат с ботом, нажмите «Start» и отправьте команду с кодом. После ответа бота обновите статус на этой странице.</p>
+              <a href="https://t.me/My_Family_cash_bot" target="_blank" rel="noreferrer noopener" className="btn-secondary mt-3 inline-flex">
+                <MessageCircle size={16} /> Открыть @My_Family_cash_bot
+              </a>
               <button type="button" onClick={loadStatus} disabled={loading} className="btn-secondary mt-3"><RefreshCw size={15} /> Проверить подключение</button>
             </div>
           </div>
