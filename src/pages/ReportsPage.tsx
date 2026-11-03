@@ -67,7 +67,7 @@ export default function ReportsPage() {
   const byMember = useMemo(() => {
     const m = new Map<string, { income: number; expense: number }>()
     for (const t of filteredTxs) {
-      const key = t.created_by ?? 'unknown'
+      const key = t.responsible_user_id || t.created_by || 'unknown'
       if (!m.has(key)) m.set(key, { income: 0, expense: 0 })
       const e = m.get(key)!
       if (t.type === 'income') e.income += t.amount_kopecks
@@ -77,9 +77,9 @@ export default function ReportsPage() {
   }, [filteredTxs])
 
   const exportCSV = () => {
-    const rows = [['Дата', 'Тип', 'Сумма (₽)', 'Категория', 'Описание', 'Автор']]
+    const rows = [['Дата', 'Тип', 'Сумма (₽)', 'Категория', 'Описание', 'Автор записи', 'Ответственный']]
     for (const t of filteredTxs) {
-      rows.push([t.operation_date, t.type === 'income' ? 'Доход' : t.type === 'expense' ? 'Расход' : 'Перевод', String(kopecksToRubles(t.amount_kopecks)), t.category_id ? catMap.get(t.category_id)?.name ?? '' : '', t.description, t.created_by ? profMap.get(t.created_by)?.display_name ?? '' : ''])
+      rows.push([t.operation_date, t.type === 'income' ? 'Доход' : t.type === 'expense' ? 'Расход' : 'Перевод', String(kopecksToRubles(t.amount_kopecks)), t.category_id ? catMap.get(t.category_id)?.name ?? '' : '', t.description, t.created_by ? profMap.get(t.created_by)?.display_name ?? '' : '', (t.responsible_user_id || t.created_by) ? profMap.get(t.responsible_user_id || t.created_by || '')?.display_name ?? '' : ''])
     }
     const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(';')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
