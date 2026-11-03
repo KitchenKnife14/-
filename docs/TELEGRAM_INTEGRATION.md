@@ -16,7 +16,7 @@ The Telegram bot token and both webhook secrets are server-side environment/scri
 ## Current implementation in this branch
 
 - One-time linking code generation via Apps Script RPC \`create_telegram_link_code\`.
-- Codes are stored as SHA-256 hashes and expire after 15 minutes.
+- Codes are stored as SHA-256 hashes, contain 12 characters, and expire after 15 minutes.
 - A Telegram account can be linked to only one app account; an app account can have only one Telegram link.
 - Apps Script webhook authentication via Script Property \`TELEGRAM_BACKEND_SECRET\`.
 - Vercel webhook endpoint at \`/api/telegram/webhook\`.
