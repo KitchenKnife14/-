@@ -34,7 +34,7 @@ let ROWS_CACHE = {};
 let TZ_CACHE = null;
 // Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
 // а строки, начинающиеся с "=", в формулы).
-const TEXT_COLS = ['created_at','updated_at','joined_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name'];
+const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash'];
 
 function doGet() {
   const out={status:'ok', message:'Сервер работает', version:API_VERSION};
@@ -734,7 +734,7 @@ function nextDate_(iso,freq,days,anchorIso){
 /* ===== Telegram webhook: вход только через доверенный Vercel endpoint ===== */
 function telegramCodeHash_(code){
   const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(code).trim().toUpperCase(),Utilities.Charset.UTF_8);
-  return Utilities.base64EncodeWebSafe(digest);
+  return Utilities.base64Encode(digest).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
 }
 function telegramWebhook_(req){
   const props=PropertiesService.getScriptProperties();
@@ -744,9 +744,9 @@ function telegramWebhook_(req){
   const updateKey=updateId?'telegram:update:'+updateId:'';
   if(updateKey){
     const saved=props.getProperty(updateKey);
-    if(saved){try{return JSON.parse(saved);}catch(_){props.deleteProperty(updateKey);}}
+    if(saved){try{const cached=JSON.parse(saved);if(cached.expires>Date.now())return cached.reply;props.deleteProperty(updateKey);}catch(_){props.deleteProperty(updateKey);}}
   }
-  const message=update.message||update.edited_message;
+  const message=update.message;
   if(!message||!message.chat||!message.from||String(message.chat.type)!=='private')return {skip:true};
   const chatId=String(message.chat.id), telegramUserId=String(message.from.id), text=String(message.text||'').trim();
   if(!text)return {chat_id:chatId,text:'Отправьте текстовое сообщение или команду /help.'};
@@ -826,7 +826,7 @@ function telegramWebhook_(req){
     const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
     reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\\nКатегория: '+category.name:'\\nКатегория не определена; проверьте её в приложении.')};
   }
-  if(updateKey)props.setProperty(updateKey,JSON.stringify(reply));
+  if(updateKey)props.setProperty(updateKey,JSON.stringify({expires:Date.now()+86400000,reply}));
   return reply;
 }
 
