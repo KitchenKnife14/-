@@ -734,7 +734,7 @@ function nextDate_(iso,freq,days,anchorIso){
 /* ===== Telegram webhook: вход только через доверенный Vercel endpoint ===== */
 function telegramCodeHash_(code){
   const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(code).trim().toUpperCase(),Utilities.Charset.UTF_8);
-  return Utilities.base64Encode(digest).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
+  return Utilities.base64Encode(digest).split('+').join('-').split('/').join('_').replace(/=+$/,'');
 }
 function telegramWebhook_(req){
   const props=PropertiesService.getScriptProperties();
