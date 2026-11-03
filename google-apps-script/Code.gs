@@ -748,7 +748,7 @@ function telegramCodeHash_(code){
 function telegramWebhook_(req){
   const props=PropertiesService.getScriptProperties();
   const expected=props.getProperty('TELEGRAM_BACKEND_SECRET');
-  if(!expected||!safeEqual_(String(req.telegramSecret||''),expected))throw new Error('Webhook authentication failed');
+  if(!expected||expected.length<32||!safeEqual_(String(req.telegramSecret||''),expected))throw new Error('Webhook authentication failed');
   const update=req.update||{}, updateId=String(update.update_id||'');
   const lastPrune=Number(props.getProperty('telegram:last_prune')||0);
   if(Date.now()-lastPrune>21600000){
