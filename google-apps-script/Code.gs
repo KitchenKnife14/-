@@ -12,7 +12,7 @@ const TABLES = {
   categories: ['id','family_id','parent_id','name','kind','color','icon','archived','sort_order','created_at'],
   accounts: ['id','family_id','name','kind','owner_user_id','starting_balance_kopecks','archived','created_at'],
   transactions: ['id','family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','created_by','updated_by','planned','parent_recurring_id','created_at','updated_at','responsible_user_id'],
-  recurring_payments: ['id','family_id','type','amount_kopecks','category_id','account_id','description','start_date','end_date','frequency','custom_interval_days','next_due_date','remind','active','created_by','created_at'],
+  recurring_payments: ['id','family_id','type','amount_kopecks','category_id','account_id','description','start_date','end_date','frequency','custom_interval_days','next_due_date','remind','active','created_by','created_at','responsible_user_id'],
   budgets: ['id','family_id','category_id','month_date','limit_kopecks','warn_75','warn_90','warn_100'],
   goals: ['id','family_id','name','description','target_kopecks','saved_kopecks','target_date','priority','status','responsible_user_id','created_at'],
   goal_contributions: ['id','goal_id','amount_kopecks','contribution_date','note','created_by','created_at'],
@@ -26,7 +26,7 @@ const AUTH_SHEET = '_auth';
 const SESSION_TTL = 60 * 60 * 24 * 14;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
-const API_VERSION=9, BATCH_MAX=25;
+const API_VERSION=10, BATCH_MAX=25;
 let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0; // кэш открытой таблицы и счётчики для замера (на время ОДНОГО запроса)
 const DEFAULT_CATEGORIES=[{"name":"Жильё и обязательные платежи","kind":"expense","icon":"🏠","color":"#2563eb","children":[{"name":"Аренда квартиры","icon":"🔑","color":"#2563eb"},{"name":"Ипотека","icon":"🏦","color":"#2563eb"},{"name":"Коммунальные услуги","icon":"💡","color":"#2563eb"},{"name":"Интернет","icon":"🌐","color":"#2563eb"},{"name":"Мобильная связь","icon":"📱","color":"#2563eb"},{"name":"Обслуживание жилья","icon":"🧰","color":"#2563eb"},{"name":"Ремонт","icon":"🛠️","color":"#2563eb"},{"name":"Мебель и предметы интерьера","icon":"🛋️","color":"#2563eb"}]},{"name":"Продукты и питание","kind":"expense","icon":"🛒","color":"#16a34a","children":[{"name":"Продукты домой","icon":"🥦","color":"#16a34a"},{"name":"Кафе и рестораны","icon":"🍽️","color":"#16a34a"},{"name":"Доставка еды","icon":"🛵","color":"#16a34a"},{"name":"Кофе и перекусы на работе","icon":"☕","color":"#16a34a"}]},{"name":"Быт","kind":"expense","icon":"🧴","color":"#0891b2","children":[{"name":"Бытовая химия","icon":"🧼","color":"#0891b2"},{"name":"Средства гигиены","icon":"🪥","color":"#0891b2"},{"name":"Товары для дома","icon":"🏠","color":"#0891b2"},{"name":"Расходные материалы","icon":"📦","color":"#0891b2"},{"name":"Мелкие бытовые покупки","icon":"🧺","color":"#0891b2"}]},{"name":"Транспорт","kind":"expense","icon":"🚌","color":"#ea580c","children":[{"name":"Общественный транспорт","icon":"🚇","color":"#ea580c"},{"name":"Такси","icon":"🚕","color":"#ea580c"},{"name":"Бензин","icon":"⛽","color":"#ea580c"},{"name":"Обслуживание автомобиля","icon":"🚗","color":"#ea580c"},{"name":"Ремонт автомобиля","icon":"🔧","color":"#ea580c"},{"name":"Страхование и документы","icon":"📄","color":"#ea580c"},{"name":"Парковка","icon":"🅿️","color":"#ea580c"}]},{"name":"Здоровье","kind":"expense","icon":"🩺","color":"#dc2626","children":[{"name":"Врачи","icon":"👨‍⚕️","color":"#dc2626"},{"name":"Анализы и обследования","icon":"🧪","color":"#dc2626"},{"name":"Лекарства","icon":"💊","color":"#dc2626"},{"name":"Стоматология","icon":"🦷","color":"#dc2626"},{"name":"Медицинские процедуры","icon":"💉","color":"#dc2626"}]},{"name":"Личные расходы","kind":"expense","icon":"👕","color":"#7c3aed","children":[{"name":"Одежда и обувь","icon":"👕","color":"#7c3aed"},{"name":"Косметика","icon":"💄","color":"#7c3aed"},{"name":"Уход за собой","icon":"💆","color":"#7c3aed"},{"name":"Личные покупки","icon":"🛍️","color":"#7c3aed"}]},{"name":"Развлечения","kind":"expense","icon":"🎮","color":"#db2777","children":[{"name":"Кино и мероприятия","icon":"🎬","color":"#db2777"},{"name":"Игры","icon":"🎮","color":"#db2777"},{"name":"Подписки","icon":"📺","color":"#db2777"},{"name":"Музыка","icon":"🎵","color":"#db2777"},{"name":"Хобби","icon":"🎨","color":"#db2777"},{"name":"Путешествия и отдых","icon":"✈️","color":"#db2777"}]},{"name":"Техника","kind":"expense","icon":"💻","color":"#0f766e","children":[{"name":"Смартфоны","icon":"📱","color":"#0f766e"},{"name":"Компьютеры и комплектующие","icon":"💻","color":"#0f766e"},{"name":"Телевизоры","icon":"📺","color":"#0f766e"},{"name":"Бытовая техника","icon":"🔌","color":"#0f766e"},{"name":"Аудиотехника","icon":"🎧","color":"#0f766e"},{"name":"Аксессуары","icon":"🎮","color":"#0f766e"}]},{"name":"Семья и подарки","kind":"expense","icon":"🎁","color":"#c026d3","children":[{"name":"Подарки","icon":"🎁","color":"#c026d3"},{"name":"Праздники","icon":"🎉","color":"#c026d3"},{"name":"Совместные мероприятия","icon":"🥳","color":"#c026d3"},{"name":"Расходы на родственников","icon":"👨‍👩‍👧","color":"#c026d3"}]},{"name":"Финансовые операции","kind":"transfer","icon":"🔁","color":"#64748b","children":[{"name":"Погашение кредитов","icon":"💳","color":"#64748b"},{"name":"Проценты по кредитам","icon":"📈","color":"#64748b"},{"name":"Комиссии","icon":"💸","color":"#64748b"},{"name":"Банковские услуги","icon":"🏦","color":"#64748b"},{"name":"Переводы между счетами","icon":"🔁","color":"#64748b"}]},{"name":"Накопления","kind":"expense","icon":"🐷","color":"#059669","children":[{"name":"Резервный фонд","icon":"🛟","color":"#059669"},{"name":"Накопления на квартиру","icon":"🏢","color":"#059669"},{"name":"Накопления на автомобиль","icon":"🚙","color":"#059669"},{"name":"Накопления на крупные покупки","icon":"💰","color":"#059669"},{"name":"Другие цели","icon":"🎯","color":"#059669"}]},{"name":"Прочее","kind":"expense","icon":"📦","color":"#6b7280","children":[{"name":"Непредвиденные расходы","icon":"⚠️","color":"#6b7280"},{"name":"Неопределённая категория","icon":"❓","color":"#6b7280"}]},{"name":"Доходы","kind":"income","icon":"💵","color":"#16a34a","children":[{"name":"Зарплата первого участника","icon":"👨","color":"#16a34a"},{"name":"Зарплата второго участника","icon":"👩","color":"#16a34a"},{"name":"Премии","icon":"🌟","color":"#16a34a"},{"name":"Подработки","icon":"🛠️","color":"#16a34a"},{"name":"Возвраты и компенсации","icon":"↩️","color":"#16a34a"},{"name":"Доходы от продажи вещей","icon":"🏷️","color":"#16a34a"},{"name":"Проценты и инвестиционный доход","icon":"📈","color":"#16a34a"},{"name":"Прочие доходы","icon":"➕","color":"#16a34a"}]}];
 // Кэш чтения листов на время ОДНОГО запроса (сбрасывается в doPost и после каждой записи).
@@ -459,7 +459,7 @@ function validateRelations_(table,row,user){
     if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма регулярного платежа должна быть положительным целым числом копеек');
   }
   if(!familyId)return;
-  if(['transactions','goals','planned_purchases'].includes(table)&&row.responsible_user_id){
+  if(['transactions','goals','planned_purchases','recurring_payments'].includes(table)&&row.responsible_user_id){
     const member=rows_('family_members').some(m=>String(m.family_id)===familyId&&String(m.user_id)===String(row.responsible_user_id));
     if(!member)throw new Error('Ответственный участник не состоит в этой семье');
   }
@@ -523,7 +523,7 @@ function query_(req,user){
       }
       if(TABLES[table].includes('created_by'))r.created_by=user.id;
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
-      if((table==='transactions'||table==='goals'||table==='planned_purchases')&&!r.responsible_user_id)r.responsible_user_id=user.id;
+      if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
       if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       validateRelations_(table,r,user);
@@ -614,7 +614,7 @@ function query_(req,user){
         updatedRows.push(found);
       }else {
         const r=Object.assign({id:id_()},raw);
-        if((table==='transactions'||table==='goals'||table==='planned_purchases')&&!r.responsible_user_id)r.responsible_user_id=user.id;
+        if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
         if(TABLES[table].includes('created_at'))r.created_at=now_();
         if(TABLES[table].includes('updated_at'))r.updated_at=now_();
         if(TABLES[table].includes('created_by'))r.created_by=user.id;
@@ -802,7 +802,7 @@ function rpc_(req,user){
       String(existingTx.account_id||'')!==String(r.account_id||'') ||
       String(existingTx.description||'')!==String(r.description||'')
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
-    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
+    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
     r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     updateRows_('recurring_payments',[r]);return true;

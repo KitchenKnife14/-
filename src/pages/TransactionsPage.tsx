@@ -30,8 +30,8 @@ export default function TransactionsPage() {
     setLoading(true)
     setError(null)
     try {
-      await ensureSupplementalCategories(family.id)
-      const [txRes, catRes, accountRes] = await Promise.all([
+      const [, txRes, catRes, accountRes] = await Promise.all([
+        ensureSupplementalCategories(family.id),
         googleSheets
           .from('transactions')
           .select('*')

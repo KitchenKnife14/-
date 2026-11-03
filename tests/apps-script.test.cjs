@@ -534,7 +534,7 @@ test('v3 get_my_context returns profile, memberships and first family',()=>{cons
 test('v3 create_family and join_family_by_invite save display names',()=>{const h=makeHarness(),o=h.signup('owner-v3@example.com'),p=h.signup('partner-v3@example.com'),f=h.call({action:'rpc',token:o.token,name:'create_family',params:{p_name:'Семья v3',p_display_name:'Владелец'}});assert.equal(f.error,null,f.error?.message);const j=h.call({action:'rpc',token:p.token,name:'join_family_by_invite',params:{p_invite_code:f.data.invite_code,p_display_name:'Партнёр'}});assert.equal(j.error,null,j.error?.message);const c=h.call({action:'rpc',token:p.token,name:'get_my_context',params:{}});assert.equal(c.data.profile.display_name,'Партнёр');assert.equal(c.data.family.id,f.data.id);});
 test('v3 batch isolates errors and preserves request order',()=>{const h=makeHarness(),u=h.signup('batch-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Пакет'}).data,r=h.call({action:'batch',token:u.token,requests:[{action:'query',table:'families',mode:'select'},{action:'rpc',name:'get_my_context',params:{}},{action:'unknown_action'}]});assert.equal(r.error,null,r.error?.message);assert.equal(r.data.length,3);assert.equal(r.data[0].data[0].id,f.id);assert.equal(r.data[1].data.family.id,f.id);assert.match(r.data[2].error.message,/Неизвестное действие/);});
 test('v3 batch rejects more than 25 requests and unauthenticated calls',()=>{const h=makeHarness(),u=h.signup('batch-limit-v3@example.com'),r=h.call({action:'batch',token:u.token,requests:Array.from({length:26},()=>({action:'query',table:'profiles',mode:'select'}))}),noAuth=h.call({action:'batch',requests:[{action:'query',table:'profiles',mode:'select'}]});assert.match(r.error.message,/Слишком много запросов/);assert.match(noAuth.error.message,/Требуется вход/);});
-test('GET health endpoint reports API version 9',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,9);});
+test('GET health endpoint reports API version 10',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,10);});
 
 
 test('upsert cannot overwrite server-owned creation timestamp', () => {
@@ -1379,4 +1379,27 @@ test('table revision polling changes after a successful write', () => {
   assert.equal(before.error, null, before.error?.message);
   assert.equal(after.error, null, after.error?.message);
   assert.notEqual(after.data, before.data);
+});
+
+
+test('recurring payments preserve the selected family participant when confirmed', () => {
+  const h = makeHarness();
+  const owner = h.signup('recurring-attribution-owner@example.com');
+  const partner = h.signup('recurring-attribution-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Ответственный за платёж' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  const created = h.call({
+    action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 150000, category_id: null, account_id: null, description: 'Аренда', start_date: '2026-11-03', next_due_date: '2026-11-03', frequency: 'monthly', remind: true, active: true, responsible_user_id: partner.user.id }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const recurring = created.data[0];
+  const confirmed = h.call({
+    action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-03' }
+  });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+  const transaction = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(transaction.created_by, owner.user.id);
+  assert.equal(transaction.responsible_user_id, partner.user.id);
 });

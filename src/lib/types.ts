@@ -90,6 +90,7 @@ export interface RecurringPayment {
   remind: boolean
   active: boolean
   created_by: string | null
+  responsible_user_id: string | null
   created_at: string
 }
 

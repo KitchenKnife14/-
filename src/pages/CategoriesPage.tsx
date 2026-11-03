@@ -20,10 +20,12 @@ export default function CategoriesPage() {
     setLoading(true)
     setError(null)
     try {
-      await ensureSupplementalCategories(family.id)
-      const { data, error: err } = await googleSheets.from('categories').select('*').eq('family_id', family.id).order('sort_order').order('name')
-      if (err) throw err
-      setCats(data as Category[])
+      const [, categoryResult] = await Promise.all([
+        ensureSupplementalCategories(family.id),
+        googleSheets.from('categories').select('*').eq('family_id', family.id).order('sort_order').order('name'),
+      ])
+      if (categoryResult.error) throw categoryResult.error
+      setCats(categoryResult.data as Category[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {

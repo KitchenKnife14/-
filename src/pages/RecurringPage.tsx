@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
-import type { RecurringPayment, Category, Account } from '../lib/types'
+import type { RecurringPayment, Category, Account, FamilyMember, Profile } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
@@ -10,7 +10,7 @@ import { Plus, Check, Pause, Play, Trash2, Repeat } from 'lucide-react'
 const FREQ_LABELS: Record<string, string> = { daily: 'Ежедневно', weekly: 'Еженедельно', monthly: 'Ежемесячно', yearly: 'Ежегодно', custom: 'По интервалу' }
 
 export default function RecurringPage() {
-  const { family, session } = useAuth()
+  const { family, session, members, memberProfiles } = useAuth()
   const [items, setItems] = useState<RecurringPayment[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -81,12 +81,12 @@ export default function RecurringPage() {
         <div className="card text-center py-8 text-sm text-slate-500"><Repeat size={24} className="mx-auto mb-2 text-slate-300" />Регулярных платежей пока нет. Добавьте аренду, подписки и другие повторяющиеся расходы.</div>
       ) : (
         <div className="space-y-4">
-          {overdue.length > 0 && <Section title="Просроченные" items={overdue} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} highlight />}
-          {upcoming.length > 0 && <Section title="Предстоящие" items={upcoming} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} />}
-          {paused.length > 0 && <Section title="Приостановленные" items={paused} catMap={catMap} accountMap={accountMap} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} dim />}
+          {overdue.length > 0 && <Section title="Просроченные" items={overdue} catMap={catMap} accountMap={accountMap} memberProfiles={memberProfiles} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} highlight />}
+          {upcoming.length > 0 && <Section title="Предстоящие" items={upcoming} catMap={catMap} accountMap={accountMap} memberProfiles={memberProfiles} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} />}
+          {paused.length > 0 && <Section title="Приостановленные" items={paused} catMap={catMap} accountMap={accountMap} memberProfiles={memberProfiles} onConfirm={setConfirming} onToggle={toggleActive} onRemove={remove} dim />}
         </div>
       )}
-      <RecurringForm open={showForm} onClose={() => setShowForm(false)} onSaved={load} categories={categories} accounts={accounts} familyId={family?.id ?? null} userId={session?.user.id ?? null} />
+      <RecurringForm open={showForm} onClose={() => setShowForm(false)} onSaved={load} categories={categories} accounts={accounts} members={members} memberProfiles={memberProfiles} familyId={family?.id ?? null} userId={session?.user.id ?? null} />
       <Modal open={!!confirming} onClose={() => setConfirming(null)} title="Подтвердить платёж?">
         <p className="text-sm text-slate-600 mb-2">Будет создана операция на сумму <strong>{formatRubles(confirming?.amount_kopecks ?? 0)}</strong> за сегодня. Дата следующего платежа будет перенесена.</p>
         <p className="text-xs text-slate-400 mb-4">Платёж не дублируется автоматически — только ручное подтверждение.</p>
@@ -96,8 +96,8 @@ export default function RecurringPage() {
   )
 }
 
-function Section({ title, items, catMap, accountMap, onConfirm, onToggle, onRemove, highlight, dim }: {
-  title: string; items: RecurringPayment[]; catMap: Map<string, Category>; accountMap: Map<string, string>; onConfirm: (r: RecurringPayment) => void; onToggle: (r: RecurringPayment) => void; onRemove: (r: RecurringPayment) => void; highlight?: boolean; dim?: boolean
+function Section({ title, items, catMap, accountMap, memberProfiles, onConfirm, onToggle, onRemove, highlight, dim }: {
+  title: string; items: RecurringPayment[]; catMap: Map<string, Category>; accountMap: Map<string, string>; memberProfiles: Profile[]; onConfirm: (r: RecurringPayment) => void; onToggle: (r: RecurringPayment) => void; onRemove: (r: RecurringPayment) => void; highlight?: boolean; dim?: boolean
 }) {
   return (
     <div>
@@ -105,13 +105,14 @@ function Section({ title, items, catMap, accountMap, onConfirm, onToggle, onRemo
       <div className="space-y-2">
         {items.map((r) => {
           const cat = r.category_id ? catMap.get(r.category_id) : null
+          const participant = memberProfiles.find((profile) => profile.id === (r.responsible_user_id || r.created_by))
           return (
             <div key={r.id} className={`card ${highlight ? 'border-warn-200 bg-warn-50/30' : ''} ${dim ? 'opacity-60' : ''}`}>
               <div className="flex items-start gap-3">
                 <div className="text-xl w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">{cat?.icon ?? '🔄'}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-900">{r.description}</div>
-                  <div className="text-xs text-slate-400">{cat?.name ?? 'Без категории'} · {r.account_id ? (accountMap.get(r.account_id) ?? 'Счёт недоступен') : 'Без счёта'} · {FREQ_LABELS[r.frequency]} · до {formatDate(r.next_due_date)}{r.end_date ? ` · до ${formatDate(r.end_date)}` : ''}</div>
+                  <div className="text-xs text-slate-400">{cat?.name ?? 'Без категории'} · {r.account_id ? (accountMap.get(r.account_id) ?? 'Счёт недоступен') : 'Без счёта'} · {FREQ_LABELS[r.frequency]} · до {formatDate(r.next_due_date)}{r.end_date ? ` · до ${formatDate(r.end_date)}` : ''}{participant ? ` · ${participant.display_name}` : ''}</div>
                 </div>
                 <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(r.amount_kopecks)}</div>
                 <div className="flex gap-1 flex-shrink-0">
@@ -128,13 +129,14 @@ function Section({ title, items, catMap, accountMap, onConfirm, onToggle, onRemo
   )
 }
 
-function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId, userId }: {
-  open: boolean; onClose: () => void; onSaved: () => void; categories: Category[]; accounts: Account[]; familyId: string | null; userId: string | null
+function RecurringForm({ open, onClose, onSaved, categories, accounts, members, memberProfiles, familyId, userId }: {
+  open: boolean; onClose: () => void; onSaved: () => void; categories: Category[]; accounts: Account[]; members: FamilyMember[]; memberProfiles: Profile[]; familyId: string | null; userId: string | null
 }) {
   const [type, setType] = useState<'expense' | 'income'>('expense')
   const [amount, setAmount] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [accountId, setAccountId] = useState('')
+  const [responsibleUserId, setResponsibleUserId] = useState(userId ?? '')
   const [description, setDescription] = useState('')
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'>('monthly')
   const [customDays, setCustomDays] = useState('30')
@@ -143,7 +145,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId,
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => { if (open) { setType('expense'); setAmount(''); setCategoryId(''); setAccountId(''); setDescription(''); setFrequency('monthly'); setCustomDays('30'); setStartDate(todayISO()); setEndDate(''); setError(null) } }, [open])
+  useEffect(() => { if (open) { setType('expense'); setAmount(''); setCategoryId(''); setAccountId(''); setResponsibleUserId(userId ?? ''); setDescription(''); setFrequency('monthly'); setCustomDays('30'); setStartDate(todayISO()); setEndDate(''); setError(null) } }, [open, userId])
   const visibleCats = categories.filter((c) => c.kind === type && !c.archived)
 
   const submit = async (e: React.FormEvent) => {
@@ -157,7 +159,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId,
     setSaving(true)
     try {
       const { error: err } = await googleSheets.from('recurring_payments').insert({
-        family_id: familyId, type, amount_kopecks: amt, category_id: categoryId || null, account_id: accountId || null,
+        family_id: familyId, type, amount_kopecks: amt, category_id: categoryId || null, account_id: accountId || null, responsible_user_id: responsibleUserId || userId,
         description: description.trim(), start_date: startDate, end_date: endDate || null,
         frequency, custom_interval_days: frequency === 'custom' ? parseInt(customDays) : null,
         next_due_date: startDate, remind: true, active: true, created_by: userId,
@@ -178,6 +180,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, familyId,
         <div><label className="label">Сумма, ₽</label><input className="input" type="number" step="0.01" min="0" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></div>
         <div><label className="label">Счёт списания/зачисления</label><select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Не выбран</option>{accounts.filter(a => !a.archived).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         <div><label className="label">Категория</label><select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{visibleCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
+        {members.length > 1 && <div><label className="label">Участник</label><select className="input" value={responsibleUserId} onChange={(e) => setResponsibleUserId(e.target.value)}>{members.map(member => { const profile = memberProfiles.find(item => item.id === member.user_id); const fallback = member.role === 'owner' ? 'Первый участник' : 'Второй участник'; return <option key={member.user_id} value={member.user_id}>{profile?.display_name || fallback}</option> })}</select></div>}
         <div><label className="label">Частота</label><select className="input" value={frequency} onChange={(e) => setFrequency(e.target.value as typeof frequency)}><option value="daily">Ежедневно</option><option value="weekly">Еженедельно</option><option value="monthly">Ежемесячно</option><option value="yearly">Ежегодно</option><option value="custom">По интервалу</option></select></div>
         {frequency === 'custom' && <div><label className="label">Интервал, дней</label><input className="input" type="number" min="1" required value={customDays} onChange={(e) => setCustomDays(e.target.value)} /></div>}
         <div className="grid grid-cols-2 gap-3">
