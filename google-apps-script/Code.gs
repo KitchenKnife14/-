@@ -477,11 +477,80 @@ function validateRelations_(table,row,user){
   if(table==='budgets'||table==='monthly_plans')check('category_id','categories','Категория');
   if(table==='planned_purchases'){check('category_id','categories','Категория');check('goal_id','goals','Цель');check('linked_transaction_id','transactions','Связанная операция');}
 }
+function matchesFilterValue_(row,filter){
+  const a=row[filter.column],b=filter.value;
+  switch(filter.op){
+    case 'eq':return String(a??'')===String(b??'');
+    case 'neq':return String(a??'')!==String(b??'');
+    case 'gte':return a>=b;
+    case 'lte':return a<=b;
+    case 'gt':return a>b;
+    case 'lt':return a<b;
+    case 'in':return (filter.values||[]).map(String).includes(String(a));
+    case 'is':return b===null?(a===null||a===''):String(a)===String(b);
+    default:throw new Error('Фильтр не поддерживается');
+  }
+}
+// For large ledgers, avoid reading every transaction column when the request
+// is for a single family's bounded date range. Small/wide queries keep the
+// simple full-sheet path because one contiguous read is cheaper there.
+function readTransactionRangeRows_(filters,user){
+  if(!Array.isArray(filters)||!filters.some(f=>f.column==='operation_date'&&f.op==='gte')||
+     !filters.some(f=>f.column==='operation_date'&&f.op==='lte'))return null;
+  const familyFilters=filters.filter(f=>f.column==='family_id'&&f.op==='eq');
+  if(familyFilters.length!==1)return null;
+  const familyId=String(familyFilters[0].value??'');
+  if(!familyId||!allowedFamilyIds_(user).includes(familyId))return [];
+  const sh=sheet_('transactions'),lastRow=sh.getLastRow(),rowCount=lastRow-1;
+  if(rowCount<200)return null;
+  const columns=TABLES.transactions,familyIndex=columns.indexOf('family_id'),dateIndex=columns.indexOf('operation_date');
+  if(familyIndex<0||dateIndex<=familyIndex)return null;
+  SHEET_READS++;
+  const indexValues=sh.getRange(2,familyIndex+1,rowCount,dateIndex-familyIndex+1).getValues();
+  const candidates=[];
+  const first=filters.find(f=>f.column==='operation_date'&&f.op==='gte');
+  const last=filters.find(f=>f.column==='operation_date'&&f.op==='lte');
+  for(let i=0;i<indexValues.length;i++){
+    const partial={
+      family_id:normal_(indexValues[i][0],'family_id'),
+      operation_date:normal_(indexValues[i][dateIndex-familyIndex],'operation_date')
+    };
+    if(String(partial.family_id)!==familyId)continue;
+    if(!matchesFilterValue_(partial,first)||!matchesFilterValue_(partial,last))continue;
+    candidates.push(i+2);
+  }
+  if(!candidates.length)return [];
+  if(candidates.length>=rowCount*0.6)return null;
+  const groups=[];
+  let start=candidates[0],previous=start,count=1;
+  for(let i=1;i<candidates.length;i++){
+    const row=candidates[i];
+    if(row===previous+1){count++;}
+    else{groups.push({start,count});start=row;count=1;}
+    previous=row;
+  }
+  groups.push({start,count});
+  if(groups.length>20)return null;
+  const result=[];
+  groups.forEach(group=>{
+    SHEET_READS++;
+    const block=sh.getRange(group.start,1,group.count,columns.length).getValues();
+    block.forEach((values,index)=>{
+      const row={};
+      columns.forEach((column,columnIndex)=>row[column]=normal_(values[columnIndex],column));
+      row.__row=group.start+index;
+      result.push(row);
+    });
+  });
+  return result;
+}
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
   if(table==='telegram_links'||table==='telegram_link_codes')throw new Error('Служебная Telegram-таблица недоступна через обычный API');
-  let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const filters=req.filters||[];
+  let all=null;
+  if(mode==='select'&&table==='transactions')all=readTransactionRangeRows_(filters,user);
+  if(all===null)all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const matches=(row)=>filters.every(f=>{
     const a=row[f.column], b=f.value;
     switch(f.op){case 'eq':return String(a??'')===String(b??'');case 'neq':return String(a??'')!==String(b??'');case 'gte':return a>=b;case 'lte':return a<=b;case 'gt':return a>b;case 'lt':return a<b;case 'in':return (f.values||[]).map(String).includes(String(a));case 'is':return b===null?(a===null||a===''):String(a)===String(b);default:throw new Error('Фильтр не поддерживается');}

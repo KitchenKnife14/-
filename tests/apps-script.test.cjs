@@ -1403,3 +1403,43 @@ test('recurring payments preserve the selected family participant when confirmed
   assert.equal(transaction.created_by, owner.user.id);
   assert.equal(transaction.responsible_user_id, partner.user.id);
 });
+
+
+test('bounded monthly transaction reads avoid full-sheet reads on a large ledger', () => {
+  const h = makeHarness();
+  const user = h.signup('selective-read@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Выборочное чтение' }).data;
+  const values = Array.from({ length: 250 }, (_, index) => ({
+    family_id: family.id,
+    type: 'expense',
+    amount_kopecks: 1000 + index,
+    operation_date: index < 240 ? '2026-10-15' : '2026-11-03',
+    description: 'Операция ' + index,
+    planned: false,
+  }));
+  const inserted = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'insert', values });
+  assert.equal(inserted.error, null, inserted.error?.message);
+
+  const sheet = h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions');
+  let fullSheetReads = 0;
+  let dataRowRanges = 0;
+  const originalGetDataRange = sheet.getDataRange.bind(sheet);
+  const originalGetRange = sheet.getRange.bind(sheet);
+  sheet.getDataRange = (...args) => { fullSheetReads++; return originalGetDataRange(...args); };
+  sheet.getRange = (...args) => { if (args[0] >= 2) dataRowRanges++; return originalGetRange(...args); };
+
+  const selected = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'select',
+    filters: [
+      { column: 'family_id', op: 'eq', value: family.id },
+      { column: 'operation_date', op: 'gte', value: '2026-11-01' },
+      { column: 'operation_date', op: 'lte', value: '2026-11-30' },
+    ],
+    orders: [{ column: 'operation_date', ascending: false }],
+  });
+  assert.equal(selected.error, null, selected.error?.message);
+  assert.equal(selected.data.length, 10);
+  assert.equal(selected.data.every(row => row.operation_date === '2026-11-03'), true);
+  assert.equal(fullSheetReads, 0);
+  assert.equal(dataRowRanges, 2);
+});
