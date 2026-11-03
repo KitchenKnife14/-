@@ -66,7 +66,9 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
     setError(null)
   }, [editing, open, initialType])
 
-  const visibleCats = categories.filter((c) => c.kind === type && (!c.archived || c.id === categoryId))
+  const visibleCats = categories
+    .filter((c) => c.kind === type && (!c.archived || c.id === categoryId))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
