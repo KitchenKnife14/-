@@ -39,7 +39,7 @@ export default function AnalysisPage() {
 
   const memberData = useMemo(() => {
     return members.map((m) => {
-      const memberTxs = txs.filter((t) => t.created_by === m.user_id)
+      const memberTxs = txs.filter((t) => (t.responsible_user_id || t.created_by) === m.user_id)
       const income = memberTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
       const expense = memberTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
       const byCat = new Map<string, number>()

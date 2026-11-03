@@ -28,15 +28,18 @@ export interface TransactionDraft {
   to_account_id: string | null
   description: string
   planned: boolean
+  responsible_user_id?: string | null
+  created_by?: string | null
 }
 
 export default function TransactionForm({ open, onClose, onSaved, categories, accounts, userId, editing, initialType = 'expense' }: Props) {
-  const { family } = useAuth()
+  const { family, members, memberProfiles } = useAuth()
   const [type, setType] = useState<TxType>(initialType)
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayISO())
   const [categoryId, setCategoryId] = useState<string>('')
   const [accountId, setAccountId] = useState('')
+  const [responsibleUserId, setResponsibleUserId] = useState(userId ?? '')
   const [toAccountId, setToAccountId] = useState('')
   const [description, setDescription] = useState('')
   const [planned, setPlanned] = useState(false)
@@ -51,6 +54,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
       setCategoryId(editing.category_id ?? '')
       setAccountId(editing.account_id ?? '')
       setToAccountId(editing.to_account_id ?? '')
+      setResponsibleUserId(editing.responsible_user_id ?? editing.created_by ?? userId ?? '')
       setDescription(editing.description)
       setPlanned(editing.planned)
     } else {
@@ -60,11 +64,12 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
       setCategoryId('')
       setAccountId('')
       setToAccountId('')
+      setResponsibleUserId(userId ?? '')
       setDescription('')
       setPlanned(false)
     }
     setError(null)
-  }, [editing, open, initialType])
+  }, [editing, open, initialType, userId])
 
   const visibleCats = categories
     .filter((c) => c.kind === type && (!c.archived || c.id === categoryId))
@@ -97,6 +102,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         category_id: type === 'transfer' ? null : (categoryId || null),
         account_id: accountId || null,
         to_account_id: type === 'transfer' ? toAccountId : null,
+        responsible_user_id: responsibleUserId || userId,
         description: description.trim(),
         planned,
       }
@@ -137,21 +143,48 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
           <input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
 
+        {members.length > 1 && (
+          <div>
+            <label className="label">Участник</label>
+            <select className="input" value={responsibleUserId} onChange={(e) => setResponsibleUserId(e.target.value)}>
+              {members.map((member) => {
+                const profile = memberProfiles.find((item) => item.id === member.user_id)
+                const fallback = member.role === 'owner' ? 'Первый участник' : 'Второй участник'
+                return <option key={member.user_id} value={member.user_id}>{profile?.display_name || fallback}</option>
+              })}
+            </select>
+          </div>
+        )}
+
         {type === 'transfer' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="label">Со счёта</label><select className="input" required value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
             <div><label className="label">На счёт</label><select className="input" required value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => a.id !== accountId && (!a.archived || a.id === toAccountId)).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
           </div>
         ) : (
-          <div><label className="label">Счёт</label><select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
+          <div>
+            <label className="label">Счёт (для расчёта остатка)</label>
+            <select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              <option value="">Не учитывать в остатках счетов</option>
+              {accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">Без счёта операция попадёт в общую статистику, но не изменит остаток отдельного счёта.</p>
+          </div>
         )}
 
         {type !== 'transfer' && <div>
           <label className="label">Категория</label>
-          <select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.ctrlKey || event.metaKey || event.altKey || !/^[а-яё]$/iu.test(event.key)) return
+              const letter = event.key.toLocaleLowerCase('ru-RU')
+              const match = visibleCats.find((category) => category.name.trim().charAt(0).toLocaleLowerCase('ru-RU') === letter)
+              if (match) { event.preventDefault(); setCategoryId(match.id) }
+            }}>
             <option value="">Без категории</option>
             {visibleCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
           </select>
+          <p className="mt-1 text-xs text-slate-400">Список по алфавиту. Начните вводить русскую букву, чтобы перейти к первой подходящей категории.</p>
         </div>}
         <div>
           <label className="label">Описание</label>

@@ -10,7 +10,7 @@ import Modal from '../components/Modal'
 import { ensureSupplementalCategories } from '../lib/categories'
 
 export default function TransactionsPage() {
-  const { family, session } = useAuth()
+  const { family, session, memberProfiles } = useAuth()
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -134,6 +134,7 @@ export default function TransactionsPage() {
         <div className="space-y-2">
           {filtered.map((t) => {
             const cat = t.category_id ? catMap.get(t.category_id) : null
+            const participant = memberProfiles.find((profile) => profile.id === (t.responsible_user_id || t.created_by))
             const isIncome = t.type === 'income'
             return (
               <div key={t.id} className="card flex items-center gap-3 py-3">
@@ -143,13 +144,13 @@ export default function TransactionsPage() {
                     {t.description || cat?.name || 'Операция'}
                     {t.planned && <span className="ml-2 badge bg-warn-100 text-warn-600">план</span>}
                   </div>
-                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {t.type === 'transfer' ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}` : `${cat?.name ?? 'Без категории'} · ${accountMap.get(t.account_id ?? '') ?? 'Без счёта'}`}</div>
+                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {t.type === 'transfer' ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}` : `${cat?.name ?? 'Без категории'} · ${accountMap.get(t.account_id ?? '') ?? 'Без счёта'}`}{participant ? ` · ${participant.display_name}` : ''}</div>
                 </div>
                 <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : 'text-slate-900'}`}>
                   {t.type === 'transfer' ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned }); setShowAdd(true) }} className="btn-ghost px-2" aria-label="Изменить">
+                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label="Изменить">
                     <Pencil size={16} />
                   </button>
                   <button onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label="Удалить">

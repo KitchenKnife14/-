@@ -11,7 +11,7 @@ const TABLES = {
   family_members: ['id','family_id','user_id','role','joined_at'],
   categories: ['id','family_id','parent_id','name','kind','color','icon','archived','sort_order','created_at'],
   accounts: ['id','family_id','name','kind','owner_user_id','starting_balance_kopecks','archived','created_at'],
-  transactions: ['id','family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','created_by','updated_by','planned','parent_recurring_id','created_at','updated_at'],
+  transactions: ['id','family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','created_by','updated_by','planned','parent_recurring_id','created_at','updated_at','responsible_user_id'],
   recurring_payments: ['id','family_id','type','amount_kopecks','category_id','account_id','description','start_date','end_date','frequency','custom_interval_days','next_due_date','remind','active','created_by','created_at'],
   budgets: ['id','family_id','category_id','month_date','limit_kopecks','warn_75','warn_90','warn_100'],
   goals: ['id','family_id','name','description','target_kopecks','saved_kopecks','target_date','priority','status','responsible_user_id','created_at'],
@@ -26,7 +26,7 @@ const AUTH_SHEET = '_auth';
 const SESSION_TTL = 60 * 60 * 24 * 14;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
-const API_VERSION=8, BATCH_MAX=25;
+const API_VERSION=9, BATCH_MAX=25;
 let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0; // кэш открытой таблицы и счётчики для замера (на время ОДНОГО запроса)
 const DEFAULT_CATEGORIES=[{"name":"Жильё и обязательные платежи","kind":"expense","icon":"🏠","color":"#2563eb","children":[{"name":"Аренда квартиры","icon":"🔑","color":"#2563eb"},{"name":"Ипотека","icon":"🏦","color":"#2563eb"},{"name":"Коммунальные услуги","icon":"💡","color":"#2563eb"},{"name":"Интернет","icon":"🌐","color":"#2563eb"},{"name":"Мобильная связь","icon":"📱","color":"#2563eb"},{"name":"Обслуживание жилья","icon":"🧰","color":"#2563eb"},{"name":"Ремонт","icon":"🛠️","color":"#2563eb"},{"name":"Мебель и предметы интерьера","icon":"🛋️","color":"#2563eb"}]},{"name":"Продукты и питание","kind":"expense","icon":"🛒","color":"#16a34a","children":[{"name":"Продукты домой","icon":"🥦","color":"#16a34a"},{"name":"Кафе и рестораны","icon":"🍽️","color":"#16a34a"},{"name":"Доставка еды","icon":"🛵","color":"#16a34a"},{"name":"Кофе и перекусы на работе","icon":"☕","color":"#16a34a"}]},{"name":"Быт","kind":"expense","icon":"🧴","color":"#0891b2","children":[{"name":"Бытовая химия","icon":"🧼","color":"#0891b2"},{"name":"Средства гигиены","icon":"🪥","color":"#0891b2"},{"name":"Товары для дома","icon":"🏠","color":"#0891b2"},{"name":"Расходные материалы","icon":"📦","color":"#0891b2"},{"name":"Мелкие бытовые покупки","icon":"🧺","color":"#0891b2"}]},{"name":"Транспорт","kind":"expense","icon":"🚌","color":"#ea580c","children":[{"name":"Общественный транспорт","icon":"🚇","color":"#ea580c"},{"name":"Такси","icon":"🚕","color":"#ea580c"},{"name":"Бензин","icon":"⛽","color":"#ea580c"},{"name":"Обслуживание автомобиля","icon":"🚗","color":"#ea580c"},{"name":"Ремонт автомобиля","icon":"🔧","color":"#ea580c"},{"name":"Страхование и документы","icon":"📄","color":"#ea580c"},{"name":"Парковка","icon":"🅿️","color":"#ea580c"}]},{"name":"Здоровье","kind":"expense","icon":"🩺","color":"#dc2626","children":[{"name":"Врачи","icon":"👨‍⚕️","color":"#dc2626"},{"name":"Анализы и обследования","icon":"🧪","color":"#dc2626"},{"name":"Лекарства","icon":"💊","color":"#dc2626"},{"name":"Стоматология","icon":"🦷","color":"#dc2626"},{"name":"Медицинские процедуры","icon":"💉","color":"#dc2626"}]},{"name":"Личные расходы","kind":"expense","icon":"👕","color":"#7c3aed","children":[{"name":"Одежда и обувь","icon":"👕","color":"#7c3aed"},{"name":"Косметика","icon":"💄","color":"#7c3aed"},{"name":"Уход за собой","icon":"💆","color":"#7c3aed"},{"name":"Личные покупки","icon":"🛍️","color":"#7c3aed"}]},{"name":"Развлечения","kind":"expense","icon":"🎮","color":"#db2777","children":[{"name":"Кино и мероприятия","icon":"🎬","color":"#db2777"},{"name":"Игры","icon":"🎮","color":"#db2777"},{"name":"Подписки","icon":"📺","color":"#db2777"},{"name":"Музыка","icon":"🎵","color":"#db2777"},{"name":"Хобби","icon":"🎨","color":"#db2777"},{"name":"Путешествия и отдых","icon":"✈️","color":"#db2777"}]},{"name":"Техника","kind":"expense","icon":"💻","color":"#0f766e","children":[{"name":"Смартфоны","icon":"📱","color":"#0f766e"},{"name":"Компьютеры и комплектующие","icon":"💻","color":"#0f766e"},{"name":"Телевизоры","icon":"📺","color":"#0f766e"},{"name":"Бытовая техника","icon":"🔌","color":"#0f766e"},{"name":"Аудиотехника","icon":"🎧","color":"#0f766e"},{"name":"Аксессуары","icon":"🎮","color":"#0f766e"}]},{"name":"Семья и подарки","kind":"expense","icon":"🎁","color":"#c026d3","children":[{"name":"Подарки","icon":"🎁","color":"#c026d3"},{"name":"Праздники","icon":"🎉","color":"#c026d3"},{"name":"Совместные мероприятия","icon":"🥳","color":"#c026d3"},{"name":"Расходы на родственников","icon":"👨‍👩‍👧","color":"#c026d3"}]},{"name":"Финансовые операции","kind":"transfer","icon":"🔁","color":"#64748b","children":[{"name":"Погашение кредитов","icon":"💳","color":"#64748b"},{"name":"Проценты по кредитам","icon":"📈","color":"#64748b"},{"name":"Комиссии","icon":"💸","color":"#64748b"},{"name":"Банковские услуги","icon":"🏦","color":"#64748b"},{"name":"Переводы между счетами","icon":"🔁","color":"#64748b"}]},{"name":"Накопления","kind":"expense","icon":"🐷","color":"#059669","children":[{"name":"Резервный фонд","icon":"🛟","color":"#059669"},{"name":"Накопления на квартиру","icon":"🏢","color":"#059669"},{"name":"Накопления на автомобиль","icon":"🚙","color":"#059669"},{"name":"Накопления на крупные покупки","icon":"💰","color":"#059669"},{"name":"Другие цели","icon":"🎯","color":"#059669"}]},{"name":"Прочее","kind":"expense","icon":"📦","color":"#6b7280","children":[{"name":"Непредвиденные расходы","icon":"⚠️","color":"#6b7280"},{"name":"Неопределённая категория","icon":"❓","color":"#6b7280"}]},{"name":"Доходы","kind":"income","icon":"💵","color":"#16a34a","children":[{"name":"Зарплата первого участника","icon":"👨","color":"#16a34a"},{"name":"Зарплата второго участника","icon":"👩","color":"#16a34a"},{"name":"Премии","icon":"🌟","color":"#16a34a"},{"name":"Подработки","icon":"🛠️","color":"#16a34a"},{"name":"Возвраты и компенсации","icon":"↩️","color":"#16a34a"},{"name":"Доходы от продажи вещей","icon":"🏷️","color":"#16a34a"},{"name":"Проценты и инвестиционный доход","icon":"📈","color":"#16a34a"},{"name":"Прочие доходы","icon":"➕","color":"#16a34a"}]}];
 // Кэш чтения листов на время ОДНОГО запроса (сбрасывается в doPost и после каждой записи).
@@ -34,7 +34,7 @@ let ROWS_CACHE = {};
 let TZ_CACHE = null;
 // Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
 // а строки, начинающиеся с "=", в формулы).
-const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash'];
+const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash','responsible_user_id'];
 
 function doGet() {
   const out={status:'ok', message:'Сервер работает', version:API_VERSION};
@@ -100,7 +100,19 @@ function sheet_(name) {
   if (cache && cache.get(hdrKey)==='1') return sh;
   SHEET_READS++;
   const header=sh.getRange(1,1,1,TABLES[name].length).getValues()[0];
-  if (header.join('|') !== TABLES[name].join('|')) throw new Error('Не совпадает структура листа '+name);
+  let used=header.length;
+  while(used>0&&(header[used-1]===''||header[used-1]===null))used--;
+  const current=header.slice(0,used), expected=TABLES[name];
+  if(current.join('|')!==expected.join('|')){
+    // Only append missing trailing columns when every existing column is an exact prefix.
+    // Never reorder, clear or overwrite existing data.
+    const safePrefix=current.length<expected.length&&current.every((value,index)=>value===expected[index]);
+    if(!safePrefix)throw new Error('Не совпадает структура листа '+name+'; автоматическое изменение небезопасно');
+    const missing=expected.slice(current.length);
+    sh.getRange(1,current.length+1,1,missing.length).setValues([missing]);
+    sh.getRange(2,current.length+1,Math.max(sh.getMaxRows()-1,1),missing.length).setNumberFormat('@');
+    SHEET_WRITES++;
+  }
   if (cache) { try{cache.put(hdrKey,'1',21600);}catch(_){} }
   return sh;
 }
@@ -128,6 +140,9 @@ function safeCell_(value) {
   // A leading apostrophe makes Sheets store the content as literal text.
   return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
 }
+function touchTableRevision_(name){
+  try{PropertiesService.getScriptProperties().setProperty('table_revision:'+name,String(Date.now())+':'+String(SHEET_WRITES));}catch(_){}
+}
 function appendRows_(name, data) {
   if (!data.length) return;
   const sh=sheet_(name), cols=TABLES[name], start=sh.getLastRow()+1;
@@ -136,6 +151,7 @@ function appendRows_(name, data) {
   delete ROWS_CACHE[name];
   sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
   SHEET_WRITES++;
+  touchTableRevision_(name);
 }
 function updateRows_(name, data) {
   if (!data.length) return;
@@ -153,6 +169,7 @@ function updateRows_(name, data) {
   sorted.forEach(row=>{if(group.length&&row.__row!==group[group.length-1].__row+1)flush();group.push(row);});
   flush();
   SHEET_WRITES++;
+  touchTableRevision_(name);
 }
 function deleteRows_(name, data) {
   const rowNumbers=[...new Set(data.map(r=>Number(r.__row)).filter(n=>Number.isInteger(n)&&n>=2))].sort((a,b)=>b-a);
@@ -166,6 +183,7 @@ function deleteRows_(name, data) {
     sh.deleteRows(low,high-low+1);
   }
   SHEET_WRITES++;
+  touchTableRevision_(name);
 }
 function writeRows_(name, data) {
   SHEET_WRITES++;
@@ -175,6 +193,7 @@ function writeRows_(name, data) {
   const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
   if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
   const last=sh.getLastRow(); if(last>data.length+1) sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent();
+  touchTableRevision_(name);
 }
 function now_(){return new Date().toISOString();}
 function id_(){return Utilities.getUuid();}
@@ -440,6 +459,10 @@ function validateRelations_(table,row,user){
     if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма регулярного платежа должна быть положительным целым числом копеек');
   }
   if(!familyId)return;
+  if(['transactions','goals','planned_purchases'].includes(table)&&row.responsible_user_id){
+    const member=rows_('family_members').some(m=>String(m.family_id)===familyId&&String(m.user_id)===String(row.responsible_user_id));
+    if(!member)throw new Error('Ответственный участник не состоит в этой семье');
+  }
   const check=(field,relatedTable,label)=>{
     const value=row[field];if(value===undefined||value===null||value==='')return;
     const related=rows_(relatedTable).find(x=>String(x.id)===String(value));
@@ -500,6 +523,7 @@ function query_(req,user){
       }
       if(TABLES[table].includes('created_by'))r.created_by=user.id;
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
+      if((table==='transactions'||table==='goals'||table==='planned_purchases')&&!r.responsible_user_id)r.responsible_user_id=user.id;
       if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       validateRelations_(table,r,user);
@@ -590,6 +614,7 @@ function query_(req,user){
         updatedRows.push(found);
       }else {
         const r=Object.assign({id:id_()},raw);
+        if((table==='transactions'||table==='goals'||table==='planned_purchases')&&!r.responsible_user_id)r.responsible_user_id=user.id;
         if(TABLES[table].includes('created_at'))r.created_at=now_();
         if(TABLES[table].includes('updated_at'))r.updated_at=now_();
         if(TABLES[table].includes('created_by'))r.created_by=user.id;
@@ -632,6 +657,66 @@ function syncGoalTotals_(goalIds){
 }
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
+  if(name==='get_table_revision'){
+    const table=String(p.p_table||'');
+    if(!TABLES[table]||table==='telegram_links'||table==='telegram_link_codes')throw new Error('Таблица недоступна');
+    if(!allowedFamilyIds_(user).length)throw new Error('Нет доступа к семейному пространству');
+    return PropertiesService.getScriptProperties().getProperty('table_revision:'+table)||'0';
+  }
+  if(name==='ensure_supplemental_categories'){
+    const familyId=String(p.p_family_id||'');
+    if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    const definitions=[
+      {name:'Сигареты',kind:'expense',icon:'🚬',color:'#78716c',children:[]},
+      {name:'Кредиты',kind:'expense',icon:'💳',color:'#64748b',children:[
+        {name:'Погашение основного долга',icon:'💳',color:'#64748b'},
+        {name:'Проценты по кредиту',icon:'📈',color:'#64748b'},
+        {name:'Комиссии по кредиту',icon:'💸',color:'#64748b'}
+      ]}
+    ];
+    const have=rows_('categories').filter(x=>String(x.family_id)===familyId),created=[];
+    definitions.forEach(def=>{
+      let parent=have.find(x=>!x.parent_id&&x.name===def.name&&x.kind===def.kind);
+      if(!parent){
+        parent={id:id_(),family_id:familyId,parent_id:null,name:def.name,kind:def.kind,icon:def.icon,color:def.color,archived:false,sort_order:0,created_at:now_()};
+        have.push(parent);created.push(parent);
+      }
+      (def.children||[]).forEach((child,index)=>{
+        if(have.some(x=>String(x.parent_id)===String(parent.id)&&x.name===child.name))return;
+        const row={id:id_(),family_id:familyId,parent_id:parent.id,name:child.name,kind:def.kind,icon:child.icon,color:child.color,archived:false,sort_order:index,created_at:now_()};
+        have.push(row);created.push(row);
+      });
+    });
+    if(created.length)appendRows_('categories',created);
+    return {added:created.length};
+  }
+  if(name==='create_goal_with_purchase'){
+    const familyId=String(p.p_family_id||'');
+    if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    const target=Number(p.p_target_kopecks),priority=Number(p.p_priority);
+    const goalName=String(p.p_name||'').trim(),description=String(p.p_description||'').trim();
+    if(!goalName)throw new Error('Введите название цели');
+    if(!Number.isSafeInteger(target)||target<=0)throw new Error('Сумма цели должна быть положительным целым числом копеек');
+    if(!Number.isInteger(priority)||priority<1||priority>5)throw new Error('Приоритет должен быть от 1 до 5');
+    const targetDate=p.p_target_date?String(p.p_target_date):'';
+    if(targetDate&&!/^\d{4}-\d{2}-\d{2}$/.test(targetDate))throw new Error('Некорректная целевая дата');
+    const goal={id:id_(),family_id:familyId,name:goalName,description,target_kopecks:target,saved_kopecks:0,target_date:targetDate||null,priority,status:'active',responsible_user_id:user.id,created_at:now_()};
+    appendRows_('goals',[goal]);
+    let purchaseId=null;
+    if(p.p_create_purchase===true){
+      const purchase={id:id_(),family_id:familyId,name:goalName,category_id:null,estimated_kopecks:target,priority,desired_month:targetDate?targetDate.slice(0,7)+'-01':null,desired_date:targetDate||null,url:'',comment:description,status:'planned',responsible_user_id:user.id,goal_id:goal.id,linked_transaction_id:'',created_by:user.id,created_at:now_()};
+      try{
+        validateRelations_('planned_purchases',purchase,user);
+        appendRows_('planned_purchases',[purchase]);
+        purchaseId=purchase.id;
+      }catch(err){
+        const saved=rows_('goals').find(g=>String(g.id)===String(goal.id));
+        if(saved)deleteRows_('goals',[saved]);
+        throw new Error('Не удалось связать цель с покупкой; создание отменено: '+String(err&&err.message||err));
+      }
+    }
+    return {goal_id:goal.id,purchase_id:purchaseId};
+  }
   if(name==='create_telegram_link_code'){
     const members=rows_('family_members').filter(m=>String(m.user_id)===user.id);
     if(!members.length)throw new Error('Сначала создайте семью или присоединитесь к ней');
@@ -658,9 +743,14 @@ function rpc_(req,user){
   if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code,display_name:p.p_display_name},user);return true;}
   if(name==='create_family')return route_({action:'createFamily',name:p.p_name,display_name:p.p_display_name},user);
   if(name==='get_my_context'){
-   const profile=rows_('profiles').find(x=>x.id===user.id),members=rows_('family_members').filter(m=>m.user_id===user.id).map(strip_);
-   const family=members.length?rows_('families').find(f=>String(f.id)===String(members[0].family_id)):null;
-   return{profile:profile?strip_(profile):null,members,family:family?strip_(family):null};
+   const profile=rows_('profiles').find(x=>x.id===user.id);
+   const ownMemberships=rows_('family_members').filter(m=>String(m.user_id)===user.id);
+   const familyIds=new Set(ownMemberships.map(m=>String(m.family_id)));
+   const members=rows_('family_members').filter(m=>familyIds.has(String(m.family_id))).map(strip_);
+   const family=ownMemberships.length?rows_('families').find(f=>String(f.id)===String(ownMemberships[0].family_id)):null;
+   const memberIds=new Set(members.map(m=>String(m.user_id)));
+   const memberProfiles=rows_('profiles').filter(x=>memberIds.has(String(x.id))).map(strip_);
+   return{profile:profile?strip_(profile):null,members,family:family?strip_(family):null,member_profiles:memberProfiles};
   }
   if(name==='confirm_planned_purchase'){
     const id=String(p.p_purchase_id||'');
@@ -687,7 +777,7 @@ function rpc_(req,user){
     ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
     if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
     if(!tx){
-      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
+      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,responsible_user_id:purchase.responsible_user_id||purchase.created_by||user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
       appendRows_('transactions',[tx]);
     }
     purchase.status='bought';
@@ -712,7 +802,7 @@ function rpc_(req,user){
       String(existingTx.account_id||'')!==String(r.account_id||'') ||
       String(existingTx.description||'')!==String(r.description||'')
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
-    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
+    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
     r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     updateRows_('recurring_payments',[r]);return true;
@@ -839,7 +929,7 @@ function telegramWebhook_(req){
     const accountId=accounts.length===1?accounts[0].id:null;
     const operationDate=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM-dd');
     const operationTime=Utilities.formatDate(new Date(),'Europe/Moscow','HH:mm');
-    query_({table:'transactions',mode:'insert',returning:true,values:{family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,description:description,planned:false}}, {id:String(link.user_id)});
+    query_({table:'transactions',mode:'insert',returning:true,values:{family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,responsible_user_id:link.user_id,description:description,planned:false}}, {id:String(link.user_id)});
     const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
     reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\\nКатегория: '+category.name:'\\nКатегория не определена; проверьте её в приложении.')};
   }

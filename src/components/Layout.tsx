@@ -11,7 +11,7 @@ const navItems = [
   { to: '/recurring', label: 'Регулярные платежи', icon: Repeat, end: false },
   { to: '/budgets', label: 'Бюджеты', icon: Target, end: false },
   { to: '/goals', label: 'Цели', icon: Target, end: false },
-  { to: '/purchases', label: 'Покупки', icon: ShoppingCart, end: false },
+  { to: '/purchases', label: 'Планируемые покупки', icon: ShoppingCart, end: false },
   { to: '/planning', label: 'Планирование', icon: ClipboardList, end: false },
   { to: '/reports', label: 'Отчёты', icon: BarChart3, end: false },
   { to: '/analysis', label: 'Анализ по участникам', icon: Users, end: false },

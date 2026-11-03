@@ -1273,3 +1273,109 @@ test('Telegram rejects ambiguous messages containing multiple numbers without wr
   const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
   assert.equal(transactions.length, 0);
 });
+
+
+test('transaction attribution defaults to author and permits only a member of the same family', () => {
+  const h = makeHarness();
+  const owner = h.signup('attribution-owner@example.com');
+  const partner = h.signup('attribution-partner@example.com');
+  const outsider = h.signup('attribution-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Учёт участников' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+
+  const selectedPartner = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, operation_date: '2026-11-03', responsible_user_id: partner.user.id }
+  });
+  assert.equal(selectedPartner.error, null, selectedPartner.error?.message);
+  assert.equal(selectedPartner.data[0].created_by, owner.user.id);
+  assert.equal(selectedPartner.data[0].responsible_user_id, partner.user.id);
+
+  const invalid = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-03', responsible_user_id: outsider.user.id }
+  });
+  assert.match(invalid.error.message, /ответственный участник/i);
+
+  const defaulted = h.call({
+    action: 'query', token: partner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'income', amount_kopecks: 50000, operation_date: '2026-11-03' }
+  });
+  assert.equal(defaulted.error, null, defaulted.error?.message);
+  assert.equal(defaulted.data[0].responsible_user_id, partner.user.id);
+});
+
+test('get_my_context returns names for both family participants', () => {
+  const h = makeHarness();
+  const owner = h.signup('context-owner@example.com');
+  const partner = h.signup('context-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Профили семьи' }).data;
+  h.call({ action: 'ensureProfile', token: owner.token, display_name: 'Никита' });
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  h.call({ action: 'ensureProfile', token: partner.token, display_name: 'Леся' });
+  const context = h.call({ action: 'rpc', token: owner.token, name: 'get_my_context' });
+  assert.equal(context.error, null, context.error?.message);
+  assert.deepEqual(context.data.member_profiles.map(p => p.display_name).sort(), ['Леся', 'Никита']);
+});
+
+test('create_goal_with_purchase creates a linked goal and planned purchase', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-purchase-link@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Связанные цели' }).data;
+  const result = h.call({
+    action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
+    params: { p_family_id: family.id, p_name: 'Телевизор', p_description: 'Для гостиной', p_target_kopecks: 7000000, p_target_date: '2027-03-01', p_priority: 2, p_create_purchase: true }
+  });
+  assert.equal(result.error, null, result.error?.message);
+  const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data.find(g => g.id === result.data.goal_id);
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data.find(p => p.id === result.data.purchase_id);
+  assert.equal(goal.name, 'Телевизор');
+  assert.equal(purchase.goal_id, goal.id);
+  assert.equal(purchase.name, goal.name);
+  assert.equal(purchase.estimated_kopecks, goal.target_kopecks);
+  assert.equal(purchase.comment, goal.description);
+});
+
+test('supplemental category provisioning is idempotent', () => {
+  const h = makeHarness();
+  const user = h.signup('supplemental-category-migration@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Дополнительные категории' }).data;
+  const first = h.call({ action: 'rpc', token: user.token, name: 'ensure_supplemental_categories', params: { p_family_id: family.id } });
+  const second = h.call({ action: 'rpc', token: user.token, name: 'ensure_supplemental_categories', params: { p_family_id: family.id } });
+  assert.equal(first.error, null, first.error?.message);
+  assert.equal(second.error, null, second.error?.message);
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  assert.equal(categories.filter(c => !c.parent_id && c.name === 'Сигареты').length, 1);
+  assert.equal(categories.filter(c => !c.parent_id && c.name === 'Кредиты').length, 1);
+  assert.equal(categories.filter(c => c.name === 'Погашение основного долга').length, 1);
+});
+
+test('schema migration appends transaction participant column without changing prior columns', () => {
+  const h = makeHarness();
+  const user = h.signup('schema-additive@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Миграция схемы' });
+  const spreadsheet = h.context.SpreadsheetApp.getActiveSpreadsheet();
+  const oldHeaders = h.context.TABLES.transactions.slice(0, -1);
+  const sheet = spreadsheet.insertSheet('transactions');
+  sheet.getRange(1, 1, 1, oldHeaders.length).setValues([oldHeaders]);
+  const result = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(result.error, null, result.error?.message);
+  assert.deepEqual(sheet.getRange(1, 1, 1, oldHeaders.length).getValues()[0], oldHeaders);
+  assert.equal(sheet.getRange(1, oldHeaders.length + 1, 1, 1).getValues()[0][0], 'responsible_user_id');
+});
+
+test('table revision polling changes after a successful write', () => {
+  const h = makeHarness();
+  const user = h.signup('revision-polling@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Версии таблиц' }).data;
+  const before = h.call({ action: 'rpc', token: user.token, name: 'get_table_revision', params: { p_table: 'transactions' } });
+  const insert = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 4500, operation_date: '2026-11-03' }
+  });
+  const after = h.call({ action: 'rpc', token: user.token, name: 'get_table_revision', params: { p_table: 'transactions' } });
+  assert.equal(insert.error, null, insert.error?.message);
+  assert.equal(before.error, null, before.error?.message);
+  assert.equal(after.error, null, after.error?.message);
+  assert.notEqual(after.data, before.data);
+});
