@@ -813,7 +813,7 @@ function telegramWebhook_(req){
     if(!member)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
     const amountMatch=text.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?:\s*(?:₽|руб(?:лей|ля|ль|\.?)?|р\.?))?(?=\s|$)/i);
     if(!amountMatch)throw new Error('Не нашёл сумму. Пример: Проезд 45 рублей.');
-    const numericTokens=text.match(/\\d+(?:[.,]\\d{1,2})?/g)||[];
+    const numericTokens=text.match(/\d+(?:[.,]\d{1,2})?/g)||[];
     if(numericTokens.length!==1)throw new Error('В сообщении несколько чисел. Отправьте одну операцию одним сообщением, например: Проезд 45 рублей.');
     const parts=amountMatch[1].replace(',','.').split('.');
     const amountKopecks=Number(parts[0])*100+Number(((parts[1]||'')+'00').slice(0,2));
