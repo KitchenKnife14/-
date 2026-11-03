@@ -93,3 +93,55 @@ export async function ensureProfile(userId: string, displayName: string): Promis
     .upsert({ id: userId, display_name: displayName }, { onConflict: 'id' })
   if (error) throw error
 }
+
+
+/** Adds only the two newly introduced default sections to existing families.
+ * Existing categories (including archived or customized ones) are never modified.
+ */
+export async function ensureSupplementalCategories(familyId: string): Promise<void> {
+  const definitions = [
+    { name: 'Сигареты', kind: 'expense', icon: '🚬', color: '#78716c', children: [] as { name: string; icon: string; color: string }[] },
+    {
+      name: 'Кредиты', kind: 'expense', icon: '💳', color: '#64748b',
+      children: [
+        { name: 'Погашение основного долга', icon: '💳', color: '#64748b' },
+        { name: 'Проценты по кредиту', icon: '📈', color: '#64748b' },
+        { name: 'Комиссии по кредиту', icon: '💸', color: '#64748b' },
+      ],
+    },
+  ]
+  const { data, error } = await googleSheets.from('categories').select('*').eq('family_id', familyId)
+  if (error) throw error
+  const existing = (data ?? []) as ExistingCategory[]
+
+  for (const definition of definitions) {
+    let parent = existing.find((item) => !item.parent_id && item.name === definition.name && item.kind === definition.kind)
+    if (!parent) {
+      const { data: created, error: createError } = await googleSheets.from('categories')
+        .insert({ family_id: familyId, parent_id: null, name: definition.name, kind: definition.kind, icon: definition.icon, color: definition.color, sort_order: 0 })
+        .select('*')
+      if (createError) throw createError
+      const row = Array.isArray(created) ? created[0] : created
+      if (!row?.id) throw new Error(`Не удалось создать категорию «${definition.name}»`)
+      parent = row as ExistingCategory
+      existing.push(parent)
+    }
+
+    const missingChildren = definition.children.filter((child) =>
+      !existing.some((item) => item.parent_id === parent!.id && item.name === child.name)
+    )
+    if (missingChildren.length) {
+      const { data: created, error: childError } = await googleSheets.from('categories')
+        .insert(missingChildren.map((child, index) => ({
+          family_id: familyId, parent_id: parent!.id, name: child.name, kind: definition.kind,
+          icon: child.icon, color: child.color, sort_order: index,
+        })))
+        .select('*')
+      if (childError) throw childError
+      if (!created || created.length !== missingChildren.length) {
+        throw new Error(`Не удалось создать подкатегории «${definition.name}»`)
+      }
+      existing.push(...(created as ExistingCategory[]))
+    }
+  }
+}
