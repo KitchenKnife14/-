@@ -15,6 +15,12 @@ The Telegram bot token and both webhook secrets are server-side environment/scri
 
 ## Current implementation in this branch
 
+## Public bot
+
+- Telegram username: `@My_Family_cash_bot`.
+- Start the bot: https://t.me/My_Family_cash_bot.
+
+
 - One-time linking code generation via Apps Script RPC \`create_telegram_link_code\`.
 - Codes are stored as SHA-256 hashes, contain 12 characters, and expire after 15 minutes.
 - A Telegram account can be linked to only one app account; an app account can have only one Telegram link.
