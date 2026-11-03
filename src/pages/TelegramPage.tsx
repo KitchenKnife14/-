@@ -67,7 +67,7 @@ export default function TelegramPage() {
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-50 text-primary-800"><MessageCircle size={21} /></div>
           <div className="min-w-0 flex-1">
             <h2 className="section-title">Подключение аккаунта</h2>
-            <p className="mt-1 text-sm leading-6 text-muted">Привязка связывает ваш Telegram ID с текущим пользователем приложения. Доступ второго участника семьи не передаётся автоматически.</p>
+            <p className="mt-1 text-sm leading-6 text-muted">Привязка связывает ваш Telegram ID с текущим пользователем приложения. Доступ второго участника семьи не передаётся автоматически. Настройка webhook и серверных секретов ещё не завершена — бот пока не принимает реальные операции.</p>
           </div>
         </div>
 
