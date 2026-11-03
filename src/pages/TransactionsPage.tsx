@@ -7,6 +7,7 @@ import { formatDate, monthRange, monthLabel, currentMoscowMonth } from '../lib/d
 import { Plus, Search, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import TransactionForm, { type TransactionDraft } from '../components/TransactionForm'
 import Modal from '../components/Modal'
+import { ensureSupplementalCategories } from '../lib/categories'
 
 export default function TransactionsPage() {
   const { family, session } = useAuth()
@@ -29,6 +30,7 @@ export default function TransactionsPage() {
     setLoading(true)
     setError(null)
     try {
+      await ensureSupplementalCategories(family.id)
       const [txRes, catRes, accountRes] = await Promise.all([
         googleSheets
           .from('transactions')
