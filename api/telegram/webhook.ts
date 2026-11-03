@@ -47,7 +47,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const backendUrl = new URL(appsScriptUrl)
-    if (backendUrl.protocol !== 'https:' || backendUrl.hostname !== 'script.google.com' || !new RegExp('^/macros/s/[^/]+/exec) {
+    if (backendUrl.protocol !== 'https:' || backendUrl.hostname !== 'script.google.com' || !new RegExp('^/macros/s/[^/]+/exec' + '$').test(backendUrl.pathname)) {
       return res.status(503).json({ ok: false, error: 'Telegram backend URL is invalid' })
     }
   } catch {
