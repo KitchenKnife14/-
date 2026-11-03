@@ -1222,3 +1222,33 @@ test('Telegram link tables cannot be forged through the public generic data API'
   });
   assert.match(forgedCode.error.message, /служебная Telegram-таблица/i);
 });
+
+
+test('Telegram salary expenses are assigned to the linked family member category', () => {
+  const h = makeHarness();
+  const owner = h.signup('telegram-salary-owner@example.com');
+  const partner = h.signup('telegram-salary-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья зарплат' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'salary-secret');
+  const generated = h.call({ action: 'rpc', token: partner.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const link = h.call({
+    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    update: { update_id: 7201, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: '/link ' + generated.data.code }}
+  });
+  assert.equal(link.error, null, link.error?.message);
+
+  const added = h.call({
+    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    update: { update_id: 7202, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: 'Доход 5000 рублей зарплата' }}
+  });
+  assert.equal(added.error, null, added.error?.message);
+  const transactions = h.call({ action: 'query', token: partner.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].type, 'income');
+  assert.equal(transactions[0].amount_kopecks, 500000);
+  const categories = h.call({ action: 'query', token: partner.token, table: 'categories', mode: 'select' }).data;
+  assert.equal(categories.find(x => x.id === transactions[0].category_id).name, 'Зарплата второго участника');
+});
