@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles } from '../lib/money'
-import { monthRange, monthLabel } from '../lib/dates'
+import { monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function AnalysisPage() {
@@ -13,7 +13,7 @@ export default function AnalysisPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [cursor, setCursor] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() })
+  const [cursor, setCursor] = useState(currentMoscowMonth)
 
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
 
@@ -21,14 +21,14 @@ export default function AnalysisPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [tRes, cRes] = await Promise.all([
-        supabase.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-      ])
-      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error
-      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[])
       const ids = members.map((m) => m.user_id)
-      if (ids.length > 0) { const { data: pRes } = await supabase.from('profiles').select('*').in('id', ids); setProfiles(pRes as Profile[] ?? []) }
+      const [tRes, cRes, pRes] = await Promise.all([
+        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        ids.length > 0 ? googleSheets.from('profiles').select('*').in('id', ids) : Promise.resolve({ data: [], error: null }),
+      ])
+      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error; if (pRes.error) throw pRes.error
+      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[]); setProfiles((pRes.data ?? []) as Profile[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
   }
@@ -57,7 +57,7 @@ export default function AnalysisPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-900">Анализ доходов по участникам</h1>
+      <h1 className="page-title">Анализ доходов по участникам</h1>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between">
         <button onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { googleSheets } from '../lib/googleSheets'
 import type { AppNotification } from '../lib/types'
 import { formatDate } from '../lib/dates'
 import { Check, Trash2, Bell } from 'lucide-react'
@@ -16,7 +16,7 @@ export default function NotificationsPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const q = supabase.from('notifications').select('*').eq('family_id', family.id).order('created_at', { ascending: false })
+      const q = googleSheets.from('notifications').select('*').eq('family_id', family.id).order('created_at', { ascending: false })
       const { data, error: err } = filter === 'unread' ? await q.eq('read', false) : await q
       if (err) throw err
       setItems(data as AppNotification[])
@@ -27,17 +27,17 @@ export default function NotificationsPage() {
   useEffect(() => { load() }, [family?.id, filter])
   useEffect(() => {
     if (!family) return
-    const ch = supabase.channel('notif-page').on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const ch = googleSheets.channel('notif-page').on('table_changes', { event: '*', schema: 'public', table: 'notifications', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
-  const markRead = async (n: AppNotification) => { const { error: err } = await supabase.from('notifications').update({ read: true }).eq('id', n.id); if (err) setError(err.message); load() }
+  const markRead = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('id', n.id); if (err) setError(err.message); load() }
   const markAllRead = async () => {
     if (!family) return
-    const { error: err } = await supabase.from('notifications').update({ read: true }).eq('family_id', family.id).eq('read', false)
+    const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('family_id', family.id).eq('read', false)
     if (err) setError(err.message); load()
   }
-  const remove = async (n: AppNotification) => { const { error: err } = await supabase.from('notifications').delete().eq('id', n.id); if (err) setError(err.message); load() }
+  const remove = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').delete().eq('id', n.id); if (err) setError(err.message); load() }
 
   const KIND_LABELS: Record<string, string> = {
     budget_warning: 'Предупреждение о бюджете', goal_progress: 'Прогресс цели', recurring_due: 'Повторяющийся платёж',
@@ -47,7 +47,7 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Уведомления</h1>
+        <h1 className="page-title">Уведомления</h1>
         {items.some((n) => !n.read) && <button onClick={markAllRead} className="btn-secondary"><Check size={16} /> Отметить все прочитанными</button>}
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}

@@ -1,10 +1,7 @@
 import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { ensureProfile } from '../lib/categories'
+import { googleSheets } from '../lib/googleSheets'
 
 export default function AuthPage() {
-  const { refresh } = useAuth()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -18,14 +15,12 @@ export default function AuthPage() {
     setLoading(true)
     try {
       if (mode === 'signup') {
-        const { data, error: err } = await supabase.auth.signUp({ email, password })
+        const { error: err } = await googleSheets.auth.signUp({ email, password, options: { data: { display_name: name || email.split('@')[0] } } })
         if (err) throw err
-        if (data.user) await ensureProfile(data.user.id, name || email.split('@')[0])
       } else {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+        const { error: err } = await googleSheets.auth.signInWithPassword({ email, password })
         if (err) throw err
       }
-      await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка авторизации')
     } finally {
@@ -34,18 +29,19 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-canvas">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-slate-900">Бюджет для двоих</h1>
-          <p className="text-sm text-slate-500 mt-1">Семейный финансовый менеджер</p>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-100 text-2xl font-semibold text-primary-800 shadow-sm">Б</div>
+          <h1 className="page-title">Бюджет для двоих</h1>
+          <p className="text-sm text-slate-500 mt-1">Общее пространство для ваших финансов</p>
         </div>
 
         <div className="card">
-          <div className="flex gap-1 mb-4 p-1 bg-slate-100 rounded-lg">
+          <div className="flex gap-1 mb-5 p-1 bg-slate-100 rounded-xl">
             <button
               onClick={() => setMode('signin')}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${mode === 'signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mode === 'signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
             >
               Вход
             </button>
@@ -70,7 +66,7 @@ export default function AuthPage() {
             </div>
             <div>
               <label className="label">Пароль</label>
-              <input className="input" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 6 символов" />
+              <input className="input" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 8 символов" />
             </div>
             {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
             <button type="submit" disabled={loading} className="btn-primary w-full">

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { googleSheets } from '../lib/googleSheets'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles, kopecksToRubles } from '../lib/money'
-import { monthRange } from '../lib/dates'
+import { monthRange, currentMoscowDate } from '../lib/dates'
 import { Download } from 'lucide-react'
 
 type Period = 'current' | 'prev' | '3m' | '6m' | 'year' | 'custom'
@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const [memberFilter, setMemberFilter] = useState<string>('all')
 
   const range = useMemo(() => {
-    const now = new Date()
+    const now = currentMoscowDate()
     if (period === 'current') return monthRange(now.getFullYear(), now.getMonth())
     if (period === 'prev') { const d = new Date(now.getFullYear(), now.getMonth() - 1, 1); return monthRange(d.getFullYear(), d.getMonth()) }
     if (period === '3m') { const d = new Date(now.getFullYear(), now.getMonth() - 2, 1); return { start: monthRange(d.getFullYear(), d.getMonth()).start, end: monthRange(now.getFullYear(), now.getMonth()).end } }
@@ -34,14 +34,14 @@ export default function ReportsPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [tRes, cRes] = await Promise.all([
-        supabase.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        supabase.from('categories').select('*').eq('family_id', family.id).eq('archived', false),
-      ])
-      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error
-      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[])
       const memberIds = members.map((m) => m.user_id)
-      if (memberIds.length > 0) { const { data: pRes } = await supabase.from('profiles').select('*').in('id', memberIds); setProfiles(pRes as Profile[] ?? []) }
+      const [tRes, cRes, pRes] = await Promise.all([
+        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
+        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        memberIds.length > 0 ? googleSheets.from('profiles').select('*').in('id', memberIds) : Promise.resolve({ data: [], error: null }),
+      ])
+      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error; if (pRes.error) throw pRes.error
+      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[]); setProfiles((pRes.data ?? []) as Profile[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
   }
@@ -91,7 +91,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Отчёты</h1>
+        <h1 className="page-title">Отчёты</h1>
         <button onClick={exportCSV} disabled={filteredTxs.length === 0} className="btn-secondary"><Download size={16} /> Экспорт CSV</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}

@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { ensureProfile, seedDefaultCategories } from '../lib/categories'
+import { googleSheets } from '../lib/googleSheets'
 
 export default function OnboardingPage() {
   const { session, profile, refresh } = useAuth()
@@ -20,25 +19,19 @@ export default function OnboardingPage() {
     setLoading(true)
     try {
       if (!session?.user) throw new Error('Нет сессии')
-      if (userName.trim()) await ensureProfile(session.user.id, userName.trim())
-
       if (mode === 'create') {
-        const { data: fam, error: fErr } = await supabase
-          .from('families')
-          .insert({ name: familyName.trim(), created_by: session.user.id })
-          .select('*')
-          .single()
-        if (fErr) throw fErr
-        const { error: mErr } = await supabase
-          .from('family_members')
-          .insert({ family_id: fam.id, user_id: session.user.id, role: 'owner' })
-        if (mErr) throw mErr
-        await seedDefaultCategories(fam.id)
+        if (!familyName.trim()) throw new Error('Введите название семьи')
+        const { error: createErr } = await googleSheets.rpc('create_family', {
+          p_name: familyName.trim(),
+          p_display_name: userName.trim(),
+        })
+        if (createErr) throw createErr
       } else {
         const code = inviteCode.trim().toUpperCase()
         if (!code) throw new Error('Введите код приглашения')
-        const { error: joinErr } = await supabase.rpc('join_family_by_invite', {
+        const { error: joinErr } = await googleSheets.rpc('join_family_by_invite', {
           p_invite_code: code,
+          p_display_name: userName.trim(),
         })
         if (joinErr) throw joinErr
       }
@@ -52,13 +45,16 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center bg-canvas p-4">
       <div className="w-full max-w-md">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Добро пожаловать</h1>
-        <p className="text-sm text-slate-500 mb-6">Создайте семейное пространство или присоединитесь к существующему.</p>
+        <div className="mb-6">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-100 text-xl font-semibold text-primary-800">Б</div>
+          <h1 className="page-title mb-1">Добро пожаловать</h1>
+          <p className="text-sm text-slate-500">Создайте семейное пространство или присоединитесь к существующему.</p>
+        </div>
 
-        <div className="flex gap-1 mb-4 p-1 bg-slate-100 rounded-lg">
-          <button onClick={() => setMode('create')} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${mode === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+        <div className="flex gap-1 mb-5 p-1 bg-slate-100 rounded-xl">
+          <button onClick={() => setMode('create')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mode === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
             Создать семью
           </button>
           <button onClick={() => setMode('join')} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${mode === 'join' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>

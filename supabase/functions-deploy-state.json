@@ -1,9 +1,0 @@
-{
-  "projectId": "72440034",
-  "functions": {
-    "telegram-bot": {
-      "hasChanged": false,
-      "hash": "ae3f5a531deace60468f6939e261647d94451c5dcc291b0b97e7115b6fb81bf5"
-    }
-  }
-}
