@@ -448,6 +448,7 @@ function validateRelations_(table,row,user){
 }
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
+  if(table==='telegram_links'||table==='telegram_link_codes')throw new Error('Служебная Telegram-таблица недоступна через обычный API');
   let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const filters=req.filters||[];
   const matches=(row)=>filters.every(f=>{
@@ -629,7 +630,7 @@ function rpc_(req,user){
     const familyId=String(members[0].family_id);
     const existing=rows_('telegram_links').find(x=>String(x.user_id)===user.id&&String(x.family_id)===familyId);
     if(existing)throw new Error('К Telegram уже привязан аккаунт. Сначала отвяжите его.');
-    const code=code_().slice(0,8), expires=new Date(Date.now()+15*60*1000).toISOString();
+    const code=code_().slice(0,12), expires=new Date(Date.now()+15*60*1000).toISOString();
     const old=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id&&!x.used_at);
     if(old.length)deleteRows_('telegram_link_codes',old);
     appendRows_('telegram_link_codes',[{id:id_(),user_id:user.id,family_id:familyId,code_hash:telegramCodeHash_(code),expires_at:expires,used_at:'',created_at:now_()}]);
@@ -741,6 +742,12 @@ function telegramWebhook_(req){
   const expected=props.getProperty('TELEGRAM_BACKEND_SECRET');
   if(!expected||!safeEqual_(String(req.telegramSecret||''),expected))throw new Error('Webhook authentication failed');
   const update=req.update||{}, updateId=String(update.update_id||'');
+  const lastPrune=Number(props.getProperty('telegram:last_prune')||0);
+  if(Date.now()-lastPrune>21600000){
+    const all=props.getProperties();
+    Object.keys(all).forEach(key=>{if(!key.startsWith('telegram:update:'))return;try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=Date.now())props.deleteProperty(key);}catch(_){props.deleteProperty(key);}});
+    props.setProperty('telegram:last_prune',String(Date.now()));
+  }
   const updateKey=updateId?'telegram:update:'+updateId:'';
   if(updateKey){
     const saved=props.getProperty(updateKey);
