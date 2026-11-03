@@ -1133,7 +1133,7 @@ test('Telegram one-time linking records transactions through the existing family
   props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret');
   const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
-  assert.equal(generated.data.code.length, 8);
+  assert.equal(generated.data.code.length, 12);
 
   const linked = h.call({
     action: 'telegramWebhook',
@@ -1204,4 +1204,21 @@ test('Telegram webhook rejects an invalid backend secret and prevents reuse of a
     update: { update_id: 7103, message: { chat: { id: 702, type: 'private' }, from: { id: 702 }, text: '/link ' + generated.data.code }}
   });
   assert.match(reused.error.message, /код не найден/i);
+});
+
+
+test('Telegram link tables cannot be forged through the public generic data API', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-table-guard@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита Telegram' }).data;
+  const forgedLink = h.call({
+    action: 'query', token: user.token, table: 'telegram_links', mode: 'insert',
+    values: { family_id: family.id, user_id: user.user.id, telegram_user_id: '999999999', telegram_chat_id: '999999999' }
+  });
+  assert.match(forgedLink.error.message, /служебная Telegram-таблица/i);
+  const forgedCode = h.call({
+    action: 'query', token: user.token, table: 'telegram_link_codes', mode: 'insert',
+    values: { family_id: family.id, user_id: user.user.id, code_hash: 'forged', expires_at: '2099-01-01T00:00:00.000Z' }
+  });
+  assert.match(forgedCode.error.message, /служебная Telegram-таблица/i);
 });
