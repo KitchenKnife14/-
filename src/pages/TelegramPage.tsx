@@ -5,11 +5,6 @@ import { googleSheets } from '../lib/googleSheets'
 type TelegramStatus = { linked: boolean; linked_at?: string; telegram_chat_id?: string }
 type LinkCode = { code: string; expires_at: string }
 
-function formatExpiry(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-}
-
 export default function TelegramPage() {
   const [status, setStatus] = useState<TelegramStatus | null>(null)
   const [code, setCode] = useState<LinkCode | null>(null)
@@ -100,7 +95,7 @@ export default function TelegramPage() {
                     <button type="button" onClick={copyCode} className="btn-secondary px-3 py-2"><Copy size={15} /> Копировать команду</button>
                   </div>
                   <p className="mt-2 text-xs text-muted">Отправьте боту: <code className="font-semibold">/link {code.code}</code></p>
-                  <p className="mt-1 text-xs text-muted">Истекает сегодня в {formatExpiry(code.expires_at)}.</p>
+                  <p className="mt-1 text-xs text-muted">Истекает: {new Date(code.expires_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.</p>
                 </div>
               )}
             </div>
