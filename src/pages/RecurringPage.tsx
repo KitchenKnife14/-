@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { ensureSupplementalCategories } from '../lib/categories'
 import type { RecurringPayment, Category, Account, FamilyMember, Profile } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
@@ -23,7 +24,9 @@ export default function RecurringPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [rRes, cRes, aRes] = await Promise.all([
+      const categoryMigration = ensureSupplementalCategories(family.id)
+      const [, rRes, cRes, aRes] = await Promise.all([
+        categoryMigration,
         googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).order('next_due_date', { ascending: true }),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
         googleSheets.from('accounts').select('*').eq('family_id', family.id),

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { ensureSupplementalCategories } from '../lib/categories'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO, currentMoscowDate } from '../lib/dates'
@@ -29,7 +30,9 @@ export default function CalendarPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [tRes, rRes, cRes] = await Promise.all([
+      const categoryMigration = ensureSupplementalCategories(family.id)
+      const [, tRes, rRes, cRes] = await Promise.all([
+        categoryMigration,
         googleSheets.from('transactions').select('*').eq('family_id', family.id).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
         googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).eq('active', true),
         googleSheets.from('categories').select('*').eq('family_id', family.id),

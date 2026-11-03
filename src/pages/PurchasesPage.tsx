@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { ensureSupplementalCategories } from '../lib/categories'
 import type { PlannedPurchase, Category, Goal, Account } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
@@ -32,7 +33,9 @@ export default function PurchasesPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [pRes, cRes, gRes, aRes] = await Promise.all([
+      const categoryMigration = ensureSupplementalCategories(family.id)
+      const [, pRes, cRes, gRes, aRes] = await Promise.all([
+        categoryMigration,
         googleSheets.from('planned_purchases').select('*').eq('family_id', family.id).order('created_at', { ascending: false }),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
         googleSheets.from('goals').select('*').eq('family_id', family.id),
