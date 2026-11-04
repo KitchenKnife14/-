@@ -1145,6 +1145,8 @@ test('Telegram one-time linking records transactions through the existing family
   });
   assert.equal(linked.error, null, linked.error?.message);
   assert.match(linked.data.text, /успешно привязан/);
+  assert.ok(linked.data.text.includes('\n'), 'Telegram replies should contain real line breaks');
+  assert.equal(linked.data.text.includes('\\n'), false, 'Telegram replies must not contain escaped newline text');
 
   const added = h.call({
     action: 'telegramWebhook',
