@@ -27,7 +27,9 @@ const SESSION_TTL = 60 * 60 * 24 * 14;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 const API_VERSION=11, BATCH_MAX=25;
-let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0; // кэш открытой таблицы и счётчики для замера (на время ОДНОГО запроса)
+let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0, SHEET_READ_MS=0, SHEET_WRITE_MS=0; // метрики сервисных вызовов Sheets на один запрос
+function timedSheetRead_(fn){const t=Date.now();try{return fn();}finally{SHEET_READ_MS+=Date.now()-t;}}
+function timedSheetWrite_(fn){const t=Date.now();try{return fn();}finally{SHEET_WRITE_MS+=Date.now()-t;}}
 const DEFAULT_CATEGORIES=[{"name":"Жильё и обязательные платежи","kind":"expense","icon":"🏠","color":"#2563eb","children":[{"name":"Аренда квартиры","icon":"🔑","color":"#2563eb"},{"name":"Ипотека","icon":"🏦","color":"#2563eb"},{"name":"Коммунальные услуги","icon":"💡","color":"#2563eb"},{"name":"Интернет","icon":"🌐","color":"#2563eb"},{"name":"Мобильная связь","icon":"📱","color":"#2563eb"},{"name":"Обслуживание жилья","icon":"🧰","color":"#2563eb"},{"name":"Ремонт","icon":"🛠️","color":"#2563eb"},{"name":"Мебель и предметы интерьера","icon":"🛋️","color":"#2563eb"}]},{"name":"Продукты и питание","kind":"expense","icon":"🛒","color":"#16a34a","children":[{"name":"Продукты домой","icon":"🥦","color":"#16a34a"},{"name":"Кафе и рестораны","icon":"🍽️","color":"#16a34a"},{"name":"Доставка еды","icon":"🛵","color":"#16a34a"},{"name":"Кофе и перекусы на работе","icon":"☕","color":"#16a34a"}]},{"name":"Быт","kind":"expense","icon":"🧴","color":"#0891b2","children":[{"name":"Бытовая химия","icon":"🧼","color":"#0891b2"},{"name":"Средства гигиены","icon":"🪥","color":"#0891b2"},{"name":"Товары для дома","icon":"🏠","color":"#0891b2"},{"name":"Расходные материалы","icon":"📦","color":"#0891b2"},{"name":"Мелкие бытовые покупки","icon":"🧺","color":"#0891b2"}]},{"name":"Транспорт","kind":"expense","icon":"🚌","color":"#ea580c","children":[{"name":"Общественный транспорт","icon":"🚇","color":"#ea580c"},{"name":"Такси","icon":"🚕","color":"#ea580c"},{"name":"Бензин","icon":"⛽","color":"#ea580c"},{"name":"Обслуживание автомобиля","icon":"🚗","color":"#ea580c"},{"name":"Ремонт автомобиля","icon":"🔧","color":"#ea580c"},{"name":"Страхование и документы","icon":"📄","color":"#ea580c"},{"name":"Парковка","icon":"🅿️","color":"#ea580c"}]},{"name":"Здоровье","kind":"expense","icon":"🩺","color":"#dc2626","children":[{"name":"Врачи","icon":"👨‍⚕️","color":"#dc2626"},{"name":"Анализы и обследования","icon":"🧪","color":"#dc2626"},{"name":"Лекарства","icon":"💊","color":"#dc2626"},{"name":"Стоматология","icon":"🦷","color":"#dc2626"},{"name":"Медицинские процедуры","icon":"💉","color":"#dc2626"}]},{"name":"Личные расходы","kind":"expense","icon":"👕","color":"#7c3aed","children":[{"name":"Одежда и обувь","icon":"👕","color":"#7c3aed"},{"name":"Косметика","icon":"💄","color":"#7c3aed"},{"name":"Уход за собой","icon":"💆","color":"#7c3aed"},{"name":"Личные покупки","icon":"🛍️","color":"#7c3aed"}]},{"name":"Развлечения","kind":"expense","icon":"🎮","color":"#db2777","children":[{"name":"Кино и мероприятия","icon":"🎬","color":"#db2777"},{"name":"Игры","icon":"🎮","color":"#db2777"},{"name":"Подписки","icon":"📺","color":"#db2777"},{"name":"Музыка","icon":"🎵","color":"#db2777"},{"name":"Хобби","icon":"🎨","color":"#db2777"},{"name":"Путешествия и отдых","icon":"✈️","color":"#db2777"}]},{"name":"Техника","kind":"expense","icon":"💻","color":"#0f766e","children":[{"name":"Смартфоны","icon":"📱","color":"#0f766e"},{"name":"Компьютеры и комплектующие","icon":"💻","color":"#0f766e"},{"name":"Телевизоры","icon":"📺","color":"#0f766e"},{"name":"Бытовая техника","icon":"🔌","color":"#0f766e"},{"name":"Аудиотехника","icon":"🎧","color":"#0f766e"},{"name":"Аксессуары","icon":"🎮","color":"#0f766e"}]},{"name":"Семья и подарки","kind":"expense","icon":"🎁","color":"#c026d3","children":[{"name":"Подарки","icon":"🎁","color":"#c026d3"},{"name":"Праздники","icon":"🎉","color":"#c026d3"},{"name":"Совместные мероприятия","icon":"🥳","color":"#c026d3"},{"name":"Расходы на родственников","icon":"👨‍👩‍👧","color":"#c026d3"}]},{"name":"Финансовые операции","kind":"transfer","icon":"🔁","color":"#64748b","children":[{"name":"Погашение кредитов","icon":"💳","color":"#64748b"},{"name":"Проценты по кредитам","icon":"📈","color":"#64748b"},{"name":"Комиссии","icon":"💸","color":"#64748b"},{"name":"Банковские услуги","icon":"🏦","color":"#64748b"},{"name":"Переводы между счетами","icon":"🔁","color":"#64748b"}]},{"name":"Накопления","kind":"expense","icon":"🐷","color":"#059669","children":[{"name":"Резервный фонд","icon":"🛟","color":"#059669"},{"name":"Накопления на квартиру","icon":"🏢","color":"#059669"},{"name":"Накопления на автомобиль","icon":"🚙","color":"#059669"},{"name":"Накопления на крупные покупки","icon":"💰","color":"#059669"},{"name":"Другие цели","icon":"🎯","color":"#059669"}]},{"name":"Прочее","kind":"expense","icon":"📦","color":"#6b7280","children":[{"name":"Непредвиденные расходы","icon":"⚠️","color":"#6b7280"},{"name":"Неопределённая категория","icon":"❓","color":"#6b7280"}]},{"name":"Доходы","kind":"income","icon":"💵","color":"#16a34a","children":[{"name":"Зарплата первого участника","icon":"👨","color":"#16a34a"},{"name":"Зарплата второго участника","icon":"👩","color":"#16a34a"},{"name":"Премии","icon":"🌟","color":"#16a34a"},{"name":"Подработки","icon":"🛠️","color":"#16a34a"},{"name":"Возвраты и компенсации","icon":"↩️","color":"#16a34a"},{"name":"Доходы от продажи вещей","icon":"🏷️","color":"#16a34a"},{"name":"Проценты и инвестиционный доход","icon":"📈","color":"#16a34a"},{"name":"Прочие доходы","icon":"➕","color":"#16a34a"}]}];
 // Кэш чтения листов на время ОДНОГО запроса (сбрасывается в doPost и после каждой записи).
 let ROWS_CACHE = {};
@@ -46,7 +48,7 @@ function doPost(e) {
   const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
   const lock = LockService.getScriptLock();
   try {
-    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0;
+    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
     if (req.action === 'telegramWebhook') {
@@ -78,7 +80,7 @@ function doPost(e) {
   } finally {
     // Одна строка в журнале выполнения: только названия действий и числа, без данных пользователей.
     const ended = Date.now();
-    try { console.log(JSON.stringify({act:req&&req.action,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES})); } catch (_) {}
+    try { console.log(JSON.stringify({act:req&&req.action,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS})); } catch (_) {}
   }
 }
 function batch_(req){
@@ -94,12 +96,12 @@ function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSp
 function sheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
-  if (!sh) { sh=ss.insertSheet(name); SHEET_WRITES++; sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]]); sh.setFrozenRows(1); formatSheet_(sh,name); }
+  if (!sh) { sh=ss.insertSheet(name); SHEET_WRITES++; timedSheetWrite_(()=>sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]])); sh.setFrozenRows(1); formatSheet_(sh,name); }
   // Заголовки проверяем не на каждый запрос: успешная проверка запоминается на 6 часов (ключ содержит версию API).
   const hdrKey='hdr'+API_VERSION+':'+name; let cache=null; try{cache=CacheService.getScriptCache();}catch(_){}
   if (cache && cache.get(hdrKey)==='1') return sh;
   SHEET_READS++;
-  const header=sh.getRange(1,1,1,TABLES[name].length).getValues()[0];
+  const header=timedSheetRead_(()=>sh.getRange(1,1,1,TABLES[name].length).getValues())[0];
   let used=header.length;
   while(used>0&&(header[used-1]===''||header[used-1]===null))used--;
   const current=header.slice(0,used), expected=TABLES[name];
@@ -109,7 +111,7 @@ function sheet_(name) {
     const safePrefix=current.length<expected.length&&current.every((value,index)=>value===expected[index]);
     if(!safePrefix)throw new Error('Не совпадает структура листа '+name+'; автоматическое изменение небезопасно');
     const missing=expected.slice(current.length);
-    sh.getRange(1,current.length+1,1,missing.length).setValues([missing]);
+    timedSheetWrite_(()=>sh.getRange(1,current.length+1,1,missing.length).setValues([missing]));
     SHEET_WRITES++;
   }
   if (cache) { try{cache.put(hdrKey,'1',21600);}catch(_){} }
@@ -121,7 +123,7 @@ function rows_(name) {
 }
 function readRows_(name) {
   SHEET_READS++;
-  const sh=sheet_(name), values=sh.getDataRange().getValues(); if(values.length<2) return [];
+  const sh=sheet_(name), values=timedSheetRead_(()=>sh.getDataRange().getValues()); if(values.length<2) return [];
   return values.slice(1).map((r,i)=>({values:r,row:i+2})).filter(x=>x.values.some(v=>v!==''&&v!==null)).map(({values:r,row})=>{
     const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j],k));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=row;return o;
   });
@@ -148,7 +150,7 @@ function appendRows_(name, data) {
   const need=start+data.length-1;
   if(sh.getMaxRows()<need){sh.insertRowsAfter(sh.getMaxRows(),need-sh.getMaxRows()+500);formatSheet_(sh,name);}
   delete ROWS_CACHE[name];
-  sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
+  timedSheetWrite_(()=>sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
   SHEET_WRITES++;
   touchTableRevision_(name);
 }
@@ -162,7 +164,7 @@ function updateRows_(name, data) {
   let group=[];
   const flush=()=>{
     if(!group.length)return;
-    sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
+    timedSheetWrite_(()=>sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
     group=[];
   };
   sorted.forEach(row=>{if(group.length&&row.__row!==group[group.length-1].__row+1)flush();group.push(row);});
@@ -179,7 +181,7 @@ function deleteRows_(name, data) {
   while(i<rowNumbers.length){
     const high=rowNumbers[i];let low=high;i++;
     while(i<rowNumbers.length&&rowNumbers[i]===low-1){low=rowNumbers[i];i++;}
-    sh.deleteRows(low,high-low+1);
+    timedSheetWrite_(()=>sh.deleteRows(low,high-low+1));
   }
   SHEET_WRITES++;
   touchTableRevision_(name);
@@ -190,8 +192,8 @@ function writeRows_(name, data) {
   delete ROWS_CACHE[name];
   // Лист по умолчанию содержит 1000 строк; без расширения запись большего числа строк падает.
   const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
-  if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
-  const last=sh.getLastRow(); if(last>data.length+1) sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent();
+  if (data.length) timedSheetWrite_(()=>sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
+  const last=sh.getLastRow(); if(last>data.length+1) timedSheetWrite_(()=>sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent());
   touchTableRevision_(name);
 }
 function now_(){return new Date().toISOString();}
@@ -199,10 +201,10 @@ function id_(){return Utilities.getUuid();}
 function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();}
 function authSheet_(){
   const ss=ss_(); let sh=ss.getSheetByName(AUTH_SHEET);
-  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]);sh.hideSheet();formatAuth_(sh);}
+  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;timedSheetWrite_(()=>sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]));sh.hideSheet();formatAuth_(sh);}
   return sh;
 }
-function authRows_(){SHEET_READS++;const sh=authSheet_(),v=sh.getDataRange().getValues();return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
+function authRows_(){SHEET_READS++;const sh=authSheet_(),v=timedSheetRead_(()=>sh.getDataRange().getValues());return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
 function hash_(password,salt){let digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+password,Utilities.Charset.UTF_8);for(let i=0;i<10000;i++)digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,digest);return Utilities.base64Encode(digest);}
 /* ===== Проверка пароля: PBKDF2-HMAC-SHA256 на чистом JavaScript =====
    Прежний цикл из 10 000 вызовов Utilities.computeDigest занимал ~5 секунд (каждый вызов — обращение к сервису Google).
@@ -324,13 +326,13 @@ function signup_(req){
   if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
   if(authRows_().some(u=>u.email===email)) throw new Error('Аккаунт с таким email уже существует');
   const id=id_(), salt=Utilities.getUuid();
-  SHEET_WRITES++; authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_));
+  SHEET_WRITES++; timedSheetWrite_(()=>authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_)));
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
   try{ensureProfile_(id,name||email.split('@')[0]);}
   catch(err){
     const cleanup=[];
-    try{const row=authRows_().find(u=>u.id===id);if(row){SHEET_WRITES++;authSheet_().deleteRow(row.row);}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    try{const row=authRows_().find(u=>u.id===id);if(row){SHEET_WRITES++;timedSheetWrite_(()=>authSheet_().deleteRow(row.row));}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     try{PropertiesService.getScriptProperties().deleteProperty('session:'+token);}catch(cleanupErr){cleanup.push('сессия: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     if(cleanup.length)throw new Error('Не удалось полностью отменить регистрацию: '+cleanup.join('; ')+'. Исходная ошибка: '+(err&&err.message?err.message:String(err)));
     throw err;
@@ -355,7 +357,7 @@ function signin_(req){
   }
   props.deleteProperty(attemptKey);
   // Старый аккаунт: после успешного входа заменяем медленный прежний хеш на новый (следующие входы будут быстрыми).
-  if(isLegacyHash_(u.hash)){try{SHEET_WRITES++;authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt));}catch(_){}}
+  if(isLegacyHash_(u.hash)){try{SHEET_WRITES++;timedSheetWrite_(()=>authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt)));}catch(_){}}
   const token=id_()+id_();
   props.setProperty('session:'+token,JSON.stringify({userId:u.id,expires:now+SESSION_TTL*1000}));
   return {token,user:{id:u.id,email:u.email}};
@@ -505,7 +507,7 @@ function readTransactionRangeRows_(filters,user){
   const columns=TABLES.transactions,familyIndex=columns.indexOf('family_id'),dateIndex=columns.indexOf('operation_date');
   if(familyIndex<0||dateIndex<=familyIndex)return null;
   SHEET_READS++;
-  const indexValues=sh.getRange(2,familyIndex+1,rowCount,dateIndex-familyIndex+1).getValues();
+  const indexValues=timedSheetRead_(()=>sh.getRange(2,familyIndex+1,rowCount,dateIndex-familyIndex+1).getValues());
   const candidates=[];
   const first=filters.find(f=>f.column==='operation_date'&&f.op==='gte');
   const last=filters.find(f=>f.column==='operation_date'&&f.op==='lte');
@@ -533,7 +535,7 @@ function readTransactionRangeRows_(filters,user){
   const result=[];
   groups.forEach(group=>{
     SHEET_READS++;
-    const block=sh.getRange(group.start,1,group.count,columns.length).getValues();
+    const block=timedSheetRead_(()=>sh.getRange(group.start,1,group.count,columns.length).getValues());
     block.forEach((values,index)=>{
       const row={};
       columns.forEach((column,columnIndex)=>row[column]=normal_(values[columnIndex],column));
@@ -1007,9 +1009,9 @@ function telegramWebhook_(req){
 
 /* ===== Служебные функции: запускаются вручную в редакторе Apps Script (меню «Выполнить») ===== */
 function formatSheet_(sh,name){
-  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@');});
+  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)timedSheetWrite_(()=>sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@'));});
 }
-function formatAuth_(sh){sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@');}
+function formatAuth_(sh){timedSheetWrite_(()=>sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@'));}
 // Один раз после установки: применяет текстовый формат к столбцам всех листов.
 function setupSheets(){
   Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));
