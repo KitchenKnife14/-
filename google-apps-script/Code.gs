@@ -96,7 +96,7 @@ function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSp
 function sheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
-  if (!sh) { sh=ss.insertSheet(name); SHEET_WRITES++; sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]]); sh.setFrozenRows(1); formatSheet_(sh,name); }
+  if (!sh) { sh=ss.insertSheet(name); SHEET_WRITES++; timedSheetWrite_(()=>sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]])); sh.setFrozenRows(1); formatSheet_(sh,name); }
   // Заголовки проверяем не на каждый запрос: успешная проверка запоминается на 6 часов (ключ содержит версию API).
   const hdrKey='hdr'+API_VERSION+':'+name; let cache=null; try{cache=CacheService.getScriptCache();}catch(_){}
   if (cache && cache.get(hdrKey)==='1') return sh;
@@ -111,7 +111,7 @@ function sheet_(name) {
     const safePrefix=current.length<expected.length&&current.every((value,index)=>value===expected[index]);
     if(!safePrefix)throw new Error('Не совпадает структура листа '+name+'; автоматическое изменение небезопасно');
     const missing=expected.slice(current.length);
-    sh.getRange(1,current.length+1,1,missing.length).setValues([missing]);
+    timedSheetWrite_(()=>sh.getRange(1,current.length+1,1,missing.length).setValues([missing]));
     SHEET_WRITES++;
   }
   if (cache) { try{cache.put(hdrKey,'1',21600);}catch(_){} }
@@ -192,8 +192,8 @@ function writeRows_(name, data) {
   delete ROWS_CACHE[name];
   // Лист по умолчанию содержит 1000 строк; без расширения запись большего числа строк падает.
   const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
-  if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
-  const last=sh.getLastRow(); if(last>data.length+1) sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent();
+  if (data.length) timedSheetWrite_(()=>sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
+  const last=sh.getLastRow(); if(last>data.length+1) timedSheetWrite_(()=>sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent());
   touchTableRevision_(name);
 }
 function now_(){return new Date().toISOString();}
@@ -201,7 +201,7 @@ function id_(){return Utilities.getUuid();}
 function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();}
 function authSheet_(){
   const ss=ss_(); let sh=ss.getSheetByName(AUTH_SHEET);
-  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]);sh.hideSheet();formatAuth_(sh);}
+  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;timedSheetWrite_(()=>sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]));sh.hideSheet();formatAuth_(sh);}
   return sh;
 }
 function authRows_(){SHEET_READS++;const sh=authSheet_(),v=timedSheetRead_(()=>sh.getDataRange().getValues());return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
@@ -326,13 +326,13 @@ function signup_(req){
   if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
   if(authRows_().some(u=>u.email===email)) throw new Error('Аккаунт с таким email уже существует');
   const id=id_(), salt=Utilities.getUuid();
-  SHEET_WRITES++; authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_));
+  SHEET_WRITES++; timedSheetWrite_(()=>authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_)));
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
   try{ensureProfile_(id,name||email.split('@')[0]);}
   catch(err){
     const cleanup=[];
-    try{const row=authRows_().find(u=>u.id===id);if(row){SHEET_WRITES++;authSheet_().deleteRow(row.row);}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    try{const row=authRows_().find(u=>u.id===id);if(row){SHEET_WRITES++;timedSheetWrite_(()=>authSheet_().deleteRow(row.row));}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     try{PropertiesService.getScriptProperties().deleteProperty('session:'+token);}catch(cleanupErr){cleanup.push('сессия: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     if(cleanup.length)throw new Error('Не удалось полностью отменить регистрацию: '+cleanup.join('; ')+'. Исходная ошибка: '+(err&&err.message?err.message:String(err)));
     throw err;
@@ -357,7 +357,7 @@ function signin_(req){
   }
   props.deleteProperty(attemptKey);
   // Старый аккаунт: после успешного входа заменяем медленный прежний хеш на новый (следующие входы будут быстрыми).
-  if(isLegacyHash_(u.hash)){try{SHEET_WRITES++;authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt));}catch(_){}}
+  if(isLegacyHash_(u.hash)){try{SHEET_WRITES++;timedSheetWrite_(()=>authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt)));}catch(_){}}
   const token=id_()+id_();
   props.setProperty('session:'+token,JSON.stringify({userId:u.id,expires:now+SESSION_TTL*1000}));
   return {token,user:{id:u.id,email:u.email}};
@@ -1009,9 +1009,9 @@ function telegramWebhook_(req){
 
 /* ===== Служебные функции: запускаются вручную в редакторе Apps Script (меню «Выполнить») ===== */
 function formatSheet_(sh,name){
-  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@');});
+  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)timedSheetWrite_(()=>sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@'));});
 }
-function formatAuth_(sh){sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@');}
+function formatAuth_(sh){timedSheetWrite_(()=>sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@'));}
 // Один раз после установки: применяет текстовый формат к столбцам всех листов.
 function setupSheets(){
   Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));
