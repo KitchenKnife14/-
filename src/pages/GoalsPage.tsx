@@ -11,7 +11,7 @@ const STATUS_LABELS: Record<string, string> = { active: 'Активная', paus
 const STATUS_COLORS: Record<string, string> = { active: 'bg-primary-50 text-primary-600', paused: 'bg-warn-50 text-warn-600', done: 'bg-accent-50 text-accent-600', cancelled: 'bg-danger-50 text-danger-600' }
 
 export default function GoalsPage() {
-  const { family } = useAuth()
+  const { family, memberProfiles } = useAuth()
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -20,6 +20,10 @@ export default function GoalsPage() {
   const [contribGoal, setContribGoal] = useState<Goal | null>(null)
   const [historyGoal, setHistoryGoal] = useState<Goal | null>(null)
   const [contributions, setContributions] = useState<GoalContribution[]>([])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [participantFilter, setParticipantFilter] = useState('')
 
   const load = async () => {
     if (!family) return
@@ -57,6 +61,13 @@ export default function GoalsPage() {
 
   const totalTarget = goals.filter((g) => g.status === 'active').reduce((s, g) => s + g.target_kopecks, 0)
   const totalSaved = goals.filter((g) => g.status === 'active').reduce((s, g) => s + g.saved_kopecks, 0)
+  const filteredGoals = goals.filter((g) => {
+    if (statusFilter !== 'all' && g.status !== statusFilter) return false
+    if (priorityFilter !== 'all' && String(g.priority) !== priorityFilter) return false
+    if (participantFilter && g.responsible_user_id !== participantFilter) return false
+    const q = search.trim().toLocaleLowerCase('ru-RU')
+    return !q || `${g.name} ${g.description || ''}`.toLocaleLowerCase('ru-RU').includes(q)
+  })
   const sortedGoals = useMemo(() => [...goals].sort((a, b) => {
     const group = (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1)
     if (group) return group
@@ -73,6 +84,13 @@ export default function GoalsPage() {
         <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Цель</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <input className="input" placeholder="Поиск по названию" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Все статусы</option><option value="active">Активные</option><option value="paused">На паузе</option><option value="done">Достигнутые</option><option value="cancelled">Отменённые</option></select>
+        <select className="input" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">Любой приоритет</option><option value="1">Высокий</option><option value="2">Выше среднего</option><option value="3">Обычный</option><option value="4">Низкий</option><option value="5">Минимальный</option></select>
+        <select className="input" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+      </div>
+      {(search || statusFilter !== 'all' || priorityFilter !== 'all' || participantFilter) && <button onClick={() => { setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setParticipantFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
       {goals.filter((g) => g.status === 'active').length > 0 && (
         <div className="card bg-primary-50 border-primary-100">
           <div className="text-sm text-primary-700">Общий прогресс по активным целям</div>
@@ -82,9 +100,11 @@ export default function GoalsPage() {
       )}
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : goals.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500"><Target size={24} className="mx-auto mb-2 text-slate-300" />Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.</div>
+      ) : filteredGoals.length === 0 ? (
+        <div className="card text-center py-8 text-sm text-slate-500">По заданным фильтрам целей нет.</div>
       ) : (
         <div className="space-y-2">
-          {sortedGoals.map((g, index) => {
+          {sortedGoals.filter((g) => filteredGoals.some((f) => f.id === g.id)).map((g, index) => {
             const pct = g.target_kopecks > 0 ? (g.saved_kopecks / g.target_kopecks) * 100 : 0
             const remaining = g.target_kopecks - g.saved_kopecks
             const monthsLeft = g.target_date ? Math.max(1, Math.round((new Date(g.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24 * 30))) : null
