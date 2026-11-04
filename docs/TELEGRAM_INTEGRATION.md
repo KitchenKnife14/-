@@ -39,7 +39,7 @@ Use a separate Vercel project for the webhook so the main family-budget website 
 - Framework Preset: Other / no framework.
 - Build Command, Install Command and Output Directory: leave empty.
 - Disable Vercel Authentication only for this endpoint-only project.
-- Do not attach the website's custom domain or deploy this project to Production. Use its Preview URL for the Telegram webhook.
+- Do not attach the website's custom domain. This endpoint-only project may use its own Production deployment because it is separate from the family-budget website and has Vercel Authentication disabled only for this isolated webhook.
 - The endpoint path remains `/api/telegram/webhook`.
 
 ## Configuration — do not enable until test backend is ready
@@ -54,7 +54,7 @@ Do not use the Telegram bot token as this secret. Do not place the secret in sou
 
 ### Vercel environment variables
 
-In the dedicated Vercel project `budget-for-two-telegram-api`, add these server-side variables. Configure Preview only; do not add Production values.
+In the dedicated Vercel project `budget-for-two-telegram-api`, add these server-side variables to the **Production** environment of this endpoint-only project. Do not add them to the main website project.
 
 - `TELEGRAM_BOT_TOKEN`: token issued by BotFather.
 - `TELEGRAM_WEBHOOK_SECRET`: a separate random string (Telegram accepts 1–256 characters; use a long random value).
@@ -65,9 +65,9 @@ Do not prefix these variables with `VITE_`. Only `VITE_*` variables are exposed 
 
 ### Register the Telegram webhook
 
-After deploying the Vercel Preview function and configuring its environment variables, register the webhook using Telegram's `setWebhook` method. Use:
+After the dedicated endpoint project's Production deployment is READY and its server-side environment variables are configured, register the webhook using Telegram's `setWebhook` method. Use:
 
-- URL: `https://YOUR-TELEGRAM-WEBHOOK-PREVIEW/api/telegram/webhook`
+- URL: `https://budget-for-two-telegram-api-nikita-aa7c.vercel.app/api/telegram/webhook`
 - `secret_token`: the exact value of `TELEGRAM_WEBHOOK_SECRET`
 - `allowed_updates`: `["message"]`
 
@@ -75,7 +75,7 @@ Do not put the bot token or secret token in GitHub issues, source files, screens
 
 ## Apps Script update
 
-The current test deployment must be updated to include the new `Code.gs` before webhook testing. Update the existing deployment to a new version so its `/exec` URL remains unchanged.
+The test Apps Script deployment must be updated to API v10 before webhook testing. The source file is `google-apps-script/Code.gs` in branch `work/final-features-performance`. Keep the existing `/exec` URL by editing the current deployment and selecting **New version**. Update the existing deployment to a new version so its `/exec` URL remains unchanged.
 
 The new backend adds two sheets automatically:
 
@@ -102,4 +102,4 @@ Use the test table and test Telegram account only.
 
 ## Current limitations
 
-The first text parser is intentionally narrow. It recognizes a small set of common category aliases and otherwise assigns the "Неопределённая категория" category where available. It does not use an LLM and does not yet support editing/deleting transactions, account selection, transfers, receipts, or natural-language dates. These should be added only after the deterministic flow is tested end to end.
+The current Apps Script source is API v10. Do not activate the webhook against the live family data until a backup and data-source migration are confirmed. The first text parser is intentionally narrow. It recognizes a small set of common category aliases and otherwise assigns the "Неопределённая категория" category where available. It does not use an LLM and does not yet support editing/deleting transactions, account selection, transfers, receipts, or natural-language dates. These should be added only after the deterministic flow is tested end to end.
