@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main, migration/google-sheets, feature/telegram-integration]
   push:
-    branches: [migration/google-sheets, audit/backend-upsert-guards, work/design-telegram-foundation, feature/telegram-integration, work/final-features-performance]
+    branches: [migration/google-sheets, audit/backend-upsert-guards, work/design-telegram-foundation, feature/telegram-integration, work/final-features-performance, perf/sheets-io-instrumentation]
   workflow_dispatch:
 
 jobs:
