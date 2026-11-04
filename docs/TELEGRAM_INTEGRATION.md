@@ -75,7 +75,7 @@ Do not put the bot token or secret token in GitHub issues, source files, screens
 
 ## Apps Script update
 
-The test Apps Script deployment must be updated to API v10 before webhook testing. The source file is `google-apps-script/Code.gs` in branch `work/final-features-performance`. Keep the existing `/exec` URL by editing the current deployment and selecting **New version**. Update the existing deployment to a new version so its `/exec` URL remains unchanged.
+The test Apps Script deployment must be updated to API v11 before webhook testing. The source file is `google-apps-script/Code.gs` in branch `work/final-features-performance`. Keep the existing `/exec` URL by editing the current deployment and selecting **New version**. Update the existing deployment to a new version so its `/exec` URL remains unchanged.
 
 The new backend adds two sheets automatically:
 
@@ -102,4 +102,4 @@ Use the test table and test Telegram account only.
 
 ## Current limitations
 
-The current Apps Script source is API v10. Do not activate the webhook against the live family data until a backup and data-source migration are confirmed. The first text parser is intentionally narrow. It recognizes a small set of common category aliases and otherwise assigns the "Неопределённая категория" category where available. It does not use an LLM and does not yet support editing/deleting transactions, account selection, transfers, receipts, or natural-language dates. These should be added only after the deterministic flow is tested end to end.
+The current Apps Script source is API v11. Do not activate the webhook against the live family data until a backup and data-source migration are confirmed. The first text parser is intentionally narrow. It recognizes a small set of common category aliases and otherwise assigns the "Неопределённая категория" category where available. It does not use an LLM and does not yet support editing/deleting transactions, account selection, transfers, receipts, or natural-language dates. These should be added only after the deterministic flow is tested end to end.
