@@ -13,7 +13,7 @@ type View = 'month' | 'week' | 'day' | 'list'
 type TxFilter = 'all' | 'income' | 'expense' | 'transfer'
 
 export default function CalendarPage() {
-  const { family } = useAuth()
+  const { family, memberProfiles } = useAuth()
   const [txs, setTxs] = useState<Transaction[]>([])
   const [recurring, setRecurring] = useState<RecurringPayment[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -21,6 +21,8 @@ export default function CalendarPage() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('month')
   const [filter, setFilter] = useState<TxFilter>('all')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
   const [cursor, setCursor] = useState(currentMoscowDate)
   const [selectedDay, setSelectedDay] = useState<Date>(currentMoscowDate)
 
@@ -53,9 +55,10 @@ export default function CalendarPage() {
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
   const filteredTxs = txs.filter((t) => {
-    if (filter === 'all') return true
-    if (filter === 'income') return t.type === 'income'
-    return t.type === 'expense'
+    if (filter !== 'all' && t.type !== filter) return false
+    if (categoryFilter && t.category_id !== categoryFilter) return false
+    if (authorFilter && (t.responsible_user_id || t.created_by) !== authorFilter) return false
+    return true
   })
 
   const txsByDate = useMemo(() => {
@@ -182,10 +185,15 @@ export default function CalendarPage() {
         <div className="font-medium text-slate-700">{monthLabel(cursor.getFullYear(), cursor.getMonth())}</div>
         <button onClick={next} className="btn-ghost px-2"><ChevronRight size={18} /></button>
       </div>
-      <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
         {(['all', 'income', 'expense'] as TxFilter[]).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : f === 'income' ? 'Доходы' : 'Расходы'}</button>
+          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : f === 'income' ? 'Доходы' : f === 'expense' ? 'Расходы' : 'Переводы'}</button>
         ))}
+        </div>
+        <select className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select className="input w-auto min-w-[150px]" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+        {(categoryFilter || authorFilter || filter !== 'all') && <button onClick={() => { setFilter('all'); setCategoryFilter(''); setAuthorFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}
       </div>
 
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : (
