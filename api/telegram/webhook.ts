@@ -1,1 +1,1 @@
-export { default } from '../../telegram-webhook/handler'
+export { default } from '../../telegram-webhook/handler.js'
