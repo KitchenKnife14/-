@@ -927,9 +927,9 @@ function telegramWebhook_(req){
   const linkCommand=text.match(/^\/link(?:@\w+)?\s+([A-Z0-9]{6,16})$/i);
   if(/^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)){
     const linked=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
-    reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\\n\\nПример записи: Проезд 45 рублей\\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\\n/link ВАШ_КОД\\n\\nКод действует 15 минут.'};
+    reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\n\nПример записи: Проезд 45 рублей\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\n/link ВАШ_КОД\n\nКод действует 15 минут.'};
   }else if(/^\/help(?:@\w+)?$/i.test(text)){
-    reply={chat_id:chatId,text:'Команды:\\n/link КОД — привязать аккаунт приложения\\n/balance — сводка за текущий месяц\\n/unlink — отвязать Telegram\\n/help — помощь\\n\\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
+    reply={chat_id:chatId,text:'Команды:\n/link КОД — привязать аккаунт приложения\n/balance — сводка за текущий месяц\n/unlink — отвязать Telegram\n/help — помощь\n\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
   }else if(linkCommand){
     const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
     const candidate=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash&&!x.used_at&&String(x.expires_at)>now);
@@ -948,7 +948,7 @@ function telegramWebhook_(req){
       appendRows_('telegram_links',[{id:id_(),telegram_user_id:telegramUserId,telegram_chat_id:chatId,user_id:candidate.user_id,family_id:candidate.family_id,linked_at:now_()}]);
     }
     candidate.used_at=now_();updateRows_('telegram_link_codes',[candidate]);
-    reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\\n\\nТеперь отправьте, например: Проезд 45 рублей\\nКоманды: /help и /balance'};
+    reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
   }else if(/^\/unlink(?:@\w+)?$/i.test(text)){
     const links=rows_('telegram_links').filter(x=>String(x.telegram_user_id)===telegramUserId);
     if(links.length)deleteRows_('telegram_links',links);
@@ -963,7 +963,7 @@ function telegramWebhook_(req){
     const income=txs.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
     const expense=txs.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
     const rubles=n=>(n/100).toFixed(2).replace('.',',')+' ₽';
-    reply={chat_id:chatId,text:'Семейный бюджет за '+month+':\\nДоходы: '+rubles(income)+'\\nРасходы: '+rubles(expense)+'\\nРазница: '+rubles(income-expense)};
+    reply={chat_id:chatId,text:'Семейный бюджет за '+month+':\nДоходы: '+rubles(income)+'\nРасходы: '+rubles(expense)+'\nРазница: '+rubles(income-expense)};
   }else{
     const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
     if(!link)throw new Error('Сначала привяжите аккаунт в приложении и отправьте /link КОД.');
@@ -999,7 +999,7 @@ function telegramWebhook_(req){
     const operationTime=Utilities.formatDate(new Date(),'Europe/Moscow','HH:mm');
     query_({table:'transactions',mode:'insert',returning:true,values:{family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,responsible_user_id:link.user_id,description:description,planned:false}}, {id:String(link.user_id)});
     const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
-    reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\\nКатегория: '+category.name:'\\nКатегория не определена; проверьте её в приложении.')};
+    reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\nКатегория: '+category.name:'\nКатегория не определена; проверьте её в приложении.')};
   }
   if(updateKey)props.setProperty(updateKey,JSON.stringify({expires:Date.now()+86400000,reply}));
   return reply;
