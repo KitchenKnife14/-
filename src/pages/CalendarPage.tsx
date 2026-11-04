@@ -10,7 +10,7 @@ import { ru } from 'date-fns/locale'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addDays, parseISO } from 'date-fns'
 
 type View = 'month' | 'week' | 'day' | 'list'
-type TxFilter = 'all' | 'income' | 'expense'
+type TxFilter = 'all' | 'income' | 'expense' | 'transfer'
 
 export default function CalendarPage() {
   const { family } = useAuth()
