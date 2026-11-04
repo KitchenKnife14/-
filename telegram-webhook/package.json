@@ -7,6 +7,6 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "echo 'No build step required for Telegram webhook'"
+    "build": "node -e \"require('node:fs').mkdirSync('dist',{recursive:true});require('node:fs').writeFileSync('dist/index.html','Telegram webhook endpoint')\""
   }
 }
