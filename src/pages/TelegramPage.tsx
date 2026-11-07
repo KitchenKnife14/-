@@ -5,6 +5,10 @@ import { googleSheets } from '../lib/googleSheets'
 type TelegramStatus = { linked: boolean; linked_at?: string; telegram_chat_id?: string }
 type LinkCode = { code: string; expires_at: string }
 
+const isTestBackend = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL.includes(
+  'AKfycbyfEQe7t5YTDHfH5SwYDwe7oiQKMPViU3ZNmoo4X5HruDpBwqPAeMMMUbIbFsyWsbCe',
+)
+
 export default function TelegramPage() {
   const [status, setStatus] = useState<TelegramStatus | null>(null)
   const [code, setCode] = useState<LinkCode | null>(null)
@@ -67,7 +71,11 @@ export default function TelegramPage() {
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-50 text-primary-800"><MessageCircle size={21} /></div>
           <div className="min-w-0 flex-1">
             <h2 className="section-title">Подключение аккаунта</h2>
-            <p className="mt-1 text-sm leading-6 text-muted">Привязка связывает ваш Telegram ID с текущим пользователем приложения. Доступ второго участника семьи не передаётся автоматически. Настройка webhook и серверных секретов ещё не завершена — бот пока не принимает реальные операции.</p>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              {isTestBackend
+                ? 'Тестовый режим: операции через бота сохраняются только в таблицу «Семейный бюджет — тест». Используйте вымышленные данные.'
+                : 'Привязка связывает ваш Telegram ID с текущим пользователем приложения. Доступ второго участника семьи не передаётся автоматически. Бот работает в личном чате, а операции проходят через Apps Script с проверкой доступа к семье.'}
+            </p>
           </div>
         </div>
 
@@ -119,7 +127,11 @@ export default function TelegramPage() {
           <p><code className="rounded bg-canvas px-1.5 py-0.5 text-ink">/balance</code> — сводка за текущий месяц.</p>
           <p><code className="rounded bg-canvas px-1.5 py-0.5 text-ink">/help</code> — список команд.</p>
         </div>
-        <p className="border-t border-line pt-3 text-xs leading-5 text-muted">Бот пока находится в режиме подготовки. Пока webhook и секреты не настроены, подключение не завершится. Не отправляйте боту реальные финансовые данные до объявления о запуске тестирования.</p>
+        <p className="border-t border-line pt-3 text-xs leading-5 text-muted">
+          {isTestBackend
+            ? 'Это тестовая среда. Перед отправкой каждой операции проверяйте, что используете тестовый аккаунт и тестовую таблицу.'
+            : 'Перед отправкой проверяйте описание и сумму операции. Для доступа к семейному бюджету используйте только личный чат с ботом.'}
+        </p>
       </section>
 
       {error && <div role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</div>}
