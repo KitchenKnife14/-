@@ -2,9 +2,9 @@ name: Validate Google Sheets migration
 
 on:
   pull_request:
-    branches: [main, migration/google-sheets]
+    branches: [main, migration/google-sheets, feature/telegram-integration]
   push:
-    branches: [migration/google-sheets, audit/backend-upsert-guards, work/design-telegram-foundation]
+    branches: [migration/google-sheets, audit/backend-upsert-guards, work/design-telegram-foundation, feature/telegram-integration, work/final-features-performance]
   workflow_dispatch:
 
 jobs:
@@ -22,9 +22,7 @@ jobs:
         run: npm ci
       - name: TypeScript and production build
         run: npm run build
-      - name: Account balance regression tests
-        run: npm run test:balances
+      - name: All regression tests
+        run: npm test
       - name: Apps Script syntax check
         run: node --check < google-apps-script/Code.gs
-      - name: Apps Script API regression tests
-        run: node --test tests/apps-script.test.cjs

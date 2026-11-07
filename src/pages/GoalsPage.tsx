@@ -11,7 +11,7 @@ const STATUS_LABELS: Record<string, string> = { active: 'Активная', paus
 const STATUS_COLORS: Record<string, string> = { active: 'bg-primary-50 text-primary-600', paused: 'bg-warn-50 text-warn-600', done: 'bg-accent-50 text-accent-600', cancelled: 'bg-danger-50 text-danger-600' }
 
 export default function GoalsPage() {
-  const { family } = useAuth()
+  const { family, memberProfiles } = useAuth()
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -20,6 +20,10 @@ export default function GoalsPage() {
   const [contribGoal, setContribGoal] = useState<Goal | null>(null)
   const [historyGoal, setHistoryGoal] = useState<Goal | null>(null)
   const [contributions, setContributions] = useState<GoalContribution[]>([])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [participantFilter, setParticipantFilter] = useState('')
 
   const load = async () => {
     if (!family) return
@@ -57,6 +61,21 @@ export default function GoalsPage() {
 
   const totalTarget = goals.filter((g) => g.status === 'active').reduce((s, g) => s + g.target_kopecks, 0)
   const totalSaved = goals.filter((g) => g.status === 'active').reduce((s, g) => s + g.saved_kopecks, 0)
+  const filteredGoals = goals.filter((g) => {
+    if (statusFilter !== 'all' && g.status !== statusFilter) return false
+    if (priorityFilter !== 'all' && String(g.priority) !== priorityFilter) return false
+    if (participantFilter && g.responsible_user_id !== participantFilter) return false
+    const q = search.trim().toLocaleLowerCase('ru-RU')
+    return !q || `${g.name} ${g.description || ''}`.toLocaleLowerCase('ru-RU').includes(q)
+  })
+  const sortedGoals = useMemo(() => [...goals].sort((a, b) => {
+    const group = (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1)
+    if (group) return group
+    const priority = Number(a.priority || 3) - Number(b.priority || 3)
+    if (priority) return priority
+    const date = String(a.target_date || '9999-12-31').localeCompare(String(b.target_date || '9999-12-31'))
+    return date || String(a.created_at || '').localeCompare(String(b.created_at || ''))
+  }), [goals])
 
   return (
     <div className="space-y-4">
@@ -65,6 +84,13 @@ export default function GoalsPage() {
         <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Цель</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <input className="input" placeholder="Поиск по названию" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Все статусы</option><option value="active">Активные</option><option value="paused">На паузе</option><option value="done">Достигнутые</option><option value="cancelled">Отменённые</option></select>
+        <select className="input" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">Любой приоритет</option><option value="1">Высокий</option><option value="2">Выше среднего</option><option value="3">Обычный</option><option value="4">Низкий</option><option value="5">Минимальный</option></select>
+        <select className="input" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+      </div>
+      {(search || statusFilter !== 'all' || priorityFilter !== 'all' || participantFilter) && <button onClick={() => { setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setParticipantFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
       {goals.filter((g) => g.status === 'active').length > 0 && (
         <div className="card bg-primary-50 border-primary-100">
           <div className="text-sm text-primary-700">Общий прогресс по активным целям</div>
@@ -74,21 +100,27 @@ export default function GoalsPage() {
       )}
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : goals.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500"><Target size={24} className="mx-auto mb-2 text-slate-300" />Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.</div>
+      ) : filteredGoals.length === 0 ? (
+        <div className="card text-center py-8 text-sm text-slate-500">По заданным фильтрам целей нет.</div>
       ) : (
         <div className="space-y-2">
-          {goals.map((g) => {
+          {sortedGoals.filter((g) => filteredGoals.some((f) => f.id === g.id)).map((g, index) => {
             const pct = g.target_kopecks > 0 ? (g.saved_kopecks / g.target_kopecks) * 100 : 0
             const remaining = g.target_kopecks - g.saved_kopecks
             const monthsLeft = g.target_date ? Math.max(1, Math.round((new Date(g.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24 * 30))) : null
             const monthlyNeeded = monthsLeft && monthsLeft > 0 ? Math.round(remaining / monthsLeft) : null
             return (
-              <div key={g.id} className={`card ${g.status === 'done' || g.status === 'cancelled' ? 'opacity-60' : ''}`}>
+              <div key={g.id}>
+                {index === 0 && <div className="pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{g.status === 'active' ? 'Активные цели' : 'Неактивные цели'}</div>}
+                {index > 0 && g.status !== 'active' && sortedGoals[index - 1].status === 'active' && <div className="pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Неактивные цели</div>}
+                <div className={`card ${g.status === 'done' || g.status === 'cancelled' ? 'opacity-60' : ''}`}>
                 <div className="flex items-start gap-3">
                   <div className="text-xl w-9 h-9 rounded-full bg-primary-50 flex items-center justify-center flex-shrink-0"><Target size={16} className="text-primary-600" /></div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-slate-900">{g.name}</span>
                       <span className={`badge ${STATUS_COLORS[g.status]}`}>{STATUS_LABELS[g.status]}</span>
+                      <span className="text-xs text-slate-400">Приоритет {g.priority}</span>
                     </div>
                     {g.description && <div className="text-xs text-slate-400 mt-0.5">{g.description}</div>}
                     <div className="text-xs text-slate-400 mt-0.5">{formatRubles(g.saved_kopecks)} / {formatRubles(g.target_kopecks)}{g.target_date && ` · до ${formatDate(g.target_date)}`}</div>
@@ -107,6 +139,7 @@ export default function GoalsPage() {
                     <button onClick={() => { setEditing(g); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
                     <button onClick={() => remove(g)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                   </div>
+                </div>
                 </div>
               </div>
             )
@@ -128,12 +161,14 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
   const [target, setTarget] = useState('')
   const [targetDate, setTargetDate] = useState('')
   const [priority, setPriority] = useState('3')
+  const [createPurchase, setCreatePurchase] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (editing) { setName(editing.name); setDescription(editing.description); setTarget((editing.target_kopecks / 100).toString()); setTargetDate(editing.target_date ?? ''); setPriority(String(editing.priority)) }
     else { setName(''); setDescription(''); setTarget(''); setTargetDate(''); setPriority('3') }
+    setCreatePurchase(false)
     setError(null)
   }, [editing, open])
 
@@ -150,7 +185,15 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
         const { error: err } = await googleSheets.from('goals').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await googleSheets.from('goals').insert({ ...payload, family_id: familyId, saved_kopecks: 0, status: 'active' })
+        const { error: err } = await googleSheets.rpc('create_goal_with_purchase', {
+          p_family_id: familyId,
+          p_name: payload.name,
+          p_description: payload.description,
+          p_target_kopecks: targetK,
+          p_target_date: payload.target_date,
+          p_priority: payload.priority,
+          p_create_purchase: createPurchase,
+        })
         if (err) throw err
       }
       onSaved(); onClose()
@@ -168,6 +211,7 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
           <div><label className="label">Целевая дата</label><input className="input" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} /></div>
           <div><label className="label">Приоритет</label><select className="input" value={priority} onChange={(e) => setPriority(e.target.value)}><option value="1">1 — Высокий</option><option value="2">2</option><option value="3">3 — Средний</option><option value="4">4</option><option value="5">5 — Низкий</option></select></div>
         </div>
+        {!editing && <label className="flex items-start gap-2 text-sm text-slate-600"><input type="checkbox" checked={createPurchase} onChange={(e) => setCreatePurchase(e.target.checked)} className="mt-0.5 rounded" /><span>Добавить также в планируемые покупки <span className="block text-xs text-slate-400">Название, сумма, срок и приоритет будут перенесены автоматически; покупка останется связанной с целью.</span></span></label>}
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
         <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : 'Сохранить'}</button></div>
       </form>

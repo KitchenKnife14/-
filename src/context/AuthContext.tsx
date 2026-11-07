@@ -7,6 +7,7 @@ interface AuthState {
   profile: Profile | null
   family: Family | null
   members: FamilyMember[]
+  memberProfiles: Profile[]
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthState>({
   profile: null,
   family: null,
   members: [],
+  memberProfiles: [],
   loading: true,
   error: null,
   refresh: async () => {},
@@ -27,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [family, setFamily] = useState<Family | null>(null)
   const [members, setMembers] = useState<FamilyMember[]>([])
+  const [memberProfiles, setMemberProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null)
       setFamily(null)
       setMembers([])
+      setMemberProfiles([])
       setLoading(false)
       return
     }
@@ -48,11 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await googleSheets.rpc('get_my_context', {})
       if (error) throw new Error(error.message)
-      const c = data as { profile: Profile | null; members: FamilyMember[]; family: Family | null }
+      const c = data as { profile: Profile | null; members: FamilyMember[]; family: Family | null; member_profiles?: Profile[] }
       setProfile(c.profile)
       setMembers(c.members ?? [])
+      setMemberProfiles(c.member_profiles ?? (c.profile ? [c.profile] : []))
       setFamily(c.family ?? null)
     } catch (e) {
+      setMemberProfiles([])
       setError(e instanceof Error ? e.message : 'Ошибка загрузки профиля')
     } finally {
       setLoading(false)
@@ -74,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, family, members, loading, error, refresh }}>
+    <AuthContext.Provider value={{ session, profile, family, members, memberProfiles, loading, error, refresh }}>
       {children}
     </AuthContext.Provider>
   )

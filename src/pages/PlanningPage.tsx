@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { ensureSupplementalCategories } from '../lib/categories'
 import type { MonthlyPlan, Category, Transaction } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
@@ -27,7 +28,9 @@ export default function PlanningPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
-      const [pRes, cRes, tRes] = await Promise.all([
+      const categoryMigration = ensureSupplementalCategories(family.id)
+      const [, pRes, cRes, tRes] = await Promise.all([
+        categoryMigration,
         googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', monthDate),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
         googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end),

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { ensureSupplementalCategories } from '../lib/categories'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
@@ -21,8 +22,10 @@ export default function AnalysisPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
+      const categoryMigration = ensureSupplementalCategories(family.id)
       const ids = members.map((m) => m.user_id)
-      const [tRes, cRes, pRes] = await Promise.all([
+      const [, tRes, cRes, pRes] = await Promise.all([
+        categoryMigration,
         googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
         ids.length > 0 ? googleSheets.from('profiles').select('*').in('id', ids) : Promise.resolve({ data: [], error: null }),
@@ -39,7 +42,7 @@ export default function AnalysisPage() {
 
   const memberData = useMemo(() => {
     return members.map((m) => {
-      const memberTxs = txs.filter((t) => t.created_by === m.user_id)
+      const memberTxs = txs.filter((t) => (t.responsible_user_id || t.created_by) === m.user_id)
       const income = memberTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
       const expense = memberTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
       const byCat = new Map<string, number>()
