@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { ensureSupplementalCategories } from '../lib/categories'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles, kopecksToRubles } from '../lib/money'
 import { monthRange, currentMoscowDate } from '../lib/dates'
@@ -34,8 +35,10 @@ export default function ReportsPage() {
     if (!family) return
     setLoading(true); setError(null)
     try {
+      const categoryMigration = ensureSupplementalCategories(family.id)
       const memberIds = members.map((m) => m.user_id)
-      const [tRes, cRes, pRes] = await Promise.all([
+      const [, tRes, cRes, pRes] = await Promise.all([
+        categoryMigration,
         googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
         memberIds.length > 0 ? googleSheets.from('profiles').select('*').in('id', memberIds) : Promise.resolve({ data: [], error: null }),
@@ -51,7 +54,7 @@ export default function ReportsPage() {
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const profMap = useMemo(() => new Map(profiles.map((p) => [p.id, p])), [profiles])
 
-  const filteredTxs = txs.filter((t) => memberFilter === 'all' || t.created_by === memberFilter)
+  const filteredTxs = txs.filter((t) => memberFilter === 'all' || (t.responsible_user_id || t.created_by) === memberFilter)
   const income = filteredTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
   const expense = filteredTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
 
@@ -64,7 +67,7 @@ export default function ReportsPage() {
   const byMember = useMemo(() => {
     const m = new Map<string, { income: number; expense: number }>()
     for (const t of filteredTxs) {
-      const key = t.created_by ?? 'unknown'
+      const key = t.responsible_user_id || t.created_by || 'unknown'
       if (!m.has(key)) m.set(key, { income: 0, expense: 0 })
       const e = m.get(key)!
       if (t.type === 'income') e.income += t.amount_kopecks
@@ -74,9 +77,9 @@ export default function ReportsPage() {
   }, [filteredTxs])
 
   const exportCSV = () => {
-    const rows = [['Дата', 'Тип', 'Сумма (₽)', 'Категория', 'Описание', 'Автор']]
+    const rows = [['Дата', 'Тип', 'Сумма (₽)', 'Категория', 'Описание', 'Автор записи', 'Ответственный']]
     for (const t of filteredTxs) {
-      rows.push([t.operation_date, t.type === 'income' ? 'Доход' : t.type === 'expense' ? 'Расход' : 'Перевод', String(kopecksToRubles(t.amount_kopecks)), t.category_id ? catMap.get(t.category_id)?.name ?? '' : '', t.description, t.created_by ? profMap.get(t.created_by)?.display_name ?? '' : ''])
+      rows.push([t.operation_date, t.type === 'income' ? 'Доход' : t.type === 'expense' ? 'Расход' : 'Перевод', String(kopecksToRubles(t.amount_kopecks)), t.category_id ? catMap.get(t.category_id)?.name ?? '' : '', t.description, t.created_by ? profMap.get(t.created_by)?.display_name ?? '' : '', (t.responsible_user_id || t.created_by) ? profMap.get(t.responsible_user_id || t.created_by || '')?.display_name ?? '' : ''])
     }
     const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(';')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })

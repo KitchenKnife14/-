@@ -1,0 +1,12 @@
+{
+  "name": "budget-for-two-telegram-endpoint",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').mkdirSync('dist',{recursive:true});require('node:fs').writeFileSync('dist/index.html','Telegram webhook endpoint')\""
+  }
+}

@@ -33,8 +33,9 @@ const READ_CACHE_TTL_MS=2000
 const readCache=new Map<string,{expiresAt:number;value:unknown}>()
 const inFlightReads=new Map<string,Promise<unknown>>()
 let readCacheVersion=0
+const READ_ONLY_RPCS = new Set(['get_table_revision', 'get_my_context', 'get_telegram_link_status'])
 function request<T>(payload:Record<string,unknown>):Promise<T>{
-  const isRead=payload.action==='query'&&payload.mode==='select'
+  const isRead=(payload.action==='query'&&payload.mode==='select') || (payload.action==='rpc'&&READ_ONLY_RPCS.has(String(payload.name||'')))
   if(!isRead){readCache.clear();inFlightReads.clear();readCacheVersion++;return requestUncached<T>(payload)}
   const key=JSON.stringify(payload)
   const cached=readCache.get(key)
@@ -42,7 +43,23 @@ function request<T>(payload:Record<string,unknown>):Promise<T>{
   const pending=inFlightReads.get(key)
   if(pending)return pending as Promise<T>
   const version=readCacheVersion
-  const current=requestUncached<T>(payload).then(value=>{if(version===readCacheVersion)readCache.set(key,{expiresAt:Date.now()+READ_CACHE_TTL_MS,value});return value}).finally(()=>{if(inFlightReads.get(key)===current)inFlightReads.delete(key)})
+  const loadRead=async(expectedVersion:number,attempt=0):Promise<T>=>{
+    const value=await requestUncached<T>(payload)
+    if(expectedVersion!==readCacheVersion){
+      if(attempt>=3)throw new Error('Данные продолжают обновляться. Повторите загрузку.')
+      return loadRead(readCacheVersion,attempt+1)
+    }
+    if(expectedVersion===readCacheVersion){
+      readCache.set(key,{expiresAt:Date.now()+READ_CACHE_TTL_MS,value})
+      if(readCache.size>100){
+        const now=Date.now()
+        for(const [cacheKey,entry] of readCache)if(entry.expiresAt<=now)readCache.delete(cacheKey)
+        while(readCache.size>100){const oldest=readCache.keys().next().value;if(oldest===undefined)break;readCache.delete(oldest)}
+      }
+    }
+    return value
+  }
+  const current=loadRead(version).finally(()=>{if(inFlightReads.get(key)===current)inFlightReads.delete(key)})
   inFlightReads.set(key,current)
   return current
 }
@@ -81,7 +98,7 @@ export const googleSheets={
         running=true
         try{
           await Promise.all(subs.map(async sub=>{
-            try{const data=await request<unknown[]>({action:'query',table:sub.table,mode:'select',filters:sub.filters});const signature=JSON.stringify(data);if(sub.previous&&signature!==sub.previous)sub.callback();sub.previous=signature}catch{}
+            try{const revision=await request<string>({action:'rpc',name:'get_table_revision',params:{p_table:sub.table}});const signature=String(revision??'0');if(sub.previous&&signature!==sub.previous)sub.callback();sub.previous=signature}catch{}
           }))
         }finally{running=false}
       }

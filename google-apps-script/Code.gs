@@ -11,8 +11,8 @@ const TABLES = {
   family_members: ['id','family_id','user_id','role','joined_at'],
   categories: ['id','family_id','parent_id','name','kind','color','icon','archived','sort_order','created_at'],
   accounts: ['id','family_id','name','kind','owner_user_id','starting_balance_kopecks','archived','created_at'],
-  transactions: ['id','family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','created_by','updated_by','planned','parent_recurring_id','created_at','updated_at'],
-  recurring_payments: ['id','family_id','type','amount_kopecks','category_id','account_id','description','start_date','end_date','frequency','custom_interval_days','next_due_date','remind','active','created_by','created_at'],
+  transactions: ['id','family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','created_by','updated_by','planned','parent_recurring_id','created_at','updated_at','responsible_user_id'],
+  recurring_payments: ['id','family_id','type','amount_kopecks','category_id','account_id','description','start_date','end_date','frequency','custom_interval_days','next_due_date','remind','active','created_by','created_at','responsible_user_id'],
   budgets: ['id','family_id','category_id','month_date','limit_kopecks','warn_75','warn_90','warn_100'],
   goals: ['id','family_id','name','description','target_kopecks','saved_kopecks','target_date','priority','status','responsible_user_id','created_at'],
   goal_contributions: ['id','goal_id','amount_kopecks','contribution_date','note','created_by','created_at'],
@@ -26,15 +26,17 @@ const AUTH_SHEET = '_auth';
 const SESSION_TTL = 60 * 60 * 24 * 14;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
-const API_VERSION=8, BATCH_MAX=25;
-let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0; // кэш открытой таблицы и счётчики для замера (на время ОДНОГО запроса)
+const API_VERSION=11, BATCH_MAX=25;
+let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0, SHEET_READ_MS=0, SHEET_WRITE_MS=0; // метрики сервисных вызовов Sheets на один запрос
+function timedSheetRead_(fn){const t=Date.now();try{return fn();}finally{SHEET_READ_MS+=Date.now()-t;}}
+function timedSheetWrite_(fn){const t=Date.now();try{return fn();}finally{SHEET_WRITE_MS+=Date.now()-t;}}
 const DEFAULT_CATEGORIES=[{"name":"Жильё и обязательные платежи","kind":"expense","icon":"🏠","color":"#2563eb","children":[{"name":"Аренда квартиры","icon":"🔑","color":"#2563eb"},{"name":"Ипотека","icon":"🏦","color":"#2563eb"},{"name":"Коммунальные услуги","icon":"💡","color":"#2563eb"},{"name":"Интернет","icon":"🌐","color":"#2563eb"},{"name":"Мобильная связь","icon":"📱","color":"#2563eb"},{"name":"Обслуживание жилья","icon":"🧰","color":"#2563eb"},{"name":"Ремонт","icon":"🛠️","color":"#2563eb"},{"name":"Мебель и предметы интерьера","icon":"🛋️","color":"#2563eb"}]},{"name":"Продукты и питание","kind":"expense","icon":"🛒","color":"#16a34a","children":[{"name":"Продукты домой","icon":"🥦","color":"#16a34a"},{"name":"Кафе и рестораны","icon":"🍽️","color":"#16a34a"},{"name":"Доставка еды","icon":"🛵","color":"#16a34a"},{"name":"Кофе и перекусы на работе","icon":"☕","color":"#16a34a"}]},{"name":"Быт","kind":"expense","icon":"🧴","color":"#0891b2","children":[{"name":"Бытовая химия","icon":"🧼","color":"#0891b2"},{"name":"Средства гигиены","icon":"🪥","color":"#0891b2"},{"name":"Товары для дома","icon":"🏠","color":"#0891b2"},{"name":"Расходные материалы","icon":"📦","color":"#0891b2"},{"name":"Мелкие бытовые покупки","icon":"🧺","color":"#0891b2"}]},{"name":"Транспорт","kind":"expense","icon":"🚌","color":"#ea580c","children":[{"name":"Общественный транспорт","icon":"🚇","color":"#ea580c"},{"name":"Такси","icon":"🚕","color":"#ea580c"},{"name":"Бензин","icon":"⛽","color":"#ea580c"},{"name":"Обслуживание автомобиля","icon":"🚗","color":"#ea580c"},{"name":"Ремонт автомобиля","icon":"🔧","color":"#ea580c"},{"name":"Страхование и документы","icon":"📄","color":"#ea580c"},{"name":"Парковка","icon":"🅿️","color":"#ea580c"}]},{"name":"Здоровье","kind":"expense","icon":"🩺","color":"#dc2626","children":[{"name":"Врачи","icon":"👨‍⚕️","color":"#dc2626"},{"name":"Анализы и обследования","icon":"🧪","color":"#dc2626"},{"name":"Лекарства","icon":"💊","color":"#dc2626"},{"name":"Стоматология","icon":"🦷","color":"#dc2626"},{"name":"Медицинские процедуры","icon":"💉","color":"#dc2626"}]},{"name":"Личные расходы","kind":"expense","icon":"👕","color":"#7c3aed","children":[{"name":"Одежда и обувь","icon":"👕","color":"#7c3aed"},{"name":"Косметика","icon":"💄","color":"#7c3aed"},{"name":"Уход за собой","icon":"💆","color":"#7c3aed"},{"name":"Личные покупки","icon":"🛍️","color":"#7c3aed"}]},{"name":"Развлечения","kind":"expense","icon":"🎮","color":"#db2777","children":[{"name":"Кино и мероприятия","icon":"🎬","color":"#db2777"},{"name":"Игры","icon":"🎮","color":"#db2777"},{"name":"Подписки","icon":"📺","color":"#db2777"},{"name":"Музыка","icon":"🎵","color":"#db2777"},{"name":"Хобби","icon":"🎨","color":"#db2777"},{"name":"Путешествия и отдых","icon":"✈️","color":"#db2777"}]},{"name":"Техника","kind":"expense","icon":"💻","color":"#0f766e","children":[{"name":"Смартфоны","icon":"📱","color":"#0f766e"},{"name":"Компьютеры и комплектующие","icon":"💻","color":"#0f766e"},{"name":"Телевизоры","icon":"📺","color":"#0f766e"},{"name":"Бытовая техника","icon":"🔌","color":"#0f766e"},{"name":"Аудиотехника","icon":"🎧","color":"#0f766e"},{"name":"Аксессуары","icon":"🎮","color":"#0f766e"}]},{"name":"Семья и подарки","kind":"expense","icon":"🎁","color":"#c026d3","children":[{"name":"Подарки","icon":"🎁","color":"#c026d3"},{"name":"Праздники","icon":"🎉","color":"#c026d3"},{"name":"Совместные мероприятия","icon":"🥳","color":"#c026d3"},{"name":"Расходы на родственников","icon":"👨‍👩‍👧","color":"#c026d3"}]},{"name":"Финансовые операции","kind":"transfer","icon":"🔁","color":"#64748b","children":[{"name":"Погашение кредитов","icon":"💳","color":"#64748b"},{"name":"Проценты по кредитам","icon":"📈","color":"#64748b"},{"name":"Комиссии","icon":"💸","color":"#64748b"},{"name":"Банковские услуги","icon":"🏦","color":"#64748b"},{"name":"Переводы между счетами","icon":"🔁","color":"#64748b"}]},{"name":"Накопления","kind":"expense","icon":"🐷","color":"#059669","children":[{"name":"Резервный фонд","icon":"🛟","color":"#059669"},{"name":"Накопления на квартиру","icon":"🏢","color":"#059669"},{"name":"Накопления на автомобиль","icon":"🚙","color":"#059669"},{"name":"Накопления на крупные покупки","icon":"💰","color":"#059669"},{"name":"Другие цели","icon":"🎯","color":"#059669"}]},{"name":"Прочее","kind":"expense","icon":"📦","color":"#6b7280","children":[{"name":"Непредвиденные расходы","icon":"⚠️","color":"#6b7280"},{"name":"Неопределённая категория","icon":"❓","color":"#6b7280"}]},{"name":"Доходы","kind":"income","icon":"💵","color":"#16a34a","children":[{"name":"Зарплата первого участника","icon":"👨","color":"#16a34a"},{"name":"Зарплата второго участника","icon":"👩","color":"#16a34a"},{"name":"Премии","icon":"🌟","color":"#16a34a"},{"name":"Подработки","icon":"🛠️","color":"#16a34a"},{"name":"Возвраты и компенсации","icon":"↩️","color":"#16a34a"},{"name":"Доходы от продажи вещей","icon":"🏷️","color":"#16a34a"},{"name":"Проценты и инвестиционный доход","icon":"📈","color":"#16a34a"},{"name":"Прочие доходы","icon":"➕","color":"#16a34a"}]}];
 // Кэш чтения листов на время ОДНОГО запроса (сбрасывается в doPost и после каждой записи).
 let ROWS_CACHE = {};
 let TZ_CACHE = null;
 // Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
 // а строки, начинающиеся с "=", в формулы).
-const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash'];
+const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash','responsible_user_id'];
 
 function doGet() {
   const out={status:'ok', message:'Сервер работает', version:API_VERSION};
@@ -46,7 +48,7 @@ function doPost(e) {
   const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
   const lock = LockService.getScriptLock();
   try {
-    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0;
+    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
     if (req.action === 'telegramWebhook') {
@@ -78,7 +80,7 @@ function doPost(e) {
   } finally {
     // Одна строка в журнале выполнения: только названия действий и числа, без данных пользователей.
     const ended = Date.now();
-    try { console.log(JSON.stringify({act:req&&req.action,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES})); } catch (_) {}
+    try { console.log(JSON.stringify({act:req&&req.action,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS})); } catch (_) {}
   }
 }
 function batch_(req){
@@ -94,13 +96,24 @@ function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSp
 function sheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
-  if (!sh) { sh=ss.insertSheet(name); SHEET_WRITES++; sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]]); sh.setFrozenRows(1); formatSheet_(sh,name); }
+  if (!sh) { sh=ss.insertSheet(name); SHEET_WRITES++; timedSheetWrite_(()=>sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]])); sh.setFrozenRows(1); formatSheet_(sh,name); }
   // Заголовки проверяем не на каждый запрос: успешная проверка запоминается на 6 часов (ключ содержит версию API).
   const hdrKey='hdr'+API_VERSION+':'+name; let cache=null; try{cache=CacheService.getScriptCache();}catch(_){}
   if (cache && cache.get(hdrKey)==='1') return sh;
   SHEET_READS++;
-  const header=sh.getRange(1,1,1,TABLES[name].length).getValues()[0];
-  if (header.join('|') !== TABLES[name].join('|')) throw new Error('Не совпадает структура листа '+name);
+  const header=timedSheetRead_(()=>sh.getRange(1,1,1,TABLES[name].length).getValues())[0];
+  let used=header.length;
+  while(used>0&&(header[used-1]===''||header[used-1]===null))used--;
+  const current=header.slice(0,used), expected=TABLES[name];
+  if(current.join('|')!==expected.join('|')){
+    // Only append missing trailing columns when every existing column is an exact prefix.
+    // Never reorder, clear or overwrite existing data.
+    const safePrefix=current.length<expected.length&&current.every((value,index)=>value===expected[index]);
+    if(!safePrefix)throw new Error('Не совпадает структура листа '+name+'; автоматическое изменение небезопасно');
+    const missing=expected.slice(current.length);
+    timedSheetWrite_(()=>sh.getRange(1,current.length+1,1,missing.length).setValues([missing]));
+    SHEET_WRITES++;
+  }
   if (cache) { try{cache.put(hdrKey,'1',21600);}catch(_){} }
   return sh;
 }
@@ -110,7 +123,7 @@ function rows_(name) {
 }
 function readRows_(name) {
   SHEET_READS++;
-  const sh=sheet_(name), values=sh.getDataRange().getValues(); if(values.length<2) return [];
+  const sh=sheet_(name), values=timedSheetRead_(()=>sh.getDataRange().getValues()); if(values.length<2) return [];
   return values.slice(1).map((r,i)=>({values:r,row:i+2})).filter(x=>x.values.some(v=>v!==''&&v!==null)).map(({values:r,row})=>{
     const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j],k));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=row;return o;
   });
@@ -128,14 +141,18 @@ function safeCell_(value) {
   // A leading apostrophe makes Sheets store the content as literal text.
   return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
 }
+function touchTableRevision_(name){
+  try{PropertiesService.getScriptProperties().setProperty('table_revision:'+name,String(Date.now())+':'+Utilities.getUuid());}catch(_){}
+}
 function appendRows_(name, data) {
   if (!data.length) return;
   const sh=sheet_(name), cols=TABLES[name], start=sh.getLastRow()+1;
   const need=start+data.length-1;
   if(sh.getMaxRows()<need){sh.insertRowsAfter(sh.getMaxRows(),need-sh.getMaxRows()+500);formatSheet_(sh,name);}
   delete ROWS_CACHE[name];
-  sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
+  timedSheetWrite_(()=>sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
   SHEET_WRITES++;
+  touchTableRevision_(name);
 }
 function updateRows_(name, data) {
   if (!data.length) return;
@@ -147,12 +164,13 @@ function updateRows_(name, data) {
   let group=[];
   const flush=()=>{
     if(!group.length)return;
-    sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
+    timedSheetWrite_(()=>sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
     group=[];
   };
   sorted.forEach(row=>{if(group.length&&row.__row!==group[group.length-1].__row+1)flush();group.push(row);});
   flush();
   SHEET_WRITES++;
+  touchTableRevision_(name);
 }
 function deleteRows_(name, data) {
   const rowNumbers=[...new Set(data.map(r=>Number(r.__row)).filter(n=>Number.isInteger(n)&&n>=2))].sort((a,b)=>b-a);
@@ -163,9 +181,10 @@ function deleteRows_(name, data) {
   while(i<rowNumbers.length){
     const high=rowNumbers[i];let low=high;i++;
     while(i<rowNumbers.length&&rowNumbers[i]===low-1){low=rowNumbers[i];i++;}
-    sh.deleteRows(low,high-low+1);
+    timedSheetWrite_(()=>sh.deleteRows(low,high-low+1));
   }
   SHEET_WRITES++;
+  touchTableRevision_(name);
 }
 function writeRows_(name, data) {
   SHEET_WRITES++;
@@ -173,18 +192,19 @@ function writeRows_(name, data) {
   delete ROWS_CACHE[name];
   // Лист по умолчанию содержит 1000 строк; без расширения запись большего числа строк падает.
   const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
-  if (data.length) sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k]))));
-  const last=sh.getLastRow(); if(last>data.length+1) sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent();
+  if (data.length) timedSheetWrite_(()=>sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
+  const last=sh.getLastRow(); if(last>data.length+1) timedSheetWrite_(()=>sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent());
+  touchTableRevision_(name);
 }
 function now_(){return new Date().toISOString();}
 function id_(){return Utilities.getUuid();}
 function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();}
 function authSheet_(){
   const ss=ss_(); let sh=ss.getSheetByName(AUTH_SHEET);
-  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]);sh.hideSheet();formatAuth_(sh);}
+  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;timedSheetWrite_(()=>sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]));sh.hideSheet();formatAuth_(sh);}
   return sh;
 }
-function authRows_(){SHEET_READS++;const sh=authSheet_(),v=sh.getDataRange().getValues();return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
+function authRows_(){SHEET_READS++;const sh=authSheet_(),v=timedSheetRead_(()=>sh.getDataRange().getValues());return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
 function hash_(password,salt){let digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+password,Utilities.Charset.UTF_8);for(let i=0;i<10000;i++)digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,digest);return Utilities.base64Encode(digest);}
 /* ===== Проверка пароля: PBKDF2-HMAC-SHA256 на чистом JavaScript =====
    Прежний цикл из 10 000 вызовов Utilities.computeDigest занимал ~5 секунд (каждый вызов — обращение к сервису Google).
@@ -306,13 +326,13 @@ function signup_(req){
   if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
   if(authRows_().some(u=>u.email===email)) throw new Error('Аккаунт с таким email уже существует');
   const id=id_(), salt=Utilities.getUuid();
-  SHEET_WRITES++; authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_));
+  SHEET_WRITES++; timedSheetWrite_(()=>authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_)));
   const token=id_()+id_();
   PropertiesService.getScriptProperties().setProperty('session:'+token,JSON.stringify({userId:id,expires:Date.now()+SESSION_TTL*1000}));
   try{ensureProfile_(id,name||email.split('@')[0]);}
   catch(err){
     const cleanup=[];
-    try{const row=authRows_().find(u=>u.id===id);if(row){SHEET_WRITES++;authSheet_().deleteRow(row.row);}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
+    try{const row=authRows_().find(u=>u.id===id);if(row){SHEET_WRITES++;timedSheetWrite_(()=>authSheet_().deleteRow(row.row));}}catch(cleanupErr){cleanup.push('аккаунт: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     try{PropertiesService.getScriptProperties().deleteProperty('session:'+token);}catch(cleanupErr){cleanup.push('сессия: '+(cleanupErr&&cleanupErr.message?cleanupErr.message:String(cleanupErr)));}
     if(cleanup.length)throw new Error('Не удалось полностью отменить регистрацию: '+cleanup.join('; ')+'. Исходная ошибка: '+(err&&err.message?err.message:String(err)));
     throw err;
@@ -337,7 +357,7 @@ function signin_(req){
   }
   props.deleteProperty(attemptKey);
   // Старый аккаунт: после успешного входа заменяем медленный прежний хеш на новый (следующие входы будут быстрыми).
-  if(isLegacyHash_(u.hash)){try{SHEET_WRITES++;authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt));}catch(_){}}
+  if(isLegacyHash_(u.hash)){try{SHEET_WRITES++;timedSheetWrite_(()=>authSheet_().getRange(u.row,4).setValue(makePasswordHash_(password,u.salt)));}catch(_){}}
   const token=id_()+id_();
   props.setProperty('session:'+token,JSON.stringify({userId:u.id,expires:now+SESSION_TTL*1000}));
   return {token,user:{id:u.id,email:u.email}};
@@ -440,6 +460,10 @@ function validateRelations_(table,row,user){
     if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма регулярного платежа должна быть положительным целым числом копеек');
   }
   if(!familyId)return;
+  if(['transactions','goals','planned_purchases','recurring_payments'].includes(table)&&row.responsible_user_id){
+    const member=rows_('family_members').some(m=>String(m.family_id)===familyId&&String(m.user_id)===String(row.responsible_user_id));
+    if(!member)throw new Error('Ответственный участник не состоит в этой семье');
+  }
   const check=(field,relatedTable,label)=>{
     const value=row[field];if(value===undefined||value===null||value==='')return;
     const related=rows_(relatedTable).find(x=>String(x.id)===String(value));
@@ -454,11 +478,80 @@ function validateRelations_(table,row,user){
   if(table==='budgets'||table==='monthly_plans')check('category_id','categories','Категория');
   if(table==='planned_purchases'){check('category_id','categories','Категория');check('goal_id','goals','Цель');check('linked_transaction_id','transactions','Связанная операция');}
 }
+function matchesFilterValue_(row,filter){
+  const a=row[filter.column],b=filter.value;
+  switch(filter.op){
+    case 'eq':return String(a??'')===String(b??'');
+    case 'neq':return String(a??'')!==String(b??'');
+    case 'gte':return a>=b;
+    case 'lte':return a<=b;
+    case 'gt':return a>b;
+    case 'lt':return a<b;
+    case 'in':return (filter.values||[]).map(String).includes(String(a));
+    case 'is':return b===null?(a===null||a===''):String(a)===String(b);
+    default:throw new Error('Фильтр не поддерживается');
+  }
+}
+// For large ledgers, avoid reading every transaction column when the request
+// is for a single family's bounded date range. Small/wide queries keep the
+// simple full-sheet path because one contiguous read is cheaper there.
+function readTransactionRangeRows_(filters,user){
+  if(!Array.isArray(filters)||!filters.some(f=>f.column==='operation_date'&&f.op==='gte')||
+     !filters.some(f=>f.column==='operation_date'&&f.op==='lte'))return null;
+  const familyFilters=filters.filter(f=>f.column==='family_id'&&f.op==='eq');
+  if(familyFilters.length!==1)return null;
+  const familyId=String(familyFilters[0].value??'');
+  if(!familyId||!allowedFamilyIds_(user).includes(familyId))return [];
+  const sh=sheet_('transactions'),lastRow=sh.getLastRow(),rowCount=lastRow-1;
+  if(rowCount<200)return null;
+  const columns=TABLES.transactions,familyIndex=columns.indexOf('family_id'),dateIndex=columns.indexOf('operation_date');
+  if(familyIndex<0||dateIndex<=familyIndex)return null;
+  SHEET_READS++;
+  const indexValues=timedSheetRead_(()=>sh.getRange(2,familyIndex+1,rowCount,dateIndex-familyIndex+1).getValues());
+  const candidates=[];
+  const first=filters.find(f=>f.column==='operation_date'&&f.op==='gte');
+  const last=filters.find(f=>f.column==='operation_date'&&f.op==='lte');
+  for(let i=0;i<indexValues.length;i++){
+    const partial={
+      family_id:normal_(indexValues[i][0],'family_id'),
+      operation_date:normal_(indexValues[i][dateIndex-familyIndex],'operation_date')
+    };
+    if(String(partial.family_id)!==familyId)continue;
+    if(!matchesFilterValue_(partial,first)||!matchesFilterValue_(partial,last))continue;
+    candidates.push(i+2);
+  }
+  if(!candidates.length)return [];
+  if(candidates.length>=rowCount*0.6)return null;
+  const groups=[];
+  let start=candidates[0],previous=start,count=1;
+  for(let i=1;i<candidates.length;i++){
+    const row=candidates[i];
+    if(row===previous+1){count++;}
+    else{groups.push({start,count});start=row;count=1;}
+    previous=row;
+  }
+  groups.push({start,count});
+  if(groups.length>20)return null;
+  const result=[];
+  groups.forEach(group=>{
+    SHEET_READS++;
+    const block=timedSheetRead_(()=>sh.getRange(group.start,1,group.count,columns.length).getValues());
+    block.forEach((values,index)=>{
+      const row={};
+      columns.forEach((column,columnIndex)=>row[column]=normal_(values[columnIndex],column));
+      row.__row=group.start+index;
+      result.push(row);
+    });
+  });
+  return result;
+}
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
   if(table==='telegram_links'||table==='telegram_link_codes')throw new Error('Служебная Telegram-таблица недоступна через обычный API');
-  let all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const filters=req.filters||[];
+  let all=null;
+  if(mode==='select'&&table==='transactions')all=readTransactionRangeRows_(filters,user);
+  if(all===null)all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
   const matches=(row)=>filters.every(f=>{
     const a=row[f.column], b=f.value;
     switch(f.op){case 'eq':return String(a??'')===String(b??'');case 'neq':return String(a??'')!==String(b??'');case 'gte':return a>=b;case 'lte':return a<=b;case 'gt':return a>b;case 'lt':return a<b;case 'in':return (f.values||[]).map(String).includes(String(a));case 'is':return b===null?(a===null||a===''):String(a)===String(b);default:throw new Error('Фильтр не поддерживается');}
@@ -500,6 +593,7 @@ function query_(req,user){
       }
       if(TABLES[table].includes('created_by'))r.created_by=user.id;
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
+      if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
       if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       validateRelations_(table,r,user);
@@ -590,6 +684,7 @@ function query_(req,user){
         updatedRows.push(found);
       }else {
         const r=Object.assign({id:id_()},raw);
+        if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
         if(TABLES[table].includes('created_at'))r.created_at=now_();
         if(TABLES[table].includes('updated_at'))r.updated_at=now_();
         if(TABLES[table].includes('created_by'))r.created_by=user.id;
@@ -632,6 +727,66 @@ function syncGoalTotals_(goalIds){
 }
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
+  if(name==='get_table_revision'){
+    const table=String(p.p_table||'');
+    if(!TABLES[table]||table==='telegram_links'||table==='telegram_link_codes')throw new Error('Таблица недоступна');
+    if(!allowedFamilyIds_(user).length)throw new Error('Нет доступа к семейному пространству');
+    return PropertiesService.getScriptProperties().getProperty('table_revision:'+table)||'0';
+  }
+  if(name==='ensure_supplemental_categories'){
+    const familyId=String(p.p_family_id||'');
+    if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    const definitions=[
+      {name:'Сигареты',kind:'expense',icon:'🚬',color:'#78716c',children:[]},
+      {name:'Кредиты',kind:'expense',icon:'💳',color:'#64748b',children:[
+        {name:'Погашение основного долга',icon:'💳',color:'#64748b'},
+        {name:'Проценты по кредиту',icon:'📈',color:'#64748b'},
+        {name:'Комиссии по кредиту',icon:'💸',color:'#64748b'}
+      ]}
+    ];
+    const have=rows_('categories').filter(x=>String(x.family_id)===familyId),created=[];
+    definitions.forEach(def=>{
+      let parent=have.find(x=>!x.parent_id&&x.name===def.name&&x.kind===def.kind);
+      if(!parent){
+        parent={id:id_(),family_id:familyId,parent_id:null,name:def.name,kind:def.kind,icon:def.icon,color:def.color,archived:false,sort_order:0,created_at:now_()};
+        have.push(parent);created.push(parent);
+      }
+      (def.children||[]).forEach((child,index)=>{
+        if(have.some(x=>String(x.parent_id)===String(parent.id)&&x.name===child.name))return;
+        const row={id:id_(),family_id:familyId,parent_id:parent.id,name:child.name,kind:def.kind,icon:child.icon,color:child.color,archived:false,sort_order:index,created_at:now_()};
+        have.push(row);created.push(row);
+      });
+    });
+    if(created.length)appendRows_('categories',created);
+    return {added:created.length};
+  }
+  if(name==='create_goal_with_purchase'){
+    const familyId=String(p.p_family_id||'');
+    if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    const target=Number(p.p_target_kopecks),priority=Number(p.p_priority);
+    const goalName=String(p.p_name||'').trim(),description=String(p.p_description||'').trim();
+    if(!goalName)throw new Error('Введите название цели');
+    if(!Number.isSafeInteger(target)||target<=0)throw new Error('Сумма цели должна быть положительным целым числом копеек');
+    if(!Number.isInteger(priority)||priority<1||priority>5)throw new Error('Приоритет должен быть от 1 до 5');
+    const targetDate=p.p_target_date?String(p.p_target_date):'';
+    if(targetDate&&!/^\d{4}-\d{2}-\d{2}$/.test(targetDate))throw new Error('Некорректная целевая дата');
+    const goal={id:id_(),family_id:familyId,name:goalName,description,target_kopecks:target,saved_kopecks:0,target_date:targetDate||null,priority,status:'active',responsible_user_id:user.id,created_at:now_()};
+    appendRows_('goals',[goal]);
+    let purchaseId=null;
+    if(p.p_create_purchase===true){
+      const purchase={id:id_(),family_id:familyId,name:goalName,category_id:null,estimated_kopecks:target,priority,desired_month:targetDate?targetDate.slice(0,7)+'-01':null,desired_date:targetDate||null,url:'',comment:description,status:'planned',responsible_user_id:user.id,goal_id:goal.id,linked_transaction_id:'',created_by:user.id,created_at:now_()};
+      try{
+        validateRelations_('planned_purchases',purchase,user);
+        appendRows_('planned_purchases',[purchase]);
+        purchaseId=purchase.id;
+      }catch(err){
+        const saved=rows_('goals').find(g=>String(g.id)===String(goal.id));
+        if(saved)deleteRows_('goals',[saved]);
+        throw new Error('Не удалось связать цель с покупкой; создание отменено: '+String(err&&err.message||err));
+      }
+    }
+    return {goal_id:goal.id,purchase_id:purchaseId};
+  }
   if(name==='create_telegram_link_code'){
     const members=rows_('family_members').filter(m=>String(m.user_id)===user.id);
     if(!members.length)throw new Error('Сначала создайте семью или присоединитесь к ней');
@@ -658,9 +813,14 @@ function rpc_(req,user){
   if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code,display_name:p.p_display_name},user);return true;}
   if(name==='create_family')return route_({action:'createFamily',name:p.p_name,display_name:p.p_display_name},user);
   if(name==='get_my_context'){
-   const profile=rows_('profiles').find(x=>x.id===user.id),members=rows_('family_members').filter(m=>m.user_id===user.id).map(strip_);
-   const family=members.length?rows_('families').find(f=>String(f.id)===String(members[0].family_id)):null;
-   return{profile:profile?strip_(profile):null,members,family:family?strip_(family):null};
+   const profile=rows_('profiles').find(x=>x.id===user.id);
+   const ownMemberships=rows_('family_members').filter(m=>String(m.user_id)===user.id);
+   const familyIds=new Set(ownMemberships.map(m=>String(m.family_id)));
+   const members=rows_('family_members').filter(m=>familyIds.has(String(m.family_id))).map(strip_);
+   const family=ownMemberships.length?rows_('families').find(f=>String(f.id)===String(ownMemberships[0].family_id)):null;
+   const memberIds=new Set(members.map(m=>String(m.user_id)));
+   const memberProfiles=rows_('profiles').filter(x=>memberIds.has(String(x.id))).map(strip_);
+   return{profile:profile?strip_(profile):null,members,family:family?strip_(family):null,member_profiles:memberProfiles};
   }
   if(name==='confirm_planned_purchase'){
     const id=String(p.p_purchase_id||'');
@@ -687,7 +847,7 @@ function rpc_(req,user){
     ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
     if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
     if(!tx){
-      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
+      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,responsible_user_id:purchase.responsible_user_id||purchase.created_by||user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
       appendRows_('transactions',[tx]);
     }
     purchase.status='bought';
@@ -712,7 +872,7 @@ function rpc_(req,user){
       String(existingTx.account_id||'')!==String(r.account_id||'') ||
       String(existingTx.description||'')!==String(r.description||'')
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
-    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
+    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
     r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     updateRows_('recurring_payments',[r]);return true;
@@ -769,9 +929,9 @@ function telegramWebhook_(req){
   const linkCommand=text.match(/^\/link(?:@\w+)?\s+([A-Z0-9]{6,16})$/i);
   if(/^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)){
     const linked=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
-    reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\\n\\nПример записи: Проезд 45 рублей\\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\\n/link ВАШ_КОД\\n\\nКод действует 15 минут.'};
+    reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\n\nПример записи: Проезд 45 рублей\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\n/link ВАШ_КОД\n\nКод действует 15 минут.'};
   }else if(/^\/help(?:@\w+)?$/i.test(text)){
-    reply={chat_id:chatId,text:'Команды:\\n/link КОД — привязать аккаунт приложения\\n/balance — сводка за текущий месяц\\n/unlink — отвязать Telegram\\n/help — помощь\\n\\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
+    reply={chat_id:chatId,text:'Команды:\n/link КОД — привязать аккаунт приложения\n/balance — сводка за текущий месяц\n/unlink — отвязать Telegram\n/help — помощь\n\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
   }else if(linkCommand){
     const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
     const candidate=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash&&!x.used_at&&String(x.expires_at)>now);
@@ -790,7 +950,7 @@ function telegramWebhook_(req){
       appendRows_('telegram_links',[{id:id_(),telegram_user_id:telegramUserId,telegram_chat_id:chatId,user_id:candidate.user_id,family_id:candidate.family_id,linked_at:now_()}]);
     }
     candidate.used_at=now_();updateRows_('telegram_link_codes',[candidate]);
-    reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\\n\\nТеперь отправьте, например: Проезд 45 рублей\\nКоманды: /help и /balance'};
+    reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
   }else if(/^\/unlink(?:@\w+)?$/i.test(text)){
     const links=rows_('telegram_links').filter(x=>String(x.telegram_user_id)===telegramUserId);
     if(links.length)deleteRows_('telegram_links',links);
@@ -805,7 +965,7 @@ function telegramWebhook_(req){
     const income=txs.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
     const expense=txs.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
     const rubles=n=>(n/100).toFixed(2).replace('.',',')+' ₽';
-    reply={chat_id:chatId,text:'Семейный бюджет за '+month+':\\nДоходы: '+rubles(income)+'\\nРасходы: '+rubles(expense)+'\\nРазница: '+rubles(income-expense)};
+    reply={chat_id:chatId,text:'Семейный бюджет за '+month+':\nДоходы: '+rubles(income)+'\nРасходы: '+rubles(expense)+'\nРазница: '+rubles(income-expense)};
   }else{
     const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
     if(!link)throw new Error('Сначала привяжите аккаунт в приложении и отправьте /link КОД.');
@@ -820,28 +980,58 @@ function telegramWebhook_(req){
     if(!Number.isSafeInteger(amountKopecks)||amountKopecks<=0||amountKopecks>1000000000000)throw new Error('Проверьте сумму операции.');
     let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)\s+/i,' ').replace(/\s+/g,' ').trim();
     if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
-    const isIncome=/^(?:доход|получил|получила|зарплата|поступило)\b/i.test(text);
+    const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило|премия|бонус|подработка|фриланс|возврат|компенсация|кэшбек|продал|продажа|проценты)(?=\s|$)/i.test(text);
     const kind=isIncome?'income':'expense';
     const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
-    const aliases=[
-      [/(?:проезд|автобус|метро|трамвай|маршрутка|транспорт)/i,'Общественный транспорт'],
-      [/такси/i,'Такси'],[/бензин|заправк/i,'Бензин'],[/продукт|магазин|пятерочк|магнит/i,'Продукты домой'],
-      [/кафе|ресторан|обед|ужин/i,'Кафе и рестораны'],[/кофе/i,'Кофе и перекусы на работе'],
-      [/аренд/i,'Аренда квартиры'],[/коммунал|жкх/i,'Коммунальные услуги'],[/интернет/i,'Интернет'],
-      [/зарплат/i,(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника'],[/преми/i,'Премии'],[/подработ/i,'Подработки']
+    const normalizedDescription=String(description).toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    const salaryCategory=(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника';
+    // Specific phrases come before broad ones to avoid assigning a more general category.
+    const aliases=kind==='income'?[
+      [/зарплат|аванс|оклад/i,salaryCategory],
+      [/преми|бонус/i,'Премии'],
+      [/подработ|фриланс/i,'Подработки'],
+      [/возврат|компенсац|кэшбек|cashback/i,'Возвраты и компенсации'],
+      [/продал|продажа|авито/i,'Доходы от продажи вещей'],
+      [/процент|дивиденд|invest/i,'Проценты и инвестиционный доход']
+    ]:[
+      [/проезд|автобус|метро|трамва|маршрутк|транспорт/i,'Общественный транспорт'],
+      [/такси|yandex go|яндекс такси/i,'Такси'],
+      [/бензин|заправ|топлив/i,'Бензин'],
+      [/парков/i,'Парковка'],
+      [/шиномонтаж|то\b|ремонт авто|автосервис/i,'Обслуживание автомобиля'],
+      [/пятерочк|магнит|перекресток|лента|ашан|вкусвилл|продукт|супермаркет|магазин продукт/i,'Продукты домой'],
+      [/доставк|самокат|деливери|купер/i,'Доставка еды'],
+      [/кафе|ресторан|обед|ужин|завтрак/i,'Кафе и рестораны'],
+      [/кофе|перекус|булоч/i,'Кофе и перекусы на работе'],
+      [/аптек|лекарств|таблетк|медикамент/i,'Лекарства'],
+      [/стоматолог|зубн/i,'Стоматология'],
+      [/врач|доктор|клиник/i,'Врачи'],
+      [/аренд|квартир/i,'Аренда квартиры'],
+      [/коммунал|жкх|электричеств|водоснабж/i,'Коммунальные услуги'],
+      [/интернет|wi ?fi|вайфай/i,'Интернет'],
+      [/мобильн|связ|телефон|тариф/i,'Мобильная связь'],
+      [/бытов хим|порош|моющ/i,'Бытовая химия'],
+      [/шампун|гигиен|зубн паст/i,'Средства гигиены'],
+      [/одежд|обув|куртк|джинс/i,'Одежда и обувь'],
+      [/подписк|netflix|кинопоиск|ivi/i,'Подписки'],
+      [/игр|steam|playstation|xbox/i,'Игры'],
+      [/кино|театр|концерт/i,'Кино и мероприятия'],
+      [/подар/i,'Подарки'],
+      [/путешеств|отпуск|отел|билет/i,'Путешествия и отдых']
     ];
     let categoryName='';
-    for(const pair of aliases){if(pair[0].test(description)){categoryName=pair[1];break;}}
-    let category=categoryName?categories.find(x=>x.name===categoryName):null;
-    if(!category)category=categories.find(x=>String(description).toLowerCase().includes(String(x.name).toLowerCase())||String(x.name).toLowerCase().includes(String(description).toLowerCase()));
+    for(const pair of aliases){if(pair[0].test(normalizedDescription)){categoryName=pair[1];break;}}
+    const normalizeCategoryName=value=>String(value||'').toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    let category=categoryName?categories.find(x=>normalizeCategoryName(x.name)===normalizeCategoryName(categoryName)):null;
+    if(!category)category=categories.find(x=>normalizedDescription.includes(normalizeCategoryName(x.name)));
     if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
     const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
     const accountId=accounts.length===1?accounts[0].id:null;
     const operationDate=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM-dd');
     const operationTime=Utilities.formatDate(new Date(),'Europe/Moscow','HH:mm');
-    query_({table:'transactions',mode:'insert',returning:true,values:{family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,description:description,planned:false}}, {id:String(link.user_id)});
+    query_({table:'transactions',mode:'insert',returning:true,values:{family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,responsible_user_id:link.user_id,description:description,planned:false}}, {id:String(link.user_id)});
     const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
-    reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\\nКатегория: '+category.name:'\\nКатегория не определена; проверьте её в приложении.')};
+    reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\nКатегория: '+category.name:'\nКатегория не определена; проверьте её в приложении.')};
   }
   if(updateKey)props.setProperty(updateKey,JSON.stringify({expires:Date.now()+86400000,reply}));
   return reply;
@@ -849,9 +1039,9 @@ function telegramWebhook_(req){
 
 /* ===== Служебные функции: запускаются вручную в редакторе Apps Script (меню «Выполнить») ===== */
 function formatSheet_(sh,name){
-  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@');});
+  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)timedSheetWrite_(()=>sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@'));});
 }
-function formatAuth_(sh){sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@');}
+function formatAuth_(sh){timedSheetWrite_(()=>sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@'));}
 // Один раз после установки: применяет текстовый формат к столбцам всех листов.
 function setupSheets(){
   Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));

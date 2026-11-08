@@ -14,16 +14,20 @@ export default function CategoriesPage() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
   const [parentId, setParentId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [kindFilter, setKindFilter] = useState('all')
 
   const load = async () => {
     if (!family) return
     setLoading(true)
     setError(null)
     try {
-      await ensureSupplementalCategories(family.id)
-      const { data, error: err } = await googleSheets.from('categories').select('*').eq('family_id', family.id).order('sort_order').order('name')
-      if (err) throw err
-      setCats(data as Category[])
+      const [, categoryResult] = await Promise.all([
+        ensureSupplementalCategories(family.id),
+        googleSheets.from('categories').select('*').eq('family_id', family.id).order('sort_order').order('name'),
+      ])
+      if (categoryResult.error) throw categoryResult.error
+      setCats(categoryResult.data as Category[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
@@ -38,7 +42,7 @@ export default function CategoriesPage() {
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
-  const roots = cats.filter((c) => !c.parent_id && !c.archived).sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
+  const roots = cats.filter((c) => !c.parent_id && !c.archived && (kindFilter === 'all' || c.kind === kindFilter) && (!search.trim() || c.name.toLocaleLowerCase('ru-RU').includes(search.trim().toLocaleLowerCase('ru-RU')) || cats.some((child) => child.parent_id === c.id && !child.archived && child.name.toLocaleLowerCase('ru-RU').includes(search.trim().toLocaleLowerCase('ru-RU'))))).sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
   const letters = [...new Set(roots.map((c) => c.name.trim().charAt(0).toLocaleUpperCase('ru-RU')))]
   const childrenOf = (id: string) => cats.filter((c) => c.parent_id === id && !c.archived).sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }))
 
@@ -75,11 +79,12 @@ export default function CategoriesPage() {
       </div>
 
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
+      <div className="flex flex-wrap gap-2"><input className="input flex-1 min-w-[180px]" placeholder="Найти категорию или подкатегорию" value={search} onChange={(e) => setSearch(e.target.value)} /><select className="input w-auto" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}><option value="all">Все типы</option><option value="expense">Расходы</option><option value="income">Доходы</option><option value="transfer">Переводы</option></select>{(search || kindFilter !== 'all') && <button onClick={() => { setSearch(''); setKindFilter('all') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}</div>
 
       {loading ? (
         <div className="text-sm text-slate-400">Загрузка…</div>
       ) : roots.length === 0 ? (
-        <div className="card text-center py-8 text-sm text-slate-500">Категорий пока нет.</div>
+        <div className="card text-center py-8 text-sm text-slate-500">По заданным фильтрам категорий нет.</div>
       ) : (
         <>
         <nav aria-label="Переход к категории по букве" className="sticky top-0 z-10 flex flex-wrap gap-1 rounded-xl border border-line bg-surface/95 p-2 shadow-sm backdrop-blur">

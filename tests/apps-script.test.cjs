@@ -534,7 +534,7 @@ test('v3 get_my_context returns profile, memberships and first family',()=>{cons
 test('v3 create_family and join_family_by_invite save display names',()=>{const h=makeHarness(),o=h.signup('owner-v3@example.com'),p=h.signup('partner-v3@example.com'),f=h.call({action:'rpc',token:o.token,name:'create_family',params:{p_name:'Семья v3',p_display_name:'Владелец'}});assert.equal(f.error,null,f.error?.message);const j=h.call({action:'rpc',token:p.token,name:'join_family_by_invite',params:{p_invite_code:f.data.invite_code,p_display_name:'Партнёр'}});assert.equal(j.error,null,j.error?.message);const c=h.call({action:'rpc',token:p.token,name:'get_my_context',params:{}});assert.equal(c.data.profile.display_name,'Партнёр');assert.equal(c.data.family.id,f.data.id);});
 test('v3 batch isolates errors and preserves request order',()=>{const h=makeHarness(),u=h.signup('batch-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Пакет'}).data,r=h.call({action:'batch',token:u.token,requests:[{action:'query',table:'families',mode:'select'},{action:'rpc',name:'get_my_context',params:{}},{action:'unknown_action'}]});assert.equal(r.error,null,r.error?.message);assert.equal(r.data.length,3);assert.equal(r.data[0].data[0].id,f.id);assert.equal(r.data[1].data.family.id,f.id);assert.match(r.data[2].error.message,/Неизвестное действие/);});
 test('v3 batch rejects more than 25 requests and unauthenticated calls',()=>{const h=makeHarness(),u=h.signup('batch-limit-v3@example.com'),r=h.call({action:'batch',token:u.token,requests:Array.from({length:26},()=>({action:'query',table:'profiles',mode:'select'}))}),noAuth=h.call({action:'batch',requests:[{action:'query',table:'profiles',mode:'select'}]});assert.match(r.error.message,/Слишком много запросов/);assert.match(noAuth.error.message,/Требуется вход/);});
-test('GET health endpoint reports API version 8',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,8);});
+test('GET health endpoint reports API version 11',()=>{const h=makeHarness(),r=JSON.parse(h.context.doGet().getContent());assert.equal(r.version,11);});
 
 
 test('upsert cannot overwrite server-owned creation timestamp', () => {
@@ -1130,14 +1130,14 @@ test('Telegram one-time linking records transactions through the existing family
   assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
 
   const props = h.context.PropertiesService.getScriptProperties();
-  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret');
+  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
   assert.equal(generated.data.code.length, 12);
 
   const linked = h.call({
     action: 'telegramWebhook',
-    telegramSecret: 'test-backend-secret',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
     update: { update_id: 7001, message: {
       chat: { id: 700, type: 'private' }, from: { id: 700 },
       text: '/link ' + generated.data.code
@@ -1145,10 +1145,12 @@ test('Telegram one-time linking records transactions through the existing family
   });
   assert.equal(linked.error, null, linked.error?.message);
   assert.match(linked.data.text, /успешно привязан/);
+  assert.ok(linked.data.text.includes('\n'), 'Telegram replies should contain real line breaks');
+  assert.equal(linked.data.text.includes('\\n'), false, 'Telegram replies must not contain escaped newline text');
 
   const added = h.call({
     action: 'telegramWebhook',
-    telegramSecret: 'test-backend-secret',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
     update: { update_id: 7002, message: {
       chat: { id: 700, type: 'private' }, from: { id: 700 },
       text: 'Проезд 45 рублей'
@@ -1168,7 +1170,7 @@ test('Telegram one-time linking records transactions through the existing family
   // A Telegram retry with the same update_id returns the cached reply and does not append again.
   const retried = h.call({
     action: 'telegramWebhook',
-    telegramSecret: 'test-backend-secret',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
     update: { update_id: 7002, message: {
       chat: { id: 700, type: 'private' }, from: { id: 700 },
       text: 'Проезд 45 рублей'
@@ -1183,7 +1185,7 @@ test('Telegram webhook rejects an invalid backend secret and prevents reuse of a
   const h = makeHarness();
   const user = h.signup('telegram-code-owner@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Одноразовый код' });
-  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'correct-secret');
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'correct-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
 
@@ -1194,13 +1196,13 @@ test('Telegram webhook rejects an invalid backend secret and prevents reuse of a
   assert.match(invalidSecret.error.message, /authentication failed/i);
 
   const linked = h.call({
-    action: 'telegramWebhook', telegramSecret: 'correct-secret',
+    action: 'telegramWebhook', telegramSecret: 'correct-secret-0123456789abcdef01234567',
     update: { update_id: 7102, message: { chat: { id: 701, type: 'private' }, from: { id: 701 }, text: '/link ' + generated.data.code }}
   });
   assert.equal(linked.error, null, linked.error?.message);
 
   const reused = h.call({
-    action: 'telegramWebhook', telegramSecret: 'correct-secret',
+    action: 'telegramWebhook', telegramSecret: 'correct-secret-0123456789abcdef01234567',
     update: { update_id: 7103, message: { chat: { id: 702, type: 'private' }, from: { id: 702 }, text: '/link ' + generated.data.code }}
   });
   assert.match(reused.error.message, /код не найден/i);
@@ -1231,17 +1233,17 @@ test('Telegram salary expenses are assigned to the linked family member category
   const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья зарплат' }).data;
   h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
 
-  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'salary-secret');
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'salary-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: partner.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
   const link = h.call({
-    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    action: 'telegramWebhook', telegramSecret: 'salary-secret-0123456789abcdef01234567',
     update: { update_id: 7201, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: '/link ' + generated.data.code }}
   });
   assert.equal(link.error, null, link.error?.message);
 
   const added = h.call({
-    action: 'telegramWebhook', telegramSecret: 'salary-secret',
+    action: 'telegramWebhook', telegramSecret: 'salary-secret-0123456789abcdef01234567',
     update: { update_id: 7202, message: { chat: { id: 720, type: 'private' }, from: { id: 720 }, text: 'Доход 5000 рублей зарплата' }}
   });
   assert.equal(added.error, null, added.error?.message);
@@ -1254,22 +1256,236 @@ test('Telegram salary expenses are assigned to the linked family member category
 });
 
 
+test('Telegram category recognition covers common expense and income phrases', () => {
+  const h = makeHarness();
+  const owner = h.signup('telegram-category-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Категории Telegram' }).data;
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'category-secret-0123456789abcdef01234567');
+  const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: 'category-secret-0123456789abcdef01234567',
+    update: { update_id: 7250, message: { chat: { id: 725, type: 'private' }, from: { id: 725 }, text: '/link ' + generated.data.code }}
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  const examples = [
+    ['Пятёрочка 850 рублей', 'Продукты домой'],
+    ['Аптека 320 рублей', 'Лекарства'],
+    ['Интернет 700 рублей', 'Интернет'],
+    ['Доставка 1200 рублей', 'Доставка еды'],
+    ['Парковка 300 рублей', 'Парковка'],
+    ['Стоматолог 2500 рублей', 'Стоматология'],
+    ['Подписка 199 рублей', 'Подписки'],
+    ['Премия 5000 рублей', 'Премии']
+  ];
+  let updateId = 7251;
+  for (const [message, expectedCategory] of examples) {
+    const added = h.call({
+      action: 'telegramWebhook', telegramSecret: 'category-secret-0123456789abcdef01234567',
+      update: { update_id: updateId++, message: { chat: { id: 725, type: 'private' }, from: { id: 725 }, text: message }}
+    });
+    assert.equal(added.error, null, added.error?.message);
+    assert.match(added.data.text, new RegExp(expectedCategory));
+  }
+  const transactions = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, examples.length);
+  const categories = h.call({ action: 'query', token: owner.token, table: 'categories', mode: 'select' }).data;
+  for (let i = 0; i < examples.length; i++) {
+    assert.equal(categories.find(x => x.id === transactions[i].category_id).name, examples[i][1]);
+  }
+});
+
 test('Telegram rejects ambiguous messages containing multiple numbers without writing a transaction', () => {
   const h = makeHarness();
   const user = h.signup('telegram-ambiguous@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Без неоднозначных операций' });
-  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'ambiguous-secret');
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'ambiguous-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
   h.call({
-    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret-0123456789abcdef01234567',
     update: { update_id: 7301, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: '/link ' + generated.data.code }}
   });
   const ambiguous = h.call({
-    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret',
+    action: 'telegramWebhook', telegramSecret: 'ambiguous-secret-0123456789abcdef01234567',
     update: { update_id: 7302, message: { chat: { id: 730, type: 'private' }, from: { id: 730 }, text: 'Продукты 45 и 50 рублей' }}
   });
   assert.match(ambiguous.error.message, /несколько чисел/i);
   const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
   assert.equal(transactions.length, 0);
+});
+
+
+test('transaction attribution defaults to author and permits only a member of the same family', () => {
+  const h = makeHarness();
+  const owner = h.signup('attribution-owner@example.com');
+  const partner = h.signup('attribution-partner@example.com');
+  const outsider = h.signup('attribution-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Учёт участников' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+
+  const selectedPartner = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, operation_date: '2026-11-03', responsible_user_id: partner.user.id }
+  });
+  assert.equal(selectedPartner.error, null, selectedPartner.error?.message);
+  assert.equal(selectedPartner.data[0].created_by, owner.user.id);
+  assert.equal(selectedPartner.data[0].responsible_user_id, partner.user.id);
+
+  const invalid = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-03', responsible_user_id: outsider.user.id }
+  });
+  assert.match(invalid.error.message, /ответственный участник/i);
+
+  const defaulted = h.call({
+    action: 'query', token: partner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'income', amount_kopecks: 50000, operation_date: '2026-11-03' }
+  });
+  assert.equal(defaulted.error, null, defaulted.error?.message);
+  assert.equal(defaulted.data[0].responsible_user_id, partner.user.id);
+});
+
+test('get_my_context returns names for both family participants', () => {
+  const h = makeHarness();
+  const owner = h.signup('context-owner@example.com');
+  const partner = h.signup('context-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Профили семьи' }).data;
+  h.call({ action: 'ensureProfile', token: owner.token, display_name: 'Никита' });
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  h.call({ action: 'ensureProfile', token: partner.token, display_name: 'Леся' });
+  const context = h.call({ action: 'rpc', token: owner.token, name: 'get_my_context' });
+  assert.equal(context.error, null, context.error?.message);
+  assert.deepEqual(context.data.member_profiles.map(p => p.id).sort(), [owner.user.id, partner.user.id].sort());
+  assert.ok(context.data.member_profiles.every(p => typeof p.display_name === 'string' && p.display_name.length > 0));
+});
+
+test('create_goal_with_purchase creates a linked goal and planned purchase', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-purchase-link@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Связанные цели' }).data;
+  const result = h.call({
+    action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
+    params: { p_family_id: family.id, p_name: 'Телевизор', p_description: 'Для гостиной', p_target_kopecks: 7000000, p_target_date: '2027-03-01', p_priority: 2, p_create_purchase: true }
+  });
+  assert.equal(result.error, null, result.error?.message);
+  const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data.find(g => g.id === result.data.goal_id);
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data.find(p => p.id === result.data.purchase_id);
+  assert.equal(goal.name, 'Телевизор');
+  assert.equal(purchase.goal_id, goal.id);
+  assert.equal(purchase.name, goal.name);
+  assert.equal(purchase.estimated_kopecks, goal.target_kopecks);
+  assert.equal(purchase.comment, goal.description);
+});
+
+test('supplemental category provisioning is idempotent', () => {
+  const h = makeHarness();
+  const user = h.signup('supplemental-category-migration@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Дополнительные категории' }).data;
+  const first = h.call({ action: 'rpc', token: user.token, name: 'ensure_supplemental_categories', params: { p_family_id: family.id } });
+  const second = h.call({ action: 'rpc', token: user.token, name: 'ensure_supplemental_categories', params: { p_family_id: family.id } });
+  assert.equal(first.error, null, first.error?.message);
+  assert.equal(second.error, null, second.error?.message);
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  assert.equal(categories.filter(c => !c.parent_id && c.name === 'Сигареты').length, 1);
+  assert.equal(categories.filter(c => !c.parent_id && c.name === 'Кредиты').length, 1);
+  assert.equal(categories.filter(c => c.name === 'Погашение основного долга').length, 1);
+});
+
+test('schema migration appends transaction participant column without changing prior columns', () => {
+  const h = makeHarness();
+  const user = h.signup('schema-additive@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Миграция схемы' });
+  const spreadsheet = h.context.SpreadsheetApp.getActiveSpreadsheet();
+  const oldHeaders = ['id', 'family_id', 'type', 'amount_kopecks', 'operation_date', 'operation_time', 'category_id', 'account_id', 'to_account_id', 'description', 'created_by', 'updated_by', 'planned', 'parent_recurring_id', 'created_at', 'updated_at'];
+  const sheet = spreadsheet.insertSheet('transactions');
+  sheet.getRange(1, 1, 1, oldHeaders.length).setValues([oldHeaders]);
+  const preservedRow = ['legacy-id', 'family-1', 'expense', 4500, '2026-11-03', '', '', '', '', 'Старый расход', 'user-1', 'user-1', false, '', '2026-11-03T10:00:00.000Z', '2026-11-03T10:00:00.000Z'];
+  sheet.getRange(2, 1, 1, oldHeaders.length).setValues([preservedRow]);
+  const result = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(result.error, null, result.error?.message);
+  assert.deepEqual(sheet.getRange(1, 1, 1, oldHeaders.length).getValues()[0], oldHeaders);
+  assert.equal(sheet.getRange(1, oldHeaders.length + 1, 1, 1).getValues()[0][0], 'responsible_user_id');
+  assert.deepEqual(sheet.getRange(2, 1, 1, oldHeaders.length).getValues()[0], preservedRow);
+  assert.equal(sheet.getRange(2, oldHeaders.length + 1, 1, 1).getValues()[0][0], '');
+});
+
+test('table revision polling changes after a successful write', () => {
+  const h = makeHarness();
+  const user = h.signup('revision-polling@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Версии таблиц' }).data;
+  const before = h.call({ action: 'rpc', token: user.token, name: 'get_table_revision', params: { p_table: 'transactions' } });
+  const insert = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 4500, operation_date: '2026-11-03' }
+  });
+  const after = h.call({ action: 'rpc', token: user.token, name: 'get_table_revision', params: { p_table: 'transactions' } });
+  assert.equal(insert.error, null, insert.error?.message);
+  assert.equal(before.error, null, before.error?.message);
+  assert.equal(after.error, null, after.error?.message);
+  assert.notEqual(after.data, before.data);
+});
+
+
+test('recurring payments preserve the selected family participant when confirmed', () => {
+  const h = makeHarness();
+  const owner = h.signup('recurring-attribution-owner@example.com');
+  const partner = h.signup('recurring-attribution-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Ответственный за платёж' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  const created = h.call({
+    action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 150000, category_id: null, account_id: null, description: 'Аренда', start_date: '2026-11-03', next_due_date: '2026-11-03', frequency: 'monthly', remind: true, active: true, responsible_user_id: partner.user.id }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const recurring = created.data[0];
+  const confirmed = h.call({
+    action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-03' }
+  });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+  const transaction = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(transaction.created_by, owner.user.id);
+  assert.equal(transaction.responsible_user_id, partner.user.id);
+});
+
+
+test('bounded monthly transaction reads avoid full-sheet reads on a large ledger', () => {
+  const h = makeHarness();
+  const user = h.signup('selective-read@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Выборочное чтение' }).data;
+  const values = Array.from({ length: 250 }, (_, index) => ({
+    family_id: family.id,
+    type: 'expense',
+    amount_kopecks: 1000 + index,
+    operation_date: index < 240 ? '2026-10-15' : '2026-11-03',
+    description: 'Операция ' + index,
+    planned: false,
+  }));
+  const inserted = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'insert', values });
+  assert.equal(inserted.error, null, inserted.error?.message);
+
+  const sheet = h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions');
+  let fullSheetReads = 0;
+  let dataRowRanges = 0;
+  const originalGetDataRange = sheet.getDataRange.bind(sheet);
+  const originalGetRange = sheet.getRange.bind(sheet);
+  sheet.getDataRange = (...args) => { fullSheetReads++; return originalGetDataRange(...args); };
+  sheet.getRange = (...args) => { if (args[0] >= 2) dataRowRanges++; return originalGetRange(...args); };
+
+  const selected = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'select',
+    filters: [
+      { column: 'family_id', op: 'eq', value: family.id },
+      { column: 'operation_date', op: 'gte', value: '2026-11-01' },
+      { column: 'operation_date', op: 'lte', value: '2026-11-30' },
+    ],
+    orders: [{ column: 'operation_date', ascending: false }],
+  });
+  assert.equal(selected.error, null, selected.error?.message);
+  assert.equal(selected.data.length, 10);
+  assert.equal(selected.data.every(row => row.operation_date === '2026-11-03'), true);
+  assert.equal(fullSheetReads, 0);
+  assert.equal(dataRowRanges, 2);
 });

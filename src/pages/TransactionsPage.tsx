@@ -10,7 +10,7 @@ import Modal from '../components/Modal'
 import { ensureSupplementalCategories } from '../lib/categories'
 
 export default function TransactionsPage() {
-  const { family, session } = useAuth()
+  const { family, session, memberProfiles } = useAuth()
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -19,6 +19,13 @@ export default function TransactionsPage() {
   const [cursor, setCursor] = useState(currentMoscowMonth)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense' | 'transfer'>('all')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [participantFilter, setParticipantFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'planned' | 'actual'>('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [minAmount, setMinAmount] = useState('')
+  const [maxAmount, setMaxAmount] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<TransactionDraft | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
@@ -30,14 +37,14 @@ export default function TransactionsPage() {
     setLoading(true)
     setError(null)
     try {
-      await ensureSupplementalCategories(family.id)
-      const [txRes, catRes, accountRes] = await Promise.all([
+      const [, txRes, catRes, accountRes] = await Promise.all([
+        ensureSupplementalCategories(family.id),
         googleSheets
           .from('transactions')
           .select('*')
           .eq('family_id', family.id)
-          .gte('operation_date', range.start)
-          .lte('operation_date', range.end)
+          .gte('operation_date', dateFrom || range.start)
+          .lte('operation_date', dateTo || range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
         googleSheets.from('categories').select('*').eq('family_id', family.id),
@@ -56,7 +63,7 @@ export default function TransactionsPage() {
     }
   }
 
-  useEffect(() => { load() }, [family?.id, range.start, range.end])
+  useEffect(() => { load() }, [family?.id, range.start, range.end, dateFrom, dateTo])
   useEffect(() => {
     if (!family) return
     const ch = googleSheets.channel('tx-page').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
@@ -68,6 +75,13 @@ export default function TransactionsPage() {
 
   const filtered = txs.filter((t) => {
     if (typeFilter !== 'all' && t.type !== typeFilter) return false
+    if (categoryFilter && t.category_id !== categoryFilter) return false
+    if (participantFilter && (t.responsible_user_id || t.created_by) !== participantFilter) return false
+    if (statusFilter === 'planned' && !t.planned) return false
+    if (statusFilter === 'actual' && t.planned) return false
+    const amount = t.amount_kopecks / 100
+    if (minAmount !== '' && amount < Number(minAmount.replace(',', '.'))) return false
+    if (maxAmount !== '' && amount > Number(maxAmount.replace(',', '.'))) return false
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       const cat = t.category_id ? catMap.get(t.category_id)?.name.toLowerCase() ?? '' : ''
@@ -75,6 +89,8 @@ export default function TransactionsPage() {
     }
     return true
   })
+  const hasFilters = !!(search || categoryFilter || participantFilter || statusFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount || typeFilter !== 'all')
+  const clearFilters = () => { setSearch(''); setTypeFilter('all'); setCategoryFilter(''); setParticipantFilter(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount('') }
 
   const income = filtered.filter((t) => t.type === 'income' && !t.planned).reduce((s, t) => s + t.amount_kopecks, 0)
   const expense = filtered.filter((t) => t.type === 'expense' && !t.planned).reduce((s, t) => s + t.amount_kopecks, 0)
@@ -116,7 +132,17 @@ export default function TransactionsPage() {
           <option value="expense">Расходы</option>
           <option value="transfer">Переводы</option>
         </select>
+        <select className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select className="input w-auto min-w-[145px]" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+        <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}><option value="all">Все статусы</option><option value="actual">Фактические</option><option value="planned">Плановые</option></select>
       </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <label className="text-xs text-slate-500">С даты<input className="input mt-1" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
+        <label className="text-xs text-slate-500">По дату<input className="input mt-1" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
+        <label className="text-xs text-slate-500">Сумма от, ₽<input className="input mt-1" type="number" min="0" step="0.01" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="Любая" /></label>
+        <label className="text-xs text-slate-500">Сумма до, ₽<input className="input mt-1" type="number" min="0" step="0.01" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Любая" /></label>
+      </div>
+      {hasFilters && <button type="button" onClick={clearFilters} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
 
       <div className="flex gap-3 text-sm">
         <div className="text-accent-600">Доходы: {formatRubles(income)}</div>
@@ -134,6 +160,7 @@ export default function TransactionsPage() {
         <div className="space-y-2">
           {filtered.map((t) => {
             const cat = t.category_id ? catMap.get(t.category_id) : null
+            const participant = memberProfiles.find((profile) => profile.id === (t.responsible_user_id || t.created_by))
             const isIncome = t.type === 'income'
             return (
               <div key={t.id} className="card flex items-center gap-3 py-3">
@@ -143,13 +170,13 @@ export default function TransactionsPage() {
                     {t.description || cat?.name || 'Операция'}
                     {t.planned && <span className="ml-2 badge bg-warn-100 text-warn-600">план</span>}
                   </div>
-                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {t.type === 'transfer' ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}` : `${cat?.name ?? 'Без категории'} · ${accountMap.get(t.account_id ?? '') ?? 'Без счёта'}`}</div>
+                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {t.type === 'transfer' ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}` : `${cat?.name ?? 'Без категории'} · ${accountMap.get(t.account_id ?? '') ?? 'Без счёта'}`}{participant ? ` · ${participant.display_name}` : ''}</div>
                 </div>
                 <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : 'text-slate-900'}`}>
                   {t.type === 'transfer' ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned }); setShowAdd(true) }} className="btn-ghost px-2" aria-label="Изменить">
+                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label="Изменить">
                     <Pencil size={16} />
                   </button>
                   <button onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label="Удалить">
