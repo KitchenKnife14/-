@@ -983,17 +983,47 @@ function telegramWebhook_(req){
     const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило)(?=\s|$)/i.test(text);
     const kind=isIncome?'income':'expense';
     const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
-    const aliases=[
-      [/(?:проезд|автобус|метро|трамвай|маршрутка|транспорт)/i,'Общественный транспорт'],
-      [/такси/i,'Такси'],[/бензин|заправк/i,'Бензин'],[/продукт|магазин|пятерочк|магнит/i,'Продукты домой'],
-      [/кафе|ресторан|обед|ужин/i,'Кафе и рестораны'],[/кофе/i,'Кофе и перекусы на работе'],
-      [/аренд/i,'Аренда квартиры'],[/коммунал|жкх/i,'Коммунальные услуги'],[/интернет/i,'Интернет'],
-      [/зарплат/i,(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника'],[/преми/i,'Премии'],[/подработ/i,'Подработки']
+    const normalizedDescription=String(description).toLowerCase().replace(/ё/g,'е').replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+    const salaryCategory=(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника';
+    // Specific phrases come before broad ones to avoid assigning a more general category.
+    const aliases=kind==='income'?[
+      [/\\bзарплат\\w*\\b|\\bаванс\\b|\\bоклад\\b/i,salaryCategory],
+      [/\\bпреми\\w*\\b|\\bбонус\\w*\\b/i,'Премии'],
+      [/\\bподработ\\w*\\b|\\bфриланс\\w*\\b/i,'Подработки'],
+      [/\\bвозврат\\w*\\b|\\bкомпенсац\\w*\\b|\\bкэшбек\\w*\\b|\\bcashback\\b/i,'Возвраты и компенсации'],
+      [/\\bпродал\\w*\\b|\\bпродажа\\b|\\bавито\\b/i,'Доходы от продажи вещей'],
+      [/\\bпроцент\\w*\\b|\\bдивиденд\\w*\\b|\\binvest\\w*\\b/i,'Проценты и инвестиционный доход']
+    ]:[
+      [/\\bпроезд\\w*\\b|\\bавтобус\\w*\\b|\\bметро\\b|\\bтрамва\\w*\\b|\\bмаршрутк\\w*\\b|\\bтранспорт\\w*\\b/i,'Общественный транспорт'],
+      [/\\bтакси\\b|\\byandex go\\b|\\bяндекс такси\\b/i,'Такси'],
+      [/\\bбензин\\w*\\b|\\bзаправ\\w*\\b|\\bтоплив\\w*\\b/i,'Бензин'],
+      [/\\bпарков\\w*\\b/i,'Парковка'],
+      [/\\bшиномонтаж\\w*\\b|\\bто\\b|\\bремонт авто\\b|\\bавтосервис\\w*\\b/i,'Обслуживание автомобиля'],
+      [/\\bпятерочк\\w*\\b|\\bмагнит\\b|\\bперекресток\\b|\\bлента\\b|\\bашан\\b|\\bвкусвилл\\b|\\bпродукт\\w*\\b|\\bсупермаркет\\w*\\b|\\bмагазин продукт\\w*\\b/i,'Продукты домой'],
+      [/\\bдоставк\\w*\\b|\\bсамокат\\b|\\bделивери\\b|\\bкупер\\b/i,'Доставка еды'],
+      [/\\bкафе\\b|\\bресторан\\w*\\b|\\bобед\\w*\\b|\\bужин\\w*\\b|\\bзавтрак\\w*\\b/i,'Кафе и рестораны'],
+      [/\\bкофе\\b|\\bперекус\\w*\\b|\\bбулоч\\w*\\b/i,'Кофе и перекусы на работе'],
+      [/\\bаптек\\w*\\b|\\bлекарств\\w*\\b|\\bтаблетк\\w*\\b|\\bмедикамент\\w*\\b/i,'Лекарства'],
+      [/\\bстоматолог\\w*\\b|\\bзубн\\w*\\b/i,'Стоматология'],
+      [/\\bврач\\w*\\b|\\bдоктор\\w*\\b|\\bклиник\\w*\\b/i,'Врачи'],
+      [/\\bаренд\\w*\\b|\\bквартир\\w*\\b/i,'Аренда квартиры'],
+      [/\\bкоммунал\\w*\\b|\\bжкх\\b|\\bсвет\\b|\\bэлектричеств\\w*\\b|\\bводоснабж\\w*\\b/i,'Коммунальные услуги'],
+      [/\\bинтернет\\w*\\b|\\bwi ?fi\\b|\\bвайфай\\b/i,'Интернет'],
+      [/\\bмобильн\\w*\\b|\\bсвяз\\b|\\bтелефон\\b|\\bтариф\\w*\\b/i,'Мобильная связь'],
+      [/\\bбытов\\w* хим\\w*\\b|\\bпорош\\w*\\b|\\bмоющ\\w*\\b/i,'Бытовая химия'],
+      [/\\bшампун\\w*\\b|\\bгигиен\\w*\\b|\\bзубн\\w* паст\\w*\\b/i,'Средства гигиены'],
+      [/\\bодежд\\w*\\b|\\bобув\\w*\\b|\\bкуртк\\w*\\b|\\bджинс\\w*\\b/i,'Одежда и обувь'],
+      [/\\bподписк\\w*\\b|\\bnetflix\\b|\\bкинопоиск\\b|\\bivi\\b/i,'Подписки'],
+      [/\\bигр\\w*\\b|\\bsteam\\b|\\bplaystation\\b|\\bxbox\\b/i,'Игры'],
+      [/\\bкино\\b|\\bтеатр\\w*\\b|\\bконцерт\\w*\\b/i,'Кино и мероприятия'],
+      [/\\bподар\\w*\\b/i,'Подарки'],
+      [/\\bпутешеств\\w*\\b|\\bотпуск\\w*\\b|\\bотел\\w*\\b|\\bбилет\\w*\\b/i,'Путешествия и отдых']
     ];
     let categoryName='';
-    for(const pair of aliases){if(pair[0].test(description)){categoryName=pair[1];break;}}
-    let category=categoryName?categories.find(x=>x.name===categoryName):null;
-    if(!category)category=categories.find(x=>String(description).toLowerCase().includes(String(x.name).toLowerCase())||String(x.name).toLowerCase().includes(String(description).toLowerCase()));
+    for(const pair of aliases){if(pair[0].test(normalizedDescription)){categoryName=pair[1];break;}}
+    const normalizeCategoryName=value=>String(value||'').toLowerCase().replace(/ё/g,'е').replace(/[^\\p{L}\\p{N}]+/gu,' ').trim();
+    let category=categoryName?categories.find(x=>normalizeCategoryName(x.name)===normalizeCategoryName(categoryName)):null;
+    if(!category)category=categories.find(x=>normalizedDescription.includes(normalizeCategoryName(x.name)));
     if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
     const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
     const accountId=accounts.length===1?accounts[0].id:null;
