@@ -1256,6 +1256,46 @@ test('Telegram salary expenses are assigned to the linked family member category
 });
 
 
+test('Telegram category recognition covers common expense and income phrases', () => {
+  const h = makeHarness();
+  const owner = h.signup('telegram-category-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Категории Telegram' }).data;
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'category-secret-0123456789abcdef01234567');
+  const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: 'category-secret-0123456789abcdef01234567',
+    update: { update_id: 7250, message: { chat: { id: 725, type: 'private' }, from: { id: 725 }, text: '/link ' + generated.data.code }}
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  const examples = [
+    ['Пятёрочка 850 рублей', 'Продукты домой'],
+    ['Аптека 320 рублей', 'Лекарства'],
+    ['Интернет 700 рублей', 'Интернет'],
+    ['Доставка 1200 рублей', 'Доставка еды'],
+    ['Парковка 300 рублей', 'Парковка'],
+    ['Стоматолог 2500 рублей', 'Стоматология'],
+    ['Подписка 199 рублей', 'Подписки'],
+    ['Премия 5000 рублей', 'Премии']
+  ];
+  let updateId = 7251;
+  for (const [message, expectedCategory] of examples) {
+    const added = h.call({
+      action: 'telegramWebhook', telegramSecret: 'category-secret-0123456789abcdef01234567',
+      update: { update_id: updateId++, message: { chat: { id: 725, type: 'private' }, from: { id: 725 }, text: message }}
+    });
+    assert.equal(added.error, null, added.error?.message);
+    assert.match(added.data.text, new RegExp(expectedCategory));
+  }
+  const transactions = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, examples.length);
+  const categories = h.call({ action: 'query', token: owner.token, table: 'categories', mode: 'select' }).data;
+  for (let i = 0; i < examples.length; i++) {
+    assert.equal(categories.find(x => x.id === transactions[i].category_id).name, examples[i][1]);
+  }
+});
+
 test('Telegram rejects ambiguous messages containing multiple numbers without writing a transaction', () => {
   const h = makeHarness();
   const user = h.signup('telegram-ambiguous@example.com');
