@@ -622,3 +622,16 @@ HEAD до:
 - До изменения doPost требуется спроектировать безопасное поведение для schema repair, проверки сессии, login attempts, batch и Telegram idempotency.
 - Код приложения и тесты пока не менялись; Production и рабочая таблица не затронуты.
 - Следующий шаг: подготовить тестируемую классификацию запросов и тесты lock lifecycle; затем выполнить минимальную реализацию на ветке ispravleniya.
+
+
+## Журнал работ — первый безопасный кодовый шаг LOCK-01 (2026-11-09)
+
+- В google-apps-script/Code.gs добавлен requestLockMode_(): явный fail-closed классификатор запросов read-candidate/write. Он пока НЕ подключён к doPost и не меняет runtime-поведение.
+- В tests/apps-script.test.cjs добавлены три теста: read candidates, write/unknown fail-closed, mixed/malformed batch.
+- Классификатор помечает query select, getSession/getUser и три read RPC как read-candidate; неизвестные действия и любые мутации остаются write.
+- Важно: read-candidate пока не означает доказанную чистоту чтения. Выявлены ленивые schema writes в sheet_()/authSheet_(); поэтому helper намеренно не используется в doPost до отдельного решения.
+- В .github/workflows/validate.yml добавлена ветка ispravleniya в push filter. Однако проверка GitHub Actions через API показала 0 запусков для ветки: workflow в основной ветке не включает ispravleniya, и менять main запрещено. CI пока не подтверждён.
+- GitHub push автоматически вызвал Vercel Preview deployments для связанных проектов. Проверенная запись основного Vercel проекта имеет target=null и alias git-ispravleniya-nikita-aa7c.vercel.app; Production alias не менялся. Эти Preview builds созданы автоматической Git integration, не ручным деплоем. В дальнейшем учитывать, что push в ветку запускает автоматические Preview builds.
+- Попытка локально клонировать репозиторий для запуска npm test/build не удалась из-за недоступности github.com из локального контейнера. Тесты и сборка не запускались в этой среде.
+- Ни один из этих шагов не менял поведение doPost: helper пока не подключён; существующие операции и основная таблица не затронуты.
+- Следующий шаг: обеспечить запуск CI без изменения main (например, отдельный draft PR только для проверки, без merge — сначала оценить и согласовать) либо доступный локальный runner; затем до рефакторинга завершить дизайн безопасной schema/auth обработки.
