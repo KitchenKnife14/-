@@ -759,3 +759,18 @@ HEAD до:
 - Консолидирован первоначальный полный аудит в docs/ISPRAVLENIYA/CODEGS-AUDIT-2026-11-09.md: приоритеты, FC/TG/LOCK реестр, проверено/не проверено, план исправлений и правила сохранности данных. Commit: c0e6f11147c4774745ca88d801213e861e26e9ab.
 - В этом этапе изменён только Markdown-аудит и этот журнал в существующей ветке ispravleniya. Code.gs, frontend, тесты, Apps Script deployment, Telegram webhook, Vercel Production и Google Sheets не изменялись.
 - Notion поиск по названию проекта/аудита не вернул существующую страницу. Новую страницу не создавал, чтобы не плодить дубли; основным источником остаётся существующий GitHub план/аудит.
+
+
+### Журнал — 2026-11-09: уточнение FC-01/02/04/06/13/20 и UX-01
+
+- Повторно проверены полный пользовательский Code.gs (1078 строк), веточный google-apps-script/Code.gs, src/pages/TransactionsPage.tsx, src/components/TransactionForm.tsx, src/lib/googleSheets.ts и src/lib/accountBalances.js.
+- FC-01: backend использует Number.isSafeInteger(Number(value)); числовые строки проходят, потому что проверяется приведённое значение, а не исходный тип.
+- FC-02: общая валидация не проверяет budgets.limit_kopecks, goals.target_kopecks, planned_purchases.estimated_kopecks, monthly_plans.planned_kopecks. create_goal_with_purchase проверяет target отдельно, но общие query insert/update/upsert обходят это отдельное RPC-условие. Проверки для accounts.starting_balance_kopecks, transactions, recurring_payments и goal_contributions также допускают numeric strings.
+- FC-04: category_id проверяется на принадлежность семье, но category.kind не сопоставляется с transactions.type; аналогичная семантическая проверка требуется для recurring_payments, budgets и monthly_plans с учётом типа записи.
+- FC-06: delete accounts защищён проверкой ссылок; аналогичного guard для delete categories не найдено. Возможны осиротевшие ссылки в операциях/бюджетах/планах/регулярных платежах/покупках и дочерних категориях.
+- FC-20: TransactionForm не отправляет стабильный id/idempotency key для новой операции; backend генерирует UUID на каждый insert; timeout клиента 45 секунд. Автоматический retry не найден, но повторная ручная отправка после неоднозначного timeout может создать дубль.
+- FC-13: accountBalances проверяет безопасный integer исходных величин, но не результат сложения/вычитания.
+- UX-01: обнаружено, что фильтр участников и подпись участника уже есть в TransactionsPage.tsx. Однако сейчас они используют responsible_user_id || created_by. TransactionForm позволяет выбрать ответственного, поэтому UI может показывать ответственного вместо реального автора. Требуется не повторное создание фильтра, а разделение фильтра/метки «Автор» и «Ответственный» и проверка старых записей без created_by.
+- Детальные выводы и точные участки кода внесены в CODEGS-AUDIT-2026-11-09.md. Commit: 1a910da1841243fc2980e4ef8e70a11faf6a0fcf.
+- Поиск Notion по проекту и названию аудита не нашёл существующей страницы. Новая страница не создавалась, чтобы не плодить дубли; GitHub остаётся основным журналом.
+- На этом шаге изменён только Markdown-аудит и журнал в ветке ispravleniya. Код приложения, тесты, deployments, webhook и данные Google Sheets не изменялись.
