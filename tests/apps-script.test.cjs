@@ -1449,3 +1449,67 @@ test('bounded monthly transaction reads avoid full-sheet reads on a large ledger
   assert.equal(fullSheetReads, 0);
   assert.equal(dataRowRanges, 2);
 });
+
+
+test('request lock classifier marks only explicit read paths as read candidates', () => {
+  const h = makeHarness();
+  const classify = h.context.requestLockMode_;
+  const readCases = [
+    { action: 'getSession' },
+    { action: 'getUser' },
+    { action: 'query', table: 'transactions', mode: 'select' },
+    { action: 'query', table: 'transactions' },
+    { action: 'rpc', name: 'get_table_revision' },
+    { action: 'rpc', name: 'get_telegram_link_status' },
+    { action: 'rpc', name: 'get_my_context' },
+  ];
+  for (const request of readCases) {
+    assert.equal(classify(request), 'read-candidate', JSON.stringify(request));
+  }
+});
+
+test('request lock classifier keeps mutations and unknown actions fail-closed', () => {
+  const h = makeHarness();
+  const classify = h.context.requestLockMode_;
+  const writeCases = [
+    null,
+    undefined,
+    {},
+    { action: 'signup' },
+    { action: 'signin' },
+    { action: 'signout' },
+    { action: 'telegramWebhook' },
+    { action: 'ensureProfile' },
+    { action: 'createFamily' },
+    { action: 'joinFamily' },
+    { action: 'query', table: 'transactions', mode: 'insert' },
+    { action: 'query', table: 'transactions', mode: 'update' },
+    { action: 'query', table: 'transactions', mode: 'delete' },
+    { action: 'query', table: 'transactions', mode: 'upsert' },
+    { action: 'rpc', name: 'confirm_recurring_payment' },
+    { action: 'rpc', name: 'unknown_rpc' },
+    { action: 'unknown_action' },
+  ];
+  for (const request of writeCases) {
+    assert.equal(classify(request), 'write', JSON.stringify(request));
+  }
+});
+
+test('request lock classifier treats mixed or malformed batches as writes', () => {
+  const h = makeHarness();
+  const classify = h.context.requestLockMode_;
+  assert.equal(classify({ action: 'batch', requests: [
+    { action: 'query', table: 'transactions', mode: 'select' },
+    { action: 'rpc', name: 'get_my_context' },
+  ]}), 'read-candidate');
+  assert.equal(classify({ action: 'batch', requests: [
+    { action: 'query', table: 'transactions', mode: 'select' },
+    { action: 'query', table: 'transactions', mode: 'insert' },
+  ]}), 'write');
+  assert.equal(classify({ action: 'batch', requests: [] }), 'write');
+  assert.equal(classify({ action: 'batch', requests: 'not-an-array' }), 'write');
+  assert.equal(classify({ action: 'batch', requests: [
+    { action: 'query', table: 'transactions', mode: 'select' },
+    { action: 'unrecognized' },
+  ]}), 'write');
+});
