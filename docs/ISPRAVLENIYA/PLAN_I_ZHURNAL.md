@@ -851,3 +851,15 @@ HEAD до:
 - Сквозной прогресс формализован: 12 этапов, завершён 1/12 (≈8,3%), 11 остаются. Текущий этап №2, параллельно закрывается статический аудит №3.
 - В очередь ручных действий добавлены M-01 (тестовый Apps Script URL), M-02 (создание изолированной тестовой среды, если её ещё нет) и M-03 (единый финальный пакет настроек). Сейчас ничего выполнять не требуется.
 - Изменены только документы аудита и плана в ветке ispravleniya. Код, тесты, Apps Script deployments, Telegram webhook, Vercel Production и Google Sheets не изменялись.
+
+
+### Журнал — 2026-11-09: проверка Vercel Telegram handler
+
+- Проверены api/telegram/webhook.ts и telegram-webhook/handler.ts.
+- Положительно: POST-only, обязательные env secrets, минимальная длина секретов, проверка Telegram secret header через XOR comparison, HTTPS + script.google.com + /macros/s/<id>/exec allowlist, отсутствие логирования секретов/финансовых данных, 502 при сбое downstream для retry.
+- Замечания: нет явного fetch timeout/AbortController; URL validator не запрещает query/hash/userinfo; нет лимита размера/полной схемной проверки update; устойчивость повторной доставки полностью зависит от backend idempotency, а crash-window между Sheet write и ScriptProperties cache остаётся.
+- Не выполнялись запросы к реальному Vercel endpoint, Telegram или Apps Script.
+- Детали внесены в CODEGS-AUDIT-2026-11-09.md, commit 8c070ad61e57d027022ba959a3f44ffdf4a5b7e5.
+- Текущий сквозной счётчик без изменения: 1/12 этапов завершён (≈8,3%); продолжаются статические этапы №2 и №3. Следующее действие — закрыть статический backend/Telegram аудит, затем собрать тестовую матрицу и регрессионные тесты.
+- Очередь ручных действий M-01—M-03 не изменилась; сейчас ничего делать не нужно.
+- Изменён только Markdown-аудит и журнал. Код, тесты, deployments, webhook, Vercel Production и Google Sheets не изменялись.
