@@ -179,3 +179,65 @@ Batch принимает список внутренних действий и �
 - [ ] Основной Vercel проект автоматически создал Preview deployment от push; target=null, alias git-ispravleniya-nikita-aa7c.vercel.app. Production alias не менялся.
 - Изменение helper/test — подготовительная основа, а не исправление глобальной блокировки.
 
+
+
+---
+
+## 10. Полная матрица код-путей по загруженному Code.gs (2026-11-09)
+
+Источник: пользовательская загруженная копия Code.gs (1078 строк), дополнительно сопоставлена с веточной версией. Матрица отражает семантику кода, а не только имена методов.
+
+| Вход | Код-путь | Фактическая классификация | Почему |
+|---|---|---|---|
+| signup | signup_() | AUTH + WRITE | Читает auth, проверяет уникальность email, пишет auth row, session property, profile; PBKDF2 внутри lock |
+| signin | signin_() | AUTH + WRITE | Читает auth, меняет loginfail/session properties; может обновлять legacy password hash; PBKDF2 внутри lock |
+| signout | signout_() | AUTH + WRITE | Удаляет session property |
+| getSession | requireUser_() → route_() | READ с auth side effect | Проверяет session и auth rows; истёкшая session удаляется; authSheet_() может создать лист |
+| getUser | requireUser_() → route_() | READ с auth side effect | Те же side effects, что getSession |
+| ensureProfile | ensureProfile_() | WRITE | Может добавить профиль |
+| createFamily | route_() + rollback/seed | COMPOUND WRITE | Пишет family, membership, категории; при ошибке пытается откатить |
+| joinFamily | route_() | WRITE | Проверяет membership и добавляет участника |
+| query/select | query_() | READ с schema/auth side effect | Читает таблицы и проверяет доступ; requireUser_ может удалять сессию; sheet_ может создать лист/дописать заголовки |
+| query/insert | query_() | WRITE | Создаёт строки и может синхронизировать totals |
+| query/update | query_() | WRITE / COMPOUND WRITE | Обновляет строки; для целей/вкладов может пересчитывать связанные записи |
+| query/delete | query_() | WRITE / COMPOUND WRITE | Удаляет строки и каскадно обновляет связанные таблицы; удаление goal удаляет contributions |
+| query/upsert | query_() | WRITE | Обновляет или добавляет строки, возможен syncGoalTotals_ |
+| batch | batch_() | MIXED, целиком WRITE | Внутри допускает query/RPC read и write; каждый вложенный route обрабатывается с тем же user; любая мутация требует сериализации всего batch |
+| rpc/get_table_revision | rpc_() | READ с auth/schema side effect | Читает ScriptProperties и membership; авторизация может удалять сессию/создавать _auth |
+| rpc/get_telegram_link_status | rpc_() | READ с auth/schema side effect | Читает telegram_links; авторизация имеет side effects |
+| rpc/get_my_context | rpc_() | READ с auth/schema side effect | Читает profile, memberships, family и profiles; авторизация имеет side effects |
+| rpc/ensure_supplemental_categories | rpc_() | WRITE | Может создать категории |
+| rpc/create_goal_with_purchase | rpc_() | COMPOUND WRITE | Создаёт goal и опционально planned purchase; rollback goal при ошибке не проверяет отдельно ошибку компенсации |
+| rpc/create_telegram_link_code | rpc_() | WRITE | Удаляет старые неиспользованные коды и создаёт новый |
+| rpc/unlink_telegram | rpc_() | WRITE | Удаляет Telegram links и link codes |
+| rpc/join_family_by_invite | rpc_() → joinFamily | WRITE | Добавляет участника |
+| rpc/create_family | rpc_() → createFamily | COMPOUND WRITE | Создаёт family, membership и категории |
+| rpc/confirm_planned_purchase | rpc_() | COMPOUND WRITE | Создаёт deterministic transaction и обновляет planned purchase |
+| rpc/confirm_recurring_payment | rpc_() | COMPOUND WRITE | Создаёт deterministic transaction и обновляет recurring payment |
+| telegramWebhook | telegramWebhook_() | MIXED + IDEMPOTENCY WRITE | Даже /help, /start и /balance сохраняют update reply в ScriptProperties; /link, /unlink и transaction messages дополнительно меняют таблицы |
+
+### Вывод по классификатору
+
+Текущий helper requestLockMode_() в ветке — только предварительный классификатор, не готовое решение:
+- read candidates всё ещё проходят requireUser_(), где есть property deletion и возможное создание auth sheet;
+- чтение таблиц проходит через sheet_(), где возможно создание листов/запись заголовков;
+- webhook нельзя считать чистым read даже для /help: обработанный update сохраняется в ScriptProperties;
+- batch целиком должен оставаться в write lane, если в нём есть хотя бы одна запись, auth action, unknown action или malformed item.
+
+### Дополнительные правила будущей реализации
+
+1. Разделить sheetReadExisting_() (только существующий лист и валидная схема; никаких insertSheet/setValues/format) и административную инициализацию/repair, выполняемую отдельно.
+2. В read-auth пути просроченная сессия должна приводить к ошибке без удаления ScriptProperty. Уборка session keys — отдельная операция под write lock.
+3. authSheet_() не должен создавать лист во время API read; если _auth отсутствует, вернуть контролируемую серверную ошибку и выполнить инициализацию отдельно.
+4. Не освобождать глобальный lock до проверки/защиты операции, если дальше используется row index. После разделения повторно искать строку по ID и проверять ожидаемое состояние внутри write lock.
+5. Для signin допустимо рассмотреть PBKDF2 до lock, но счётчик попыток, актуальный password hash, legacy migration и выдача session должны быть повторно проверены/обновлены в короткой атомарной секции.
+6. Для signup PBKDF2 можно вычислять до lock, но уникальность email нужно повторно проверять под lock непосредственно перед append.
+7. Telegram требует отдельного протокола claim/lease/finalize для update_id либо другого устойчивого idempotency key на уровне transaction. Просто перенести webhook вне ScriptLock нельзя.
+8. Составные RPC должны иметь проверяемую компенсацию или устойчивые deterministic IDs и проверку состояния; ScriptLock не превращает несколько Sheets операций в транзакцию.
+
+## 11. Дополнительные замечания загруженной копии Code.gs
+
+- Расширенный Telegram alias parser — это изменение относительно Code.gs ветки ispravleniya. Оно улучшает покрытие категорий, но не исправляет default-to-expense и не реализует transfer.
+- Загруженная копия не содержит requestLockMode_(), который уже добавлен в ветку; не перезаписывать веточный Code.gs загруженной копией без осознанного объединения.
+- selfTest() удаляет лист _selftest_tmp, если он уже существует. Не запускать на основной таблице; перед дальнейшим использованием сделать имя уникальным и не удалять заранее существующий лист.
+- writeRows_() содержит clearContent() ниже нового набора строк, но в загруженной копии нет вызовов этой функции кроме объявления. Не вызывать без отдельного доказательства безопасного сценария.
