@@ -1046,3 +1046,28 @@ function selfTest(){
   finally{ss.deleteSheet(sh);}
   Logger.log(out.join('\n'));
 }
+
+/**
+ * Classifies whether a request is a candidate for a read-only execution path.
+ * This is intentionally not wired into doPost yet: sheet_() and authSheet_()
+ * can still create/repair schema during reads. Keep unknown actions fail-closed.
+ * Return values: "read-candidate" or "write".
+ */
+function requestLockMode_(req) {
+  if (!req || typeof req !== 'object' || Array.isArray(req)) return 'write';
+  const action = String(req.action || '');
+  if (action === 'batch') {
+    if (!Array.isArray(req.requests) || req.requests.length === 0) return 'write';
+    return req.requests.every(item => requestLockMode_(item) === 'read-candidate')
+      ? 'read-candidate'
+      : 'write';
+  }
+  if (action === 'getSession' || action === 'getUser') return 'read-candidate';
+  if (action === 'query') return String(req.mode || 'select') === 'select' ? 'read-candidate' : 'write';
+  if (action === 'rpc') {
+    return ['get_table_revision', 'get_telegram_link_status', 'get_my_context'].includes(String(req.name || ''))
+      ? 'read-candidate'
+      : 'write';
+  }
+  return 'write';
+}
