@@ -345,3 +345,24 @@
 В тестах есть сценарии успешной привязки и добавления расхода, обычного повторного update_id после успешного ответа, неверного backend secret, одноразового кода, зарплатного дохода с описанием, неоднозначных нескольких чисел и семейной атрибуции. Не обнаружены отдельные тесты на «Доход 5000 рублей» без описания, «Перевод 500 рублей», исключение planned из `/balance`, сбой после вставки транзакции до сохранения update_id и параллельную доставку одного update.
 
 **Статус:** выводы основаны на статическом анализе пользовательского Code.gs и текущей ветки. Живой Telegram webhook и Apps Script не вызывались; реальные операции не создавались.
+
+
+## 14. Проверка Vercel Telegram webhook handler
+
+Проверены api/telegram/webhook.ts и telegram-webhook/handler.ts.
+
+Положительные проверки:
+- Принимается только POST; для других методов возвращается 405 и Allow: POST.
+- Проверяются наличие всех четырёх env-переменных (TELEGRAM_WEBHOOK_SECRET, TELEGRAM_BACKEND_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_APPS_SCRIPT_URL) и минимальная длина двух секретов.
+- Заголовок x-telegram-bot-api-secret-token сравнивается функцией secretMatches с накоплением XOR-разницы.
+- URL backend проверяется на HTTPS, hostname script.google.com и путь /macros/s/<deployment>/exec.
+- Ошибки не логируют секреты, тело сообщений и финансовые данные.
+- Ошибка Apps Script / Telegram sendMessage возвращает 502, чтобы Telegram мог повторить update; обычный ответ — 200.
+
+Оставшиеся проверки/риски:
+- У fetch к Apps Script и Telegram sendMessage нет собственного явного AbortController/таймаута; зависание ограничивается средой исполнения Vercel, точное поведение требует проверки runtime/плана.
+- URL-валидатор проверяет protocol/hostname/path, но не запрещает query/hash/userinfo. Сейчас это не подтверждённая уязвимость, а ужесточение конфигурационного allowlist.
+- Ключевой сценарий retry зависит от backend idempotency: если Apps Script успел записать транзакцию, но завершился до сохранения telegram:update:<update_id>, повтор Vercel запроса может дублировать запись. Сам Vercel handler не создаёт транзакции и не устраняет это окно.
+- Нет проверки максимального размера/структуры update beyond JSON object на уровне handler; дальнейшая проверка частично выполняется Apps Script через message/chat/from/type. Нужны тесты malformed payload и unsupported update.
+
+**Статус:** статический анализ. Реальный Vercel endpoint и Telegram webhook не вызывались.
