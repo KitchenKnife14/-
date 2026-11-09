@@ -167,3 +167,15 @@ Batch принимает список внутренних действий и �
 
 ### 8.3 Обновлённый вывод
 Основная цель LOCK-01 — убрать длительную общую блокировку из независимых чтений и дорогостоящих вычислений, но сохранить короткие атомарные секции там, где они защищают запись и idempotency. Вначале нужно закрыть schema side effects и auth race conditions; только после этого менять doPost().
+
+
+## 9. Статус после первого подготовительного изменения
+
+- [x] Добавлен fail-closed классификатор requestLockMode_() в Code.gs.
+- [x] Добавлены unit tests на явные read candidates, write actions, unknown actions и смешанный batch.
+- [ ] Классификатор не подключён к doPost: это намеренно, пока не решены schema side effects и конкурентные auth semantics.
+- [ ] Тесты ещё не исполнены. GitHub Actions для ветки не запустились; текущий workflow в main не включает эту ветку, а main менять нельзя.
+- [ ] Локальный git clone не состоялся из-за сетевой недоступности github.com в контейнере.
+- [ ] Основной Vercel проект автоматически создал Preview deployment от push; target=null, alias git-ispravleniya-nikita-aa7c.vercel.app. Production alias не менялся.
+- Изменение helper/test — подготовительная основа, а не исправление глобальной блокировки.
+
