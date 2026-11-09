@@ -8,6 +8,7 @@ function makeHarness() {
   const sheets = new Map();
   const properties = new Map();
   let uuidCounter = 0;
+  let lockAcquires = 0, lockReleases = 0;
   class Range {
     constructor(sheet, row, col, rows, cols) { Object.assign(this, { sheet, row, col, rows, cols }); }
     getValues() {
@@ -69,7 +70,7 @@ function makeHarness() {
       MimeType: { JSON: 'application/json' },
       createTextOutput: text => ({ text, setMimeType() { return this; }, getContent() { return this.text; } })
     },
-    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {}, hasLock: () => false }) },
+    LockService: { getScriptLock: () => ({ waitLock() { lockAcquires++; }, releaseLock() { lockReleases++; }, hasLock: () => false }) },
     PropertiesService: { getScriptProperties: () => ({
       getProperty: key => properties.get(key) ?? null,
       setProperty: (key, value) => { properties.set(key, value); return this; },
@@ -96,7 +97,7 @@ function makeHarness() {
     assert.equal(response.error, null, response.error?.message);
     return response.data;
   };
-  return { context, call, signup };
+  return { context, call, signup, lockStats: () => ({ acquires: lockAcquires, releases: lockReleases }), resetLockStats: () => { lockAcquires = 0; lockReleases = 0; } };
 }
 
 test('signup and signin return the token and user in the API data envelope', () => {
@@ -1512,4 +1513,17 @@ test('request lock classifier treats mixed or malformed batches as writes', () =
     { action: 'query', table: 'transactions', mode: 'select' },
     { action: 'unrecognized' },
   ]}), 'write');
+});
+
+
+test('baseline: a read-only query currently acquires and releases the global ScriptLock', () => {
+  const h = makeHarness();
+  const user = h.signup('lock-baseline@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Baseline блокировки' }).data;
+  assert.ok(family?.id);
+  h.resetLockStats();
+
+  const selected = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(selected.error, null, selected.error?.message);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
 });
