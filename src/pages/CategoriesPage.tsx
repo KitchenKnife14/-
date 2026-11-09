@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { Category, CategoryKind } from '../lib/types'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Archive, Folder } from 'lucide-react'

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { ensureProfile } from '../lib/categories'
+import { supabase } from '../lib/googleSheets'
 
 export default function AuthPage() {
   const { refresh } = useAuth()
@@ -18,9 +17,8 @@ export default function AuthPage() {
     setLoading(true)
     try {
       if (mode === 'signup') {
-        const { data, error: err } = await supabase.auth.signUp({ email, password })
+        const { error: err } = await supabase.auth.signUp({ email, password, options: { data: { display_name: name || email.split('@')[0] } } })
         if (err) throw err
-        if (data.user) await ensureProfile(data.user.id, name || email.split('@')[0])
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password })
         if (err) throw err
@@ -70,7 +68,7 @@ export default function AuthPage() {
             </div>
             <div>
               <label className="label">Пароль</label>
-              <input className="input" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 6 символов" />
+              <input className="input" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 8 символов" />
             </div>
             {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
             <button type="submit" disabled={loading} className="btn-primary w-full">

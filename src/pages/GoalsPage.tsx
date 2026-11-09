@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'

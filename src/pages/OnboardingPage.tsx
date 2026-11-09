@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { ensureProfile, seedDefaultCategories } from '../lib/categories'
+import { supabase } from '../lib/googleSheets'
 
 export default function OnboardingPage() {
   const { session, profile, refresh } = useAuth()
@@ -20,25 +19,19 @@ export default function OnboardingPage() {
     setLoading(true)
     try {
       if (!session?.user) throw new Error('Нет сессии')
-      if (userName.trim()) await ensureProfile(session.user.id, userName.trim())
-
       if (mode === 'create') {
-        const { data: fam, error: fErr } = await supabase
-          .from('families')
-          .insert({ name: familyName.trim(), created_by: session.user.id })
-          .select('*')
-          .single()
-        if (fErr) throw fErr
-        const { error: mErr } = await supabase
-          .from('family_members')
-          .insert({ family_id: fam.id, user_id: session.user.id, role: 'owner' })
-        if (mErr) throw mErr
-        await seedDefaultCategories(fam.id)
+        if (!familyName.trim()) throw new Error('Введите название семьи')
+        const { error: createErr } = await supabase.rpc('create_family', {
+          p_name: familyName.trim(),
+          p_display_name: userName.trim(),
+        })
+        if (createErr) throw createErr
       } else {
         const code = inviteCode.trim().toUpperCase()
         if (!code) throw new Error('Введите код приглашения')
         const { error: joinErr } = await supabase.rpc('join_family_by_invite', {
           p_invite_code: code,
+          p_display_name: userName.trim(),
         })
         if (joinErr) throw joinErr
       }

@@ -1,0 +1,28 @@
+name: Validate Google Sheets migration
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [migration/google-sheets]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript and production build
+        run: npm run build
+      - name: Apps Script syntax check
+        run: node --check < google-apps-script/Code.gs
+      - name: Apps Script API regression tests
+        run: node --test tests/apps-script.test.cjs

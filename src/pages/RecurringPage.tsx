@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { RecurringPayment, Category } from '../lib/types'
 import { formatRubles } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
