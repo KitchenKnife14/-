@@ -201,20 +201,20 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Редактировать покупку' : 'Новая покупка'}>
       <form onSubmit={submit} className="space-y-3">
-        <div><label className="label">Название</label><input className="input" required value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
-        <div><label className="label">Категория</label><select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{categories.filter((c) => c.kind === 'expense' && (!c.archived || c.id === categoryId)).map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}{c.archived ? ' (архив)' : ''}</option>)}</select></div>
-        <div><label className="label">Ориентировочная стоимость, ₽</label><input className="input" type="number" step="0.01" min="0" required value={estimated} onChange={(e) => setEstimated(e.target.value)} placeholder="5000" /></div>
+        <div><label className="label" htmlFor="purchase-name">Название</label><input id="purchase-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
+        <div><label className="label" htmlFor="purchase-category">Категория</label><select id="purchase-category" className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{categories.filter((c) => c.kind === 'expense' && (!c.archived || c.id === categoryId)).map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}{c.archived ? ' (архив)' : ''}</option>)}</select></div>
+        <div><label className="label" htmlFor="purchase-estimated">Ориентировочная стоимость, ₽</label><input id="purchase-estimated" className="input" type="number" step="0.01" min="0" required value={estimated} onChange={(e) => setEstimated(e.target.value)} placeholder="5000" /></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="label">Приоритет</label><select className="input" value={priority} onChange={(e) => setPriority(e.target.value)}><option value="1">1 — Критически необходимое</option><option value="2">2 — Необходимое</option><option value="3">3 — Важное</option><option value="4">4 — Желательное</option><option value="5">5 — Необязательное</option></select></div>
-          <div><label className="label">Статус</label><select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>{Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+          <div><label className="label" htmlFor="purchase-priority">Приоритет</label><select id="purchase-priority" className="input" value={priority} onChange={(e) => setPriority(e.target.value)}><option value="1">1 — Критически необходимое</option><option value="2">2 — Необходимое</option><option value="3">3 — Важное</option><option value="4">4 — Желательное</option><option value="5">5 — Необязательное</option></select></div>
+          <div><label className="label" htmlFor="purchase-status">Статус</label><select id="purchase-status" className="input" value={status} onChange={(e) => setStatus(e.target.value)}>{Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="label">Желаемый месяц</label><input className="input" type="month" value={desiredMonth} onChange={(e) => setDesiredMonth(e.target.value)} /></div>
-          <div><label className="label">Желаемая дата</label><input className="input" type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="purchase-desired-month">Желаемый месяц</label><input id="purchase-desired-month" className="input" type="month" value={desiredMonth} onChange={(e) => setDesiredMonth(e.target.value)} /></div>
+          <div><label className="label" htmlFor="purchase-desired-date">Желаемая дата</label><input id="purchase-desired-date" className="input" type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} /></div>
         </div>
-        <div><label className="label">Ссылка на товар</label><input className="input" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" /></div>
-        <div><label className="label">Связанная финансовая цель</label><select className="input" value={goalId} onChange={(e) => setGoalId(e.target.value)}><option value="">Нет</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-        <div><label className="label">Комментарий</label><textarea className="input" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
+        <div><label className="label" htmlFor="purchase-url">Ссылка на товар</label><input id="purchase-url" className="input" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" /></div>
+        <div><label className="label" htmlFor="purchase-goal">Связанная финансовая цель</label><select id="purchase-goal" className="input" value={goalId} onChange={(e) => setGoalId(e.target.value)}><option value="">Нет</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+        <div><label className="label" htmlFor="purchase-comment">Комментарий</label><textarea id="purchase-comment" className="input" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
         <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : 'Сохранить'}</button></div>
       </form>
