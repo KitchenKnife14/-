@@ -2091,3 +2091,44 @@ test('Telegram balance excludes planned operations and transfers from realized t
   assert.match(balance.data.text, /Расходы: 250,00 ₽/);
   assert.match(balance.data.text, /Разница: 750,00 ₽/);
 });
+
+
+test('category kind cannot change while the category is referenced by financial records', () => {
+  const h = makeHarness();
+  const user = h.signup('category-kind-change@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Тип используемой категории' }).data;
+  const cases = [
+    ['transactions', { type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-10' }],
+    ['recurring_payments', { type: 'expense', amount_kopecks: 1000, description: 'Платёж', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true }],
+    ['budgets', { month_date: '2026-11-01', limit_kopecks: 1000 }],
+    ['monthly_plans', { month_date: '2026-11-01', type: 'expense', planned_kopecks: 1000 }],
+    ['planned_purchases', { name: 'Покупка', estimated_kopecks: 1000, status: 'planned' }],
+  ];
+
+  for (const [table, fields] of cases) {
+    const categoryResult = h.call({
+      action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+      values: { family_id: family.id, name: 'Категория ' + table, kind: 'expense', parent_id: null },
+    });
+    assert.equal(categoryResult.error, null, table + ' category creation: ' + categoryResult.error?.message);
+    const category = categoryResult.data[0];
+    const row = h.call({
+      action: 'query', token: user.token, table, mode: 'insert', returning: true,
+      values: { family_id: family.id, category_id: category.id, ...fields },
+    });
+    assert.equal(row.error, null, table + ' reference creation: ' + row.error?.message);
+
+    const changed = h.call({
+      action: 'query', token: user.token, table: 'categories', mode: 'update',
+      filters: [{ column: 'id', op: 'eq', value: category.id }],
+      values: { kind: 'income' },
+    });
+    assert.match(changed.error?.message || '', /нельзя менять тип категории, пока она используется/i, table + ' must block category kind changes');
+
+    const saved = h.call({
+      action: 'query', token: user.token, table: 'categories', mode: 'select',
+      filters: [{ column: 'id', op: 'eq', value: category.id }],
+    });
+    assert.equal(saved.data[0].kind, 'expense', table + ' failed category update must not mutate the category');
+  }
+});
