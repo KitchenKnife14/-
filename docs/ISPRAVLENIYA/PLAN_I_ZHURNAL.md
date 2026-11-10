@@ -1759,3 +1759,5 @@ HEAD до:
 - Изменение не затрагивает листы операций, существующие записи, пароли, хеши, Script Properties, настройки Apps Script, тестовую/основную таблицы или deployment. Проверка пока выполняется в Node VM harness; требуется отдельно подтвердить на изолированном тестовом Apps Script после переноса файла.
 - Контрольная точка до изменений: 5ec2d1b36a7c230f24774588d6f3f43f44162ae2. Работа только в ispravleniya; main и Production не затронуты.
 - Прогресс чек-листа не увеличен: 145/272 (53.3%); новый fail-closed guard — дополнительная защита, но не доказательство фактической схемы live/test таблицы.
+- Результат CI после коммита 84e8d32: [run 42892068562](https://github.com/KitchenKnife14/-/actions/runs/42892068562) завершился `completed / success`; build, dependency audit, TypeScript, regression suite, Apps Script syntax, runtime diagnostics syntax и manifest validation прошли. Предыдущая запись журнала также прошла CI: [run 42890421082](https://github.com/KitchenKnife14/-/actions/runs/42890421082), success.
+
