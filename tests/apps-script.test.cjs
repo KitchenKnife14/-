@@ -1695,6 +1695,13 @@ test('category hierarchy, recurring payments, budgets, monthly plans and planned
   });
   assert.match(wrongChild.error?.message || '', /Тип подкатегории должен совпадать/);
 
+  const wrongParentEdit = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: incomeRoot.id }],
+    values: { kind: 'expense' },
+  });
+  assert.match(wrongParentEdit.error?.message || '', /Нельзя менять тип категории/);
+
   const wrongRecurring = h.call({
     action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert',
     values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, category_id: incomeChild.id, description: 'Платёж', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
