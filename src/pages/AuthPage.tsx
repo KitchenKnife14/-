@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { googleSheets } from '../lib/googleSheets'
 
 export default function AuthPage() {
+  const fieldId = useId()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -56,17 +57,17 @@ export default function AuthPage() {
           <form onSubmit={submit} className="space-y-3">
             {mode === 'signup' && (
               <div>
-                <label className="label">Имя</label>
-                <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Как вас зовут" />
+                <label className="label" htmlFor={`${fieldId}-name`}>Имя</label>
+                <input id={`${fieldId}-name`} className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Как вас зовут" />
               </div>
             )}
             <div>
-              <label className="label">Email</label>
-              <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <label className="label" htmlFor={`${fieldId}-email`}>Email</label>
+              <input id={`${fieldId}-email`} className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
             </div>
             <div>
-              <label className="label">Пароль</label>
-              <input className="input" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 8 символов" />
+              <label className="label" htmlFor={`${fieldId}-password`}>Пароль</label>
+              <input id={`${fieldId}-password`} className="input" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Минимум 8 символов" />
             </div>
             {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
             <button type="submit" disabled={loading} className="btn-primary w-full">
