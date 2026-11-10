@@ -1621,3 +1621,12 @@ HEAD до:
 - Блокировки не менялись; ScriptLock продолжает сериализовать read/write запросы. Это осознанно оставлено без изменений до реального concurrency test.
 - Текущий прогресс: 138 закрыто / 134 открыто / 272 всего = 50.7%.
 
+
+### AUTH-SESSION — аудит жизненного цикла сессий и logout — 2026-11-10 (CI pending)
+
+- Проверен Code.gs: срок сессии 14 суток, токен создаётся из двух UUID, запись хранится в Script Properties; каждое защищённое действие проверяет наличие, expiry и существование пользователя.
+- Просроченная сессия удаляется при обращении; logout удаляет ключ session:<token>. Signin/signup выполняют pruneSessions_ для истёкших/повреждённых session и loginfail ключей. Rate limit: 8 ошибочных попыток на нормализованный email за 15 минут, затем блокировка на 15 минут.
+- Сессия не продлевается при каждом запросе (абсолютный TTL), refresh-token механизма нет. На каждый защищённый запрос authRows_ читает _auth и ищет пользователя; это дополнительное чтение Sheets, масштабируемость зависит от числа аккаунтов. Для пары пользователей это не требует изменения сейчас.
+- Добавлены три regression tests: expired token rejected and deleted; signout immediately revokes token; signup cleanup removes expired/malformed session and expired loginfail properties while preserving live session.
+- Изменений runtime Code.gs не делалось; проверяется уже существующее поведение. CI pending, пункты не закрыты, прогресс не меняется.
+

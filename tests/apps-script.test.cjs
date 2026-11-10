@@ -134,6 +134,48 @@ test('signup and signin return the token and user in the API data envelope', () 
   assert.equal(signin.data.data, undefined);
 });
 
+test('expired sessions are rejected and removed from Script Properties', () => {
+  const h = makeHarness();
+  const user = h.signup('expired-session@example.com');
+  const key = 'session:' + user.token;
+  h.context.PropertiesService.getScriptProperties().setProperty(key, JSON.stringify({
+    userId: user.user.id,
+    expires: 0
+  }));
+  const response = h.call({ action: 'getSession', token: user.token });
+  assert.match(response.error?.message || '', /Сессия завершена/);
+  assert.equal(h.context.PropertiesService.getScriptProperties().getProperty(key), null);
+});
+
+test('signout revokes the session token immediately', () => {
+  const h = makeHarness();
+  const user = h.signup('signout-session@example.com');
+  const key = 'session:' + user.token;
+  assert.ok(h.context.PropertiesService.getScriptProperties().getProperty(key));
+  const signedOut = h.call({ action: 'signout', token: user.token });
+  assert.equal(signedOut.error, null, signedOut.error?.message);
+  assert.equal(signedOut.data, true);
+  assert.equal(h.context.PropertiesService.getScriptProperties().getProperty(key), null);
+  const nextRequest = h.call({ action: 'getSession', token: user.token });
+  assert.match(nextRequest.error?.message || '', /Сессия завершена/);
+});
+
+test('signup prunes expired and malformed session properties but preserves live sessions', () => {
+  const h = makeHarness();
+  const user = h.signup('session-prune-owner@example.com');
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('session:expired', JSON.stringify({ userId: user.user.id, expires: 0 }));
+  props.setProperty('session:malformed', '{not-json');
+  props.setProperty('loginfail:expired', JSON.stringify({ count: 8, expires: 0, blockedUntil: 0 }));
+  props.setProperty('session:live', JSON.stringify({ userId: user.user.id, expires: Date.now() + 60_000 }));
+  const created = h.call({ action: 'signup', email: 'session-prune-new@example.com', password: 'correct-horse-battery' });
+  assert.equal(created.error, null, created.error?.message);
+  assert.equal(props.getProperty('session:expired'), null);
+  assert.equal(props.getProperty('session:malformed'), null);
+  assert.equal(props.getProperty('loginfail:expired'), null);
+  assert.ok(props.getProperty('session:live'));
+});
+
 test('family data is hidden until a user joins the family', () => {
   const h = makeHarness();
   const first = h.signup('first@example.com');
