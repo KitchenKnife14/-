@@ -143,7 +143,7 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, e
     setError(null)
   }, [editing, open])
 
-  const expenseCats = categories.filter((c) => c.kind === 'expense' && !c.parent_id && !c.archived)
+  const expenseCats = categories.filter((c) => c.kind === 'expense' && !c.parent_id && (!c.archived || c.id === categoryId))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
