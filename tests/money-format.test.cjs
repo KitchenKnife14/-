@@ -31,6 +31,15 @@ test('ruble input parsing converts decimal text exactly without rounding', async
   assert.equal(parseRublesToKopecks(' 12,5 '), 1250)
 })
 
+test('signed ruble parsing is opt-in and preserves negative kopecks exactly', async () => {
+  const { parseRublesToKopecks } = await loadMoneyModule()
+  assert.equal(parseRublesToKopecks('-45,12'), null)
+  assert.equal(parseRublesToKopecks('-45,12', { allowNegative: true }), -4512)
+  assert.equal(parseRublesToKopecks('-0,01', { allowNegative: true }), -1)
+  assert.equal(parseRublesToKopecks('45,12', { allowNegative: true }), 4512)
+  assert.equal(parseRublesToKopecks('-45,123', { allowNegative: true }), null)
+})
+
 test('ruble input parsing rejects malformed, over-precise and unsafe values', async () => {
   const { parseRublesToKopecks } = await loadMoneyModule()
   for (const value of ['', ' ', '45,123', '45.001', '45rub', '1,2,3', '-1', '+1', '1e2', 'NaN', 'Infinity', '90071992547410']) {
