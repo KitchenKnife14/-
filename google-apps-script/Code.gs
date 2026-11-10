@@ -610,6 +610,25 @@ function sameTransactionInsert_(stored,candidate,user){
   const fields=['family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','responsible_user_id','planned','parent_recurring_id'];
   return fields.every(field=>String(stored[field]??'')===String(candidate[field]??''));
 }
+function findRowsByIds_(table,ids){
+  const found=new Map(),wanted=new Set((ids||[]).map(String));
+  if(!wanted.size)return found;
+  const sh=sheet_(table),last=sh.getLastRow(),idColumn=TABLES[table].indexOf('id')+1;
+  if(last<2||idColumn<1)return found;
+  SHEET_READS++;
+  const values=timedSheetRead_(()=>sh.getRange(2,idColumn,last-1,1).getValues());
+  const matches=[];
+  values.forEach((row,index)=>{const id=String(row[0]??'');if(wanted.has(id))matches.push({id,row:index+2});});
+  matches.forEach(match=>{
+    SHEET_READS++;
+    const values=timedSheetRead_(()=>sh.getRange(match.row,1,1,TABLES[table].length).getValues()[0]);
+    const row={};
+    TABLES[table].forEach((column,index)=>row[column]=normal_(values[index],column));
+    row.__row=match.row;
+    found.set(match.id,row);
+  });
+  return found;
+}
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
   if(table==='telegram_links'||table==='telegram_link_codes')throw new Error('Служебная Telegram-таблица недоступна через обычный API');
@@ -629,7 +648,9 @@ function query_(req,user){
   }
   if(mode==='insert'){
     const input=Array.isArray(req.values)?req.values:[req.values];
-    const needsExisting=table==='budgets'||table==='profiles'||input.some(raw=>raw&&raw.id);
+    const transactionIds=table==='transactions'?input.filter(raw=>raw&&raw.id).map(raw=>raw.id):[];
+    const transactionRowsById=transactionIds.length?findRowsByIds_(table,transactionIds):new Map();
+    const needsExisting=table==='budgets'||table==='profiles'||(table!=='transactions'&&input.some(raw=>raw&&raw.id));
     const existing=needsExisting?rows_(table):[];
     const createdIds_=new Set();
     const created=input.map(raw=>{
@@ -637,7 +658,7 @@ function query_(req,user){
       // Server owns identity and audit timestamps.
       if(table==='profiles' && r.id!==undefined && String(r.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='profiles')r.id=user.id;
-      const existingById=r.id?existing.find(x=>String(x.id)===String(r.id)):null;
+      const existingById=r.id?(table==='transactions'?transactionRowsById.get(String(r.id)):existing.find(x=>String(x.id)===String(r.id))):null;
       if(existingById&&table!=='transactions')throw new Error('Запись с таким ID уже существует');
       if(!r.id)r.id=id_();
       if(TABLES[table].includes('created_at'))r.created_at=now_();
