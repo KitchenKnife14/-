@@ -1987,3 +1987,39 @@ test('transaction idempotency lookup scans only the ID column, not the full ledg
   assert.equal(fullSheetReads, 0);
   assert.equal(idColumnReads, 1);
 });
+
+
+test('Telegram refuses to record transfers as expenses and accepts an income without a description', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-transfer-income@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Без ошибочных переводов' });
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'transfer-income-secret-0123456789abcdef');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7501, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: '/link ' + generated.data.code } },
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  for (const [update_id, text] of [[7502, 'Перевод 500 рублей'], [7503, 'Перевёл 500 рублей']]) {
+    const result = h.call({
+      action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+      update: { update_id, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text } },
+    });
+    assert.match(result.error?.message || '', /переводы через Telegram пока не поддерживаются/i);
+  }
+
+  const income = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7504, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Доход 5000 рублей' } },
+  });
+  assert.equal(income.error, null, income.error?.message);
+  assert.match(income.data.text, /Записал доход: 5000,00 ₽ — Доход/);
+
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].type, 'income');
+  assert.equal(transactions[0].amount_kopecks, 500000);
+  assert.equal(transactions[0].description, 'Доход');
+});
