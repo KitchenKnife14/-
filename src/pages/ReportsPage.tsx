@@ -99,11 +99,11 @@ export default function ReportsPage() {
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex flex-wrap gap-2">
-        <select className="input w-auto" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
+        <select aria-label="Период отчёта" className="input w-auto" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
           <option value="current">Текущий месяц</option><option value="prev">Предыдущий месяц</option><option value="3m">3 месяца</option><option value="6m">6 месяцев</option><option value="year">Год</option><option value="custom">Произвольный</option>
         </select>
-        {period === 'custom' && (<><input className="input w-auto" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} /><input className="input w-auto" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} /></>)}
-        <select className="input w-auto" value={memberFilter} onChange={(e) => setMemberFilter(e.target.value)}>
+        {period === 'custom' && (<><input aria-label="Дата начала отчёта" className="input w-auto" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} /><input aria-label="Дата окончания отчёта" className="input w-auto" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} /></>)}
+        <select aria-label="Фильтр отчёта по участнику" className="input w-auto" value={memberFilter} onChange={(e) => setMemberFilter(e.target.value)}>
           <option value="all">Все участники</option>{members.map((m) => <option key={m.user_id} value={m.user_id}>{profMap.get(m.user_id)?.display_name ?? 'Участник'}</option>)}
         </select>
       </div>
