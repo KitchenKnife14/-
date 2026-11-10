@@ -434,10 +434,24 @@ function assertUniqueBudget_(rows,row,excludeId){
     String(x.month_date)===String(row.month_date));
   if(duplicate)throw new Error('Для этой категории уже задан бюджет на выбранный месяц');
 }
+function assertKopecks_(value,label,options){
+  const opts=options||{};
+  if(opts.optional&&value===undefined)return;
+  if(typeof value!=='number'||!Number.isSafeInteger(value))throw new Error(label+' должно быть безопасным целым числом копеек');
+  if(opts.positive&&value<=0)throw new Error(label+' должно быть положительным целым числом копеек');
+}
 function validateRelations_(table,row,user){
   const familyId=String(row.family_id||'');
+  // Validate stored money values without coercion: numeric strings and booleans are not kopecks.
+  if(table==='accounts')assertKopecks_(row.starting_balance_kopecks,'Начальный остаток',{optional:true});
+  if(table==='transactions')assertKopecks_(row.amount_kopecks,'Сумма операции',{positive:true});
+  if(table==='recurring_payments')assertKopecks_(row.amount_kopecks,'Сумма регулярного платежа',{positive:true});
+  if(table==='budgets')assertKopecks_(row.limit_kopecks,'Лимит бюджета',{positive:true});
+  if(table==='goals')assertKopecks_(row.target_kopecks,'Сумма цели',{positive:true});
+  if(table==='goal_contributions')assertKopecks_(row.amount_kopecks,'Сумма пополнения',{positive:true});
+  if(table==='planned_purchases')assertKopecks_(row.estimated_kopecks,'Стоимость покупки',{positive:true});
+  if(table==='monthly_plans')assertKopecks_(row.planned_kopecks,'Плановая сумма',{positive:true});
   if(table==='goal_contributions'){
-    if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма пополнения должна быть положительным целым числом копеек');
     const goal=rows_('goals').find(x=>String(x.id)===String(row.goal_id));
     if(!goal)throw new Error('Связанная цель не найдена');
     if(!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
@@ -446,18 +460,15 @@ function validateRelations_(table,row,user){
   if(table==='accounts'){
     const name=String(row.name||'').trim();
     if(!name)throw new Error('Введите название счёта');
-    if(!Number.isSafeInteger(Number(row.starting_balance_kopecks||0)))throw new Error('Начальный остаток должен быть целым числом копеек');
     if(!['cash','bank','savings','other'].includes(String(row.kind||'')))throw new Error('Неизвестный тип счёта');
   }
   if(table==='transactions'){
-    if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма операции должна быть положительным целым числом копеек');
     if(!['income','expense','transfer'].includes(String(row.type||'')))throw new Error('Неизвестный тип операции');
     if(row.type==='transfer'&&(!row.account_id||!row.to_account_id))throw new Error('Для перевода нужны счёт списания и счёт зачисления');
     if(row.type!=='transfer'&&row.to_account_id)throw new Error('Счёт зачисления допустим только для перевода');
   }
   if(table==='recurring_payments'){
     if(row.type==='transfer')throw new Error('Регулярные переводы пока не поддерживаются');
-    if(!Number.isSafeInteger(Number(row.amount_kopecks))||Number(row.amount_kopecks)<=0)throw new Error('Сумма регулярного платежа должна быть положительным целым числом копеек');
   }
   if(!familyId)return;
   if(['transactions','goals','planned_purchases','recurring_payments'].includes(table)&&row.responsible_user_id){
@@ -763,7 +774,8 @@ function rpc_(req,user){
   if(name==='create_goal_with_purchase'){
     const familyId=String(p.p_family_id||'');
     if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
-    const target=Number(p.p_target_kopecks),priority=Number(p.p_priority);
+    assertKopecks_(p.p_target_kopecks,'Сумма цели',{positive:true});
+    const target=p.p_target_kopecks,priority=Number(p.p_priority);
     const goalName=String(p.p_name||'').trim(),description=String(p.p_description||'').trim();
     if(!goalName)throw new Error('Введите название цели');
     if(!Number.isSafeInteger(target)||target<=0)throw new Error('Сумма цели должна быть положительным целым числом копеек');
