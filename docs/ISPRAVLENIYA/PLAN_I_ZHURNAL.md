@@ -1,6 +1,6 @@
 # Family Cash — план исправлений и журнал работ
 
-> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 129 из 272 пунктов плана закрыто (47.4%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
+> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 130 из 272 пунктов плана закрыто (47.8%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
 > Дата фиксации плана: 2026-11-09.
 > Рабочая ветка: `ispravleniya`.
 > Базовый Production-коммит: `a7f105df927a54fe7351fc928b896fe473714386`.
@@ -1550,7 +1550,7 @@ HEAD до:
 - [x] Ограничить отображение ссылок абсолютными HTTP(S) адресами; небезопасные старые значения скрывать без изменения исходных строк.
 - [x] Добавить серверную проверку схемы HTTP(S), длины до 2048 символов, пробелов/управляющих символов и обратной косой черты при insert/update.
 - [x] Добавить unit/regression tests для разрешённых HTTP/HTTPS и отклонения javascript:, data:, protocol-relative, ftp, credentials, пробелов, backslash и чрезмерной длины.
-- [ ] Подтвердить полный GitHub CI для этого исправления; не считать локальные sandbox-тесты заменой CI.
+- [x] Подтвердить полный GitHub CI для этого исправления; не считать локальные sandbox-тесты заменой CI.
 
 ### Дополнение к аудиту React Router и SEC-06 — 2026-11-10
 
@@ -1563,3 +1563,14 @@ HEAD до:
 - Данные Google Sheets не изменялись и не мигрировались; ранее сохранённые URL не переписываются. Новые/изменяемые записи с небезопасным URL отклоняются; старые небезопасные ссылки скрываются до ручного исправления конкретной записи.
 - В изолированном Vercel Sandbox: npm test — 143/143 pass; TypeScript + Vite 6.4.6 production build — success (2435 modules); node --check Code.gs — success; git diff --check — success. Полный GitHub CI для этого коммита ожидает запуска.
 - React Router advisories: https://github.com/remix-run/react-router/security/advisories/GHSA-wrjc-x8rr-h8h6 ; https://github.com/remix-run/react-router/security/advisories/GHSA-jjmj-jmhj-qwj2 ; https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2 ; https://github.com/remix-run/react-router/security/advisories/GHSA-337j-9hxr-rhxg ; https://github.com/remix-run/react-router/security/advisories/GHSA-h8fp-f39c-q6mh ; https://github.com/remix-run/react-router/security/advisories/GHSA-chx6-hx7r-mcp5 ; https://github.com/remix-run/react-router/security/advisories/GHSA-49rj-9fvp-4h2h ; https://github.com/remix-run/react-router/security/advisories/GHSA-8x6r-g9mw-2r78 ; https://github.com/remix-run/react-router/security/advisories/GHSA-84g9-w2xq-vcv6 ; https://github.com/remix-run/react-router/security/advisories/GHSA-2j2x-hqr9-3h42
+
+### SEC-06 — контрольный GitHub CI завершён — 2026-11-10
+
+- Commit: b4d819055500fd7ba3f0216e573e14595ade8a15
+- CI: https://github.com/KitchenKnife14/-/actions/runs/42869132381 — success.
+- Node v22.23.4; npm 10.9.9; npm ci — success; npm audit --audit-level=high — success, 0 vulnerabilities.
+- TypeScript + Vite 6.4.6 production build — success.
+- Regression tests: 143 total, 143 pass, 0 fail.
+- Apps Script Code.gs syntax check и PBKDF2 diagnostics syntax check — success.
+- SEC-06 закрыт. Текущий контрольный прогресс: 130 закрыто / 142 открыто / 272 всего = 47.8%.
+- Изменения только в ветке ispravleniya. Production, main, основная таблица и production Apps Script не изменялись.
