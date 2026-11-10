@@ -2,19 +2,29 @@ export const kopecksToRubles = (k: number): number => k / 100
 
 /**
  * Parses a user-entered ruble amount without floating-point rounding.
- * Accepts an unsigned decimal with at most two fractional digits.
- * Returns null for malformed, negative, non-finite, or unsafe values.
+ * Accepts a decimal with at most two fractional digits; negative values are
+ * allowed only when explicitly requested (e.g. an account's opening balance).
+ * Returns null for malformed, non-finite, or unsafe values.
  */
-export const parseRublesToKopecks = (value: string): number | null => {
-  const normalized = value.trim().replace(',', '.')
+export const parseRublesToKopecks = (
+  value: string,
+  options: { allowNegative?: boolean } = {},
+): number | null => {
+  let normalized = value.trim().replace(',', '.')
+  let sign = 1
+  if (normalized.startsWith('-')) {
+    if (!options.allowNegative) return null
+    sign = -1
+    normalized = normalized.slice(1)
+  }
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(normalized)
   if (!match) return null
 
   const rubles = Number(match[1])
   const kopecks = Number((match[2] ?? '').padEnd(2, '0') || '0')
-  if (!Number.isSafeInteger(rubles) || rubles < 0) return null
+  if (!Number.isSafeInteger(rubles)) return null
 
-  const total = rubles * 100 + kopecks
+  const total = sign * (rubles * 100 + kopecks)
   return Number.isSafeInteger(total) ? total : null
 }
 
