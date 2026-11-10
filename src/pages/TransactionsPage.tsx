@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { calculateRealizedTotals } from '../lib/realizedTotals'
 import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
@@ -94,8 +95,7 @@ export default function TransactionsPage() {
   const hasFilters = !!(search || categoryFilter || authorFilter || responsibleFilter || statusFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount || typeFilter !== 'all')
   const clearFilters = () => { setSearch(''); setTypeFilter('all'); setCategoryFilter(''); setAuthorFilter(''); setResponsibleFilter(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount('') }
 
-  const income = filtered.filter((t) => t.type === 'income' && !t.planned).reduce((s, t) => s + t.amount_kopecks, 0)
-  const expense = filtered.filter((t) => t.type === 'expense' && !t.planned).reduce((s, t) => s + t.amount_kopecks, 0)
+  const { income, expense } = calculateRealizedTotals(filtered)
 
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
