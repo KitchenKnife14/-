@@ -2138,7 +2138,7 @@ test('Telegram balance excludes planned operations and transfers from realized t
   });
   assert.equal(linked.error, null, linked.error?.message);
 
-  const RealDate = h.context.Date;
+  const RealDate = Date;
   h.context.Date = class extends RealDate {
     constructor(...args) { super(...(args.length ? args : ['2026-10-31T21:30:00.000Z'])); }
   };
