@@ -1339,3 +1339,12 @@ HEAD до:
 - `doPost` по-прежнему берёт глобальный `ScriptLock` на все обычные запросы и Telegram webhook с `waitLock(20000)`; освобождение выполняется через `finally`. `requestLockMode_` остаётся классификатором, не подключённым к `doPost`. Lock contention и реальные wait-time пока не измерялись в изолированном GAS runtime.
 - Production Apps Script, основная Google Sheet, Production Vercel и Telegram webhook не изменялись. Checklist не увеличен: остаются fault-injection сценарии на реальном тестовом GAS и отдельное решение по атомарности.
 
+### LOCK-03 — ScriptLock timeout/release fault tests (работа № 39)
+
+- Повторно проверен `doPost`: обычные API-запросы и Telegram webhook берут один глобальный `ScriptLock` с `waitLock(20000)`; обычный запрос освобождает lock во внутреннем `finally`, webhook — в отдельном `finally`. Если `waitLock` выбрасывает ошибку до захвата, внешний catch проверяет `hasLock()` и не вызывает `releaseLock()` для незахваченного lock.
+- Подтверждено, что `requestLockMode_` не вызывается из `doPost`; это пока не оптимизатор блокировок, а неиспользуемая классификация read/write. Перевод чтений на другой lock не выполнялся.
+- Тестовый harness получил инъекцию ошибки ожидания lock. Добавлен тест, подтверждающий возврат timeout error и отсутствие попытки release до захвата. Частичный update test дополнен проверкой, что при ошибке записи захваченный lock освобождается.
+- CI [42850878191](https://github.com/KitchenKnife14/-/actions/runs/42850878191) завершился успешно: TypeScript/production build, 121 regression tests (121 passed, 0 failed) и Apps Script syntax check.
+- Ограничение: VM harness проверяет контракт release/timeout, но не моделирует реальную конкуренцию двух Apps Script executions и не измеряет lock wait. Глобальный lock оставлен без изменений до изолированного GAS concurrency test. Атомарность multi-range writes остаётся отдельным открытым риском.
+- Production, основная Google Sheet, опубликованный Apps Script, Production Vercel и Telegram webhook не изменялись. Checklist не увеличен.
+
