@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
@@ -15,6 +15,7 @@ type TxFilter = 'all' | 'income' | 'expense' | 'transfer'
 
 export default function CalendarPage() {
   const { family, memberProfiles } = useAuth()
+  const familyId = family?.id
   const [txs, setTxs] = useState<Transaction[]>([])
   const [recurring, setRecurring] = useState<RecurringPayment[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -29,29 +30,33 @@ export default function CalendarPage() {
 
   const range = useMemo(() => monthRange(cursor.getFullYear(), cursor.getMonth()), [cursor])
 
-  const load = async () => {
-    if (!family) return
+  const load = useCallback(async () => {
+    if (!familyId) return
     setLoading(true); setError(null)
     try {
-      const categoryMigration = ensureSupplementalCategories(family.id)
+      const categoryMigration = ensureSupplementalCategories(familyId)
       const [, tRes, rRes, cRes] = await Promise.all([
         categoryMigration,
-        googleSheets.from('transactions').select('*').eq('family_id', family.id).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        googleSheets.from('recurring_payments').select('*').eq('family_id', family.id).eq('active', true),
-        googleSheets.from('categories').select('*').eq('family_id', family.id),
+        googleSheets.from('transactions').select('*').eq('family_id', familyId).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
+        googleSheets.from('recurring_payments').select('*').eq('family_id', familyId).eq('active', true),
+        googleSheets.from('categories').select('*').eq('family_id', familyId),
       ])
       if (tRes.error) throw tRes.error; if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setRecurring(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
-  }
+  }, [familyId, range.start, range.end])
 
-  useEffect(() => { load() }, [family?.id, range.start, range.end])
+  useEffect(() => { void load() }, [load])
   useEffect(() => {
-    if (!family) return
-    const ch = googleSheets.channel('cal-page').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { googleSheets.removeChannel(ch) }
-  }, [family?.id])
+    if (!familyId) return
+    const channel = googleSheets
+      .channel('cal-page')
+      .on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${familyId}` }, () => { void load() })
+      .subscribe()
+    return () => { googleSheets.removeChannel(channel) }
+  }, [familyId, load])
+
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 

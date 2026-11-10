@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
@@ -12,6 +12,7 @@ const TYPE_LABELS: Record<string, string> = { income: 'Доход', expense: 'Р
 
 export default function PlanningPage() {
   const { family } = useAuth()
+  const familyId = family?.id
   const [plans, setPlans] = useState<MonthlyPlan[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [txs, setTxs] = useState<Transaction[]>([])
@@ -24,29 +25,33 @@ export default function PlanningPage() {
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
   const prevMonthDate = firstDayOfMonth(cursor.month === 0 ? cursor.year - 1 : cursor.year, cursor.month === 0 ? 11 : cursor.month - 1)
 
-  const load = async () => {
-    if (!family) return
+  const load = useCallback(async () => {
+    if (!familyId) return
     setLoading(true); setError(null)
     try {
-      const categoryMigration = ensureSupplementalCategories(family.id)
+      const categoryMigration = ensureSupplementalCategories(familyId)
       const [, pRes, cRes, tRes] = await Promise.all([
         categoryMigration,
-        googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', monthDate),
-        googleSheets.from('categories').select('*').eq('family_id', family.id),
-        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end),
+        googleSheets.from('monthly_plans').select('*').eq('family_id', familyId).eq('month_date', monthDate),
+        googleSheets.from('categories').select('*').eq('family_id', familyId),
+        googleSheets.from('transactions').select('*').eq('family_id', familyId).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end),
       ])
       if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (tRes.error) throw tRes.error
       setPlans(pRes.data as MonthlyPlan[]); setCategories(cRes.data as Category[]); setTxs(tRes.data as Transaction[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
-  }
+  }, [familyId, monthDate, range.start, range.end])
 
-  useEffect(() => { load() }, [family?.id, monthDate])
+  useEffect(() => { void load() }, [load])
   useEffect(() => {
-    if (!family) return
-    const ch = googleSheets.channel('plan-page').on('table_changes', { event: '*', schema: 'public', table: 'monthly_plans', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { googleSheets.removeChannel(ch) }
-  }, [family?.id])
+    if (!familyId) return
+    const channel = googleSheets
+      .channel('plan-page')
+      .on('table_changes', { event: '*', schema: 'public', table: 'monthly_plans', filter: `family_id=eq.${familyId}` }, () => { void load() })
+      .subscribe()
+    return () => { googleSheets.removeChannel(channel) }
+  }, [familyId, load])
+
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const factByCatAndType = useMemo(() => {

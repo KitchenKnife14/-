@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { calculateRealizedTotals } from '../lib/realizedTotals'
@@ -13,6 +13,7 @@ import { getTransactionAttribution, matchesTransactionAttribution } from '../lib
 
 export default function TransactionsPage() {
   const { family, session, memberProfiles } = useAuth()
+  const familyId = family?.id
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -35,23 +36,23 @@ export default function TransactionsPage() {
 
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
 
-  const load = async () => {
-    if (!family) return
+  const load = useCallback(async () => {
+    if (!familyId) return
     setLoading(true)
     setError(null)
     try {
       const [, txRes, catRes, accountRes] = await Promise.all([
-        ensureSupplementalCategories(family.id),
+        ensureSupplementalCategories(familyId),
         googleSheets
           .from('transactions')
           .select('*')
-          .eq('family_id', family.id)
+          .eq('family_id', familyId)
           .gte('operation_date', dateFrom || range.start)
           .lte('operation_date', dateTo || range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id),
-        googleSheets.from('accounts').select('*').eq('family_id', family.id),
+        googleSheets.from('categories').select('*').eq('family_id', familyId),
+        googleSheets.from('accounts').select('*').eq('family_id', familyId),
       ])
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
@@ -64,14 +65,18 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [familyId, dateFrom, dateTo, range.start, range.end])
 
-  useEffect(() => { load() }, [family?.id, range.start, range.end, dateFrom, dateTo])
+  useEffect(() => { void load() }, [load])
   useEffect(() => {
-    if (!family) return
-    const ch = googleSheets.channel('tx-page').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { googleSheets.removeChannel(ch) }
-  }, [family?.id])
+    if (!familyId) return
+    const channel = googleSheets
+      .channel('tx-page')
+      .on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${familyId}` }, () => { void load() })
+      .subscribe()
+    return () => { googleSheets.removeChannel(channel) }
+  }, [familyId, load])
+
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])

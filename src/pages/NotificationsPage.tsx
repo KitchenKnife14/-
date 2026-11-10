@@ -7,29 +7,34 @@ import { Check, Trash2, Bell } from 'lucide-react'
 
 export default function NotificationsPage() {
   const { family } = useAuth()
+  const familyId = family?.id
   const [items, setItems] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
 
-  const load = async () => {
-    if (!family) return
+  const load = useCallback(async () => {
+    if (!familyId) return
     setLoading(true); setError(null)
     try {
-      const q = googleSheets.from('notifications').select('*').eq('family_id', family.id).order('created_at', { ascending: false })
+      const q = googleSheets.from('notifications').select('*').eq('family_id', familyId).order('created_at', { ascending: false })
       const { data, error: err } = filter === 'unread' ? await q.eq('read', false) : await q
       if (err) throw err
       setItems(data as AppNotification[])
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { setLoading(false) }
-  }
+  }, [familyId, filter])
 
-  useEffect(() => { load() }, [family?.id, filter])
+  useEffect(() => { void load() }, [load])
   useEffect(() => {
-    if (!family) return
-    const ch = googleSheets.channel('notif-page').on('table_changes', { event: '*', schema: 'public', table: 'notifications', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { googleSheets.removeChannel(ch) }
-  }, [family?.id])
+    if (!familyId) return
+    const channel = googleSheets
+      .channel('notif-page')
+      .on('table_changes', { event: '*', schema: 'public', table: 'notifications', filter: `family_id=eq.${familyId}` }, () => { void load() })
+      .subscribe()
+    return () => { googleSheets.removeChannel(channel) }
+  }, [familyId, load])
+
 
   const markRead = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('id', n.id); if (err) setError(err.message); load() }
   const markAllRead = async () => {

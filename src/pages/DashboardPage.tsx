@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { calculateRealizedTotals } from '../lib/realizedTotals'
@@ -12,6 +12,7 @@ import { ensureSupplementalCategories } from '../lib/categories'
 
 export default function DashboardPage() {
   const { family, session } = useAuth()
+  const familyId = family?.id
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -25,23 +26,23 @@ export default function DashboardPage() {
   const month = now.getMonth()
   const range = useMemo(() => monthRange(year, month), [year, month])
 
-  const load = async () => {
-    if (!family) return
+  const load = useCallback(async () => {
+    if (!familyId) return
     setLoading(true)
     setError(null)
     try {
       const [, txRes, catRes, accountRes] = await Promise.all([
-        ensureSupplementalCategories(family.id),
+        ensureSupplementalCategories(familyId),
         googleSheets
           .from('transactions')
           .select('*')
-          .eq('family_id', family.id)
+          .eq('family_id', familyId)
           .gte('operation_date', range.start)
           .lte('operation_date', range.end)
           .order('operation_date', { ascending: false })
           .order('created_at', { ascending: false }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id),
-        googleSheets.from('accounts').select('*').eq('family_id', family.id),
+        googleSheets.from('categories').select('*').eq('family_id', familyId),
+        googleSheets.from('accounts').select('*').eq('family_id', familyId),
       ])
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
@@ -54,23 +55,18 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [familyId, range.start, range.end])
 
+  useEffect(() => { void load() }, [load])
   useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family?.id, range.start, range.end])
-
-  // Refresh the dashboard when the shared transaction snapshot changes.
-  useEffect(() => {
-    if (!family) return
+    if (!familyId) return
     const channel = googleSheets
       .channel('dashboard-tx')
-      .on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load())
+      .on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${familyId}` }, () => { void load() })
       .subscribe()
     return () => { googleSheets.removeChannel(channel) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family?.id])
+  }, [familyId, load])
+
 
   const { income, expense } = calculateRealizedTotals(txs)
   const realized = txs.filter((t) => !t.planned)
