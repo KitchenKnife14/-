@@ -164,6 +164,20 @@ test('Apps Script request logs contain metrics only and never payload secrets or
   }
 });
 
+test('request metrics never log attacker-controlled unknown action values', () => {
+  const h = makeHarness();
+  const logs = [];
+  h.context.console = { log: value => logs.push(String(value)) };
+  const marker = 'private-action-payload@example.com:secret-marker';
+  const response = h.call({ action: marker });
+  assert.ok(response.error);
+  assert.equal(logs.length, 1);
+  const record = JSON.parse(logs[0]);
+  assert.equal(record.act, 'unknown');
+  assert.equal(logs[0].includes(marker), false);
+  assert.equal(logs[0].includes('secret-marker'), false);
+});
+
 test('signup and signin return the token and user in the API data envelope', () => {
   const h = makeHarness();
   const signup = h.call({ action: 'signup', email: 'auth-shape@example.com', password: 'correct-horse-battery' });

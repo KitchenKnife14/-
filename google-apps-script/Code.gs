@@ -101,7 +101,7 @@ function doPost(e) {
   } finally {
     // Одна строка в журнале выполнения: только названия действий и числа, без данных пользователей.
     const ended = Date.now();
-    try { console.log(JSON.stringify({act:req&&req.action,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS})); } catch (_) {}
+    try { const action=req&&req.action;const loggedAction=typeof action==='string'&&['telegramWebhook','signup','signin','signout','batch','getSession','getUser','ensureProfile','createFamily','joinFamily','query','rpc'].includes(action)?action:'unknown';console.log(JSON.stringify({act:loggedAction,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS})); } catch (_) {}
   }
 }
 function batch_(req){
