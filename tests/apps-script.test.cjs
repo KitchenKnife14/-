@@ -1741,3 +1741,32 @@ test('category hierarchy, recurring payments, budgets, monthly plans and planned
   });
   assert.match(wrongPurchase.error?.message || '', /только к категории расходов/);
 });
+
+
+test('legacy category mismatches do not block unrelated edits to historical records', () => {
+  const h = makeHarness();
+  const user = h.signup('legacy-category-edit@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Старые категории' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  const incomeCategory = categories.find(c => c.kind === 'income' && c.parent_id);
+  const expenseCategory = categories.find(c => c.kind === 'expense' && c.parent_id);
+  const created = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, category_id: expenseCategory.id, operation_date: '2026-11-10' },
+  });
+  assert.equal(created.error, null, created.error?.message);
+
+  const stored = h.context.rows_('transactions').find(row => row.id === created.data[0].id);
+  stored.category_id = incomeCategory.id; // Simulate a historical mismatch from before server validation.
+  h.context.updateRows_('transactions', [stored]);
+
+  const unrelatedEdit = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: stored.id }],
+    values: { description: 'Историческая запись' },
+  });
+  assert.equal(unrelatedEdit.error, null, unrelatedEdit.error?.message);
+  const after = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(after.category_id, incomeCategory.id);
+  assert.equal(after.description, 'Историческая запись');
+});
