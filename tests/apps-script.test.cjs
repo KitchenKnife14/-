@@ -2409,6 +2409,12 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
   });
   assert.match(unknown.error?.message || '', /не понял, это расход или доход/i);
 
+  const noAmount = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7509, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Проезд' } },
+  });
+  assert.match(noAmount.error?.message || '', /не нашёл сумму/i);
+
   const income = h.call({
     action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
     update: { update_id: 7504, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Доход 5000 рублей' } },
@@ -2435,13 +2441,20 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
   });
   assert.equal(salaryWithPrefix.error, null, salaryWithPrefix.error?.message);
 
+  const arrived = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7510, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Поступило 500 рублей' } },
+  });
+  assert.equal(arrived.error, null, arrived.error?.message);
+  assert.match(arrived.data.text, /Записал доход: 500,00 ₽/);
+
   const expense = h.call({
     action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
     update: { update_id: 7506, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Потратил 500 рублей' } },
   });
   assert.equal(expense.error, null, expense.error?.message);
   const updatedTransactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
-  assert.equal(updatedTransactions.length, 4);
+  assert.equal(updatedTransactions.length, 5);
   const savedSalary = updatedTransactions.filter(row => row.type === 'income' && row.amount_kopecks === 500000);
   assert.equal(savedSalary.length, 3);
   assert.ok(savedSalary.every(row => row.type === 'income'));
