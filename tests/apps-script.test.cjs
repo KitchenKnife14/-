@@ -1908,6 +1908,8 @@ test('Telegram retry after a transaction write but before update cache does not 
 
   const props = h.context.PropertiesService.getScriptProperties();
   const originalSetProperty = props.setProperty;
+  const originalGetScriptProperties = h.context.PropertiesService.getScriptProperties;
+  h.context.PropertiesService.getScriptProperties = () => props;
   let failCacheWrite = true;
   props.setProperty = (key, value) => {
     if (key === 'telegram:update:7402' && failCacheWrite) {
@@ -1928,6 +1930,7 @@ test('Telegram retry after a transaction write but before update cache does not 
   const firstAttempt = h.call({ action: 'telegramWebhook', telegramSecret: 'crash-window-secret-0123456789abcdef', update });
   assert.match(firstAttempt.error?.message || '', /simulated crash before update cache/);
   props.setProperty = originalSetProperty;
+  h.context.PropertiesService.getScriptProperties = originalGetScriptProperties;
 
   const retry = h.call({ action: 'telegramWebhook', telegramSecret: 'crash-window-secret-0123456789abcdef', update });
   assert.equal(retry.error, null, retry.error?.message);
