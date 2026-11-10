@@ -163,7 +163,7 @@ function normal_(v,col) {
   }
   // Google Sheets normally returns numeric cells as numbers, but legacy/imported
   // integer kopecks may be stored as text. Normalize only exact safe integers.
-  if(KOPECK_COLUMNS_.has(col)&&typeof v==='string'&&/^-?\\d+$/.test(v.trim())){
+  if(KOPECK_COLUMNS_.has(col)&&typeof v==='string'&&/^-?\d+$/.test(v.trim())){
     const numeric=Number(v.trim());
     if(Number.isSafeInteger(numeric))return numeric;
   }
