@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
 import type { MonthlyPlan, Category, Transaction } from '../lib/types'
-import { formatRubles } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, ChevronLeft, ChevronRight, Copy, Trash2 } from 'lucide-react'
@@ -155,8 +155,8 @@ function PlanForm({ open, onClose, onSaved, categories, familyId, monthDate }: {
     e.preventDefault()
     if (!familyId) return
     setError(null)
-    const amtK = Math.round(parseFloat(amount.replace(',', '.')) * 100)
-    if (!amtK || amtK <= 0) { setError('Введите сумму больше нуля'); return }
+    const amtK = parseRublesToKopecks(amount)
+    if (amtK === null || amtK <= 0) { setError('Введите корректную сумму больше нуля с точностью до копейки'); return }
     setSaving(true)
     try {
       const { error: err } = await googleSheets.from('monthly_plans').upsert({
