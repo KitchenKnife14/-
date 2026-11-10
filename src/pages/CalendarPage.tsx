@@ -191,8 +191,8 @@ export default function CalendarPage() {
           <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : f === 'income' ? 'Доходы' : f === 'expense' ? 'Расходы' : 'Переводы'}</button>
         ))}
         </div>
-        <select className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-        <select className="input w-auto min-w-[150px]" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+        <select aria-label="Фильтр по категории операций" className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select aria-label="Фильтр по участнику" className="input w-auto min-w-[150px]" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
         {(categoryFilter || authorFilter || filter !== 'all') && <button onClick={() => { setFilter('all'); setCategoryFilter(''); setAuthorFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}
       </div>
 
