@@ -605,6 +605,11 @@ function readTransactionRangeRows_(filters,user){
   });
   return result;
 }
+function sameTransactionInsert_(stored,candidate,user){
+  if(String(stored.created_by||'')!==String(user.id))return false;
+  const fields=['family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','responsible_user_id','planned','parent_recurring_id'];
+  return fields.every(field=>String(stored[field]??'')===String(candidate[field]??''));
+}
 function query_(req,user){
   const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
   if(table==='telegram_links'||table==='telegram_link_codes')throw new Error('Служебная Telegram-таблица недоступна через обычный API');
@@ -632,7 +637,8 @@ function query_(req,user){
       // Server owns identity and audit timestamps.
       if(table==='profiles' && r.id!==undefined && String(r.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='profiles')r.id=user.id;
-      if(r.id && existing.some(x=>String(x.id)===String(r.id)))throw new Error('Запись с таким ID уже существует');
+      const existingById=r.id?existing.find(x=>String(x.id)===String(r.id)):null;
+      if(existingById&&table!=='transactions')throw new Error('Запись с таким ID уже существует');
       if(!r.id)r.id=id_();
       if(TABLES[table].includes('created_at'))r.created_at=now_();
       if(TABLES[table].includes('updated_at'))r.updated_at=now_();
@@ -657,12 +663,17 @@ function query_(req,user){
       if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
       if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       validateRelations_(table,r,user);
+      if(existingById){
+        if(!sameTransactionInsert_(existingById,r,user))throw new Error('Запись с таким ID уже существует или содержит другие данные');
+        return {idempotent:true,row:existingById};
+      }
       if(table==='budgets')assertUniqueBudget_(existing,r);
-      existing.push(r);return r;
+      existing.push(r);return {idempotent:false,row:r};
     });
-    appendRows_(table,created);
-    if(table==='goal_contributions')syncGoalTotals_(created.map(r=>r.goal_id));
-    return req.returning?created.map(r=>strip_(r)):null;
+    const newRows=created.filter(item=>!item.idempotent).map(item=>item.row);
+    if(newRows.length)appendRows_(table,newRows);
+    if(table==='goal_contributions'&&newRows.length)syncGoalTotals_(newRows.map(r=>r.goal_id));
+    return req.returning?created.map(item=>strip_(item.row)):null;
   }
   if(mode==='update'||mode==='delete'){
     if(!filters.length)throw new Error('Для изменения или удаления нужен хотя бы один фильтр');
