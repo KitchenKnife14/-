@@ -19,3 +19,23 @@ test('compact ruble formatting preserves kopecks instead of rounding to whole ru
   assert.equal(formatRublesShort(100), '1 ₽')
   assert.equal(formatRublesShort(-1), '-0,01 ₽')
 })
+
+
+test('ruble input parsing converts decimal text exactly without rounding', async () => {
+  const { parseRublesToKopecks } = await loadMoneyModule()
+  assert.equal(parseRublesToKopecks('45'), 4500)
+  assert.equal(parseRublesToKopecks('45,1'), 4510)
+  assert.equal(parseRublesToKopecks('45.10'), 4510)
+  assert.equal(parseRublesToKopecks('0,01'), 1)
+  assert.equal(parseRublesToKopecks('00045,09'), 4509)
+  assert.equal(parseRublesToKopecks(' 12,5 '), 1250)
+})
+
+test('ruble input parsing rejects malformed, over-precise and unsafe values', async () => {
+  const { parseRublesToKopecks } = await loadMoneyModule()
+  for (const value of ['', ' ', '45,123', '45.001', '45rub', '1,2,3', '-1', '+1', '1e2', 'NaN', 'Infinity', '90071992547410']) {
+    assert.equal(parseRublesToKopecks(value), null, value)
+  }
+  assert.equal(parseRublesToKopecks('0'), 0)
+  assert.equal(parseRublesToKopecks('0,00'), 0)
+})
