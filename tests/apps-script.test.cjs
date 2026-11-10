@@ -1400,7 +1400,7 @@ test('authRows preserves physical sheet row numbers across blank rows before leg
   assert.equal(rows.find(row => row.id === second.user.id).row, 3);
   const signedIn = h.call({ action: 'signin', email: 'second-auth-row@example.com', password: 'correct-horse-battery' });
   assert.equal(signedIn.error, null, signedIn.error?.message);
-  assert.ok(String(sheet.getRange(3, 4, 1, 1).getValues()[0][0]).startsWith('p2
+  assert.ok(String(sheet.getRange(3, 4, 1, 1).getValues()[0][0]).startsWith('p2' + String.fromCharCode(36)));
   assert.equal(sheet.getRange(2, 4, 1, 1).getValues()[0][0], '');
 });
 
