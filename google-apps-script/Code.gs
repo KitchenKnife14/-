@@ -271,8 +271,12 @@ function now_(){return new Date().toISOString();}
 function id_(){return Utilities.getUuid();}
 function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();}
 function authSheet_(){
+  const expected=['id','email','salt','password_hash','display_name','created_at'];
   const ss=ss_(); let sh=ss.getSheetByName(AUTH_SHEET);
-  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;timedSheetWrite_(()=>sh.getRange(1,1,1,6).setValues([['id','email','salt','password_hash','display_name','created_at']]));sh.hideSheet();formatAuth_(sh);}
+  if(!sh){sh=ss.insertSheet(AUTH_SHEET);SHEET_WRITES++;timedSheetWrite_(()=>sh.getRange(1,1,1,expected.length).setValues([expected]));sh.hideSheet();formatAuth_(sh);return sh;}
+  // _auth is positional and contains credential material: never guess, reorder or auto-repair its schema.
+  const header=timedSheetRead_(()=>sh.getRange(1,1,1,expected.length).getValues())[0];
+  if(header.join('|')!==expected.join('|'))throw new Error('Не совпадает структура служебного листа _auth; автоматическое изменение небезопасно');
   return sh;
 }
 function authRows_(){SHEET_READS++;const sh=authSheet_(),v=timedSheetRead_(()=>sh.getDataRange().getValues());return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}

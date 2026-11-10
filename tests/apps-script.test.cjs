@@ -1651,6 +1651,20 @@ test('supplemental category provisioning is idempotent', () => {
   assert.equal(categories.filter(c => c.name === 'Погашение основного долга').length, 1);
 });
 
+test('_auth refuses a mismatched header without changing credential rows', () => {
+  const h = makeHarness();
+  const spreadsheet = h.context.SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.insertSheet('_auth');
+  const badHeaders = ['id', 'salt', 'email', 'password_hash', 'display_name', 'created_at'];
+  const credentialRow = ['user-1', 'salt-value', 'user@example.com', 'hash-value', 'User', '2026-11-10'];
+  sheet.getRange(1, 1, 1, badHeaders.length).setValues([badHeaders]);
+  sheet.getRange(2, 1, 1, credentialRow.length).setValues([credentialRow]);
+
+  assert.throws(() => h.context.authRows_(), /структура служебного листа _auth/);
+  assert.deepEqual(sheet.getRange(1, 1, 1, badHeaders.length).getValues()[0], badHeaders);
+  assert.deepEqual(sheet.getRange(2, 1, 1, credentialRow.length).getValues()[0], credentialRow);
+});
+
 test('schema migration appends transaction participant column without changing prior columns', () => {
   const h = makeHarness();
   const user = h.signup('schema-additive@example.com');
