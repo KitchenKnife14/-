@@ -1598,3 +1598,14 @@ HEAD до:
 - Никакие блокировки не удалялись и не переносились. Реальная параллельная нагрузка, гонки одновременных signup/webhook и concurrency tests остаются открытыми. До отдельного тестового GAS проекта оптимизацию lock policy не выполнять.
 - Прогресс после сверки SEC-02: 133/272 = 48.9%.
 
+
+### SEC-03 — аудит границ семейной изоляции и batch — 2026-11-10 (CI pending)
+
+- Проверены batch_, route_, query_, rpc_, allowedFamilyIds_ и canAccessRow_. Batch требует одну аутентифицированную сессию, запрещает вложенные batch и auth actions, а каждый вложенный запрос исполняет через route_ с тем же user.
+- Select фильтрует строки через canAccessRow_; update/delete повторно применяют canAccessRow_ к каждой строке; upsert проверяет доступ к найденной записи, запрещает менять family_id и проверяет принадлежность новой строки через allowedFamilyIds_.
+- Все RPC перечислены и проверены: get_table_revision, ensure_supplemental_categories, create_goal_with_purchase, Telegram link/status/unlink, join/create family, get_my_context, confirm_planned_purchase, confirm_recurring_payment. Семейные RPC проверяют allowedFamilyIds_ либо находят запись через canAccessRow_; персональные Telegram операции ограничены user.id.
+- Добавлен отдельный regression test для batch: чужой участник не может прочитать, изменить или удалить чужую транзакцию; после batch исходная запись у владельца остаётся неизменной. Локальный sandbox запуск был прерван завершением sandbox, поэтому окончательный результат этого теста должен быть подтверждён GitHub CI.
+- Существующие тесты дополнительно покрывают прямой API select/update/delete, все family-scoped tables, foreign category/account references, family-scoped RPC, get_my_context, table revisions и notifications revisions.
+- get_table_revision принимает только доступный familyId; ключ ревизии содержит table + familyId, а notifications дополнительно userId. touchTableRevision_ обновляет только ключи затронутых семей; отдельные тесты подтверждают, что изменение семьи A не меняет revision семьи B, а чужая notification revision недоступна.
+- Пока CI не прошёл, пункты SEC-03 не закрываются и процент не повышается.
+

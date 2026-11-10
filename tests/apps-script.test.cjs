@@ -525,6 +525,38 @@ test('family creation rolls back earlier writes if default category creation fai
 });
 
 
+test('batch API cannot read, update or delete another family records', () => {
+  const h = makeHarness();
+  const owner = h.signup('batch-isolation-owner@example.com');
+  const outsider = h.signup('batch-isolation-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья batch' }).data;
+  const inserted = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, operation_date: '2026-11-10', description: 'Приватная запись' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const id = inserted.data[0].id;
+  const filters = [{ column: 'id', op: 'eq', value: id }];
+  const batch = h.call({
+    action: 'batch', token: outsider.token,
+    requests: [
+      { action: 'query', table: 'transactions', mode: 'select', filters },
+      { action: 'query', table: 'transactions', mode: 'update', filters, values: { description: 'Подмена через batch' } },
+      { action: 'query', table: 'transactions', mode: 'delete', filters },
+    ]
+  });
+  assert.equal(batch.error, null, batch.error?.message);
+  assert.equal(batch.data[0].error, null);
+  assert.deepEqual(batch.data[0].data, []);
+  assert.equal(batch.data[1].error, null);
+  assert.equal(batch.data[1].data, null);
+  assert.equal(batch.data[2].error, null);
+  assert.equal(batch.data[2].data, null);
+  const ownerRead = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select', filters });
+  assert.equal(ownerRead.data.length, 1);
+  assert.equal(ownerRead.data[0].description, 'Приватная запись');
+});
+
 test('direct API requests cannot read, update or delete another family records', () => {
   const h = makeHarness();
   const owner = h.signup('direct-api-owner@example.com');
