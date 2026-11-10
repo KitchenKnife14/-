@@ -862,6 +862,14 @@ test('goal contribution totals reject safe-integer overflow before writing rows'
   assert.equal(contributions.length, 1);
   assert.equal(savedGoal.saved_kopecks, max - 1);
 
+  const overflowUpsert = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'upsert', onConflict: 'id',
+    values: { id: 'overflow-upsert-001', goal_id: goal.id, amount_kopecks: 2, contribution_date: '2026-11-10' }
+  });
+  assert.match(overflowUpsert.error?.message || '', /превышает безопасный диапазон/);
+  contributions = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'select' }).data;
+  assert.equal(contributions.length, 1);
+
   const smallGoal = h.call({
     action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Отпуск', target_kopecks: max }
