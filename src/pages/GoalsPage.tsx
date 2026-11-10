@@ -232,8 +232,8 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
     e.preventDefault()
     if (!goal) return
     setError(null)
-    const amt = Math.round(parseFloat(amount.replace(',', '.')) * 100)
-    if (!amt || amt === 0) { setError('Введите сумму'); return }
+    const amt = parseRublesToKopecks(amount)
+    if (amt === null || amt <= 0) { setError('Введите корректную положительную сумму с точностью до копейки'); return }
     setSaving(true)
     try {
       const { data: prof } = await googleSheets.auth.getUser()
