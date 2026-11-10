@@ -1879,3 +1879,4 @@ HEAD до:
 - Добавлен table-driven regression test для HTTP 400, 401, 403, 404, 409, 429, 500, 502 и 503: корректный error envelope сохраняет серверное сообщение; ответ без error envelope, пустое тело, HTML login page и malformed JSON отклоняются.
 - Изменение production parser не потребовалось: его поведение уже соответствует контракту, расширено только покрытие.
 - В плане закрыт соответствующий unit-test пункт FRONT-02. Реальные timeout/abort и redirect остаются интеграционными проверками. Прогресс: 156/272 (57.4%).
+- CI для коммита `78dc5662adddf9524767b43d848b4d508d6f9d04` завершился `completed / success`: [run 42907534817](https://github.com/KitchenKnife14/-/actions/runs/42907534817). TypeScript/production build, полный набор из 165 тестов (165 passed, 0 failed), Apps Script syntax, runtime diagnostics syntax, manifest validation и `npm audit` (0 vulnerabilities) прошли. Изменён только тестовый набор и журнал; parser production-кода не менялся.
