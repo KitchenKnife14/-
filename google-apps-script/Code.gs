@@ -44,6 +44,27 @@ function doGet() {
   if(PropertiesService.getScriptProperties().getProperty('DEBUG_INFO')==='1')out.spreadsheet=SpreadsheetApp.getActiveSpreadsheet().getName();
   return json_(out);
 }
+/**
+ * Классификатор предназначен только для тестирования/будущей оптимизации блокировок.
+ * doPost намеренно продолжает использовать общий ScriptLock: не переключать read-path
+ * на read lock, пока отдельно не доказана чистота всех операций чтения.
+ */
+function requestLockMode_(request){
+  const isRead=request=>{
+    if(!request||typeof request!=='object'||Array.isArray(request))return false;
+    const action=String(request.action||'');
+    if(action==='getSession'||action==='getUser')return true;
+    if(action==='query')return !request.mode||request.mode==='select';
+    if(action==='rpc')return ['get_table_revision','get_telegram_link_status','get_my_context'].includes(String(request.name||''));
+    if(action==='batch'){
+      if(!Array.isArray(request.requests)||request.requests.length===0)return false;
+      return request.requests.every(isRead);
+    }
+    return false;
+  };
+  return isRead(request)?'read-candidate':'write';
+}
+
 function doPost(e) {
   const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
   const lock = LockService.getScriptLock();
