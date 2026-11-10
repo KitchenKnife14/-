@@ -1086,7 +1086,9 @@ function telegramWebhook_(req){
     if(!Number.isSafeInteger(amountKopecks)||amountKopecks<=0||amountKopecks>1000000000000)throw new Error('Проверьте сумму операции.');
     let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)\s+/i,' ').replace(/\s+/g,' ').trim();
     const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило)(?=\s|$)/i.test(text);
+    const explicitExpense=/(?:^|\s)(?:расход|потратил|потратила|купил|купила|оплатил|оплатила|покупка)(?=\s|$)/i.test(text);
     if(!description&&isIncome)description='Доход';
+    if(!description&&explicitExpense)description='Расход';
     if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
     const kind=isIncome?'income':'expense';
     const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
@@ -1101,7 +1103,6 @@ function telegramWebhook_(req){
     for(const pair of aliases){if(pair[0].test(description)){categoryName=pair[1];break;}}
     let category=categoryName?categories.find(x=>x.name===categoryName):null;
     if(!category)category=categories.find(x=>String(description).toLowerCase().includes(String(x.name).toLowerCase())||String(x.name).toLowerCase().includes(String(description).toLowerCase()));
-    const explicitExpense=/(?:^|\s)(?:расход|потратил|потратила|купил|купила|оплатил|оплатила|покупка)(?=\s|$)/i.test(text);
     if(!isIncome&&!explicitExpense&&!categoryName&&!category)throw new Error('Не понял, это расход или доход. Уточните тип: «Расход ...» или «Доход ...».');
     if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
     const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
