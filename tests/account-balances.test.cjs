@@ -41,3 +41,47 @@ test('invalid, same-account, and unknown-account transfers do not corrupt balanc
   assert.equal(balances.get('a'), -100)
   assert.equal(balances.get('b'), 200)
 })
+
+
+test('balance arithmetic skips rows that would exceed the safe integer range', async () => {
+  const { calculateAccountBalances } = await import('../src/lib/accountBalances.js')
+  const max = Number.MAX_SAFE_INTEGER
+  const min = Number.MIN_SAFE_INTEGER
+  const accounts = [
+    { id: 'max', starting_balance_kopecks: max - 1 },
+    { id: 'min', starting_balance_kopecks: min + 1 },
+    { id: 'source', starting_balance_kopecks: 10 },
+    { id: 'target', starting_balance_kopecks: max },
+  ]
+  const rows = [
+    { type: 'income', amount_kopecks: 1, account_id: 'max', planned: false },
+    { type: 'income', amount_kopecks: 1, account_id: 'max', planned: false },
+    { type: 'expense', amount_kopecks: 1, account_id: 'min', planned: false },
+    { type: 'expense', amount_kopecks: 1, account_id: 'min', planned: false },
+    // The destination would overflow, so neither side of this transfer may change.
+    { type: 'transfer', amount_kopecks: 1, account_id: 'source', to_account_id: 'target', planned: false },
+  ]
+
+  const balances = calculateAccountBalances(accounts, rows)
+  assert.equal(balances.get('max'), max)
+  assert.equal(balances.get('min'), min)
+  assert.equal(balances.get('source'), 10)
+  assert.equal(balances.get('target'), max)
+  for (const value of balances.values()) assert.equal(Number.isSafeInteger(value), true)
+})
+
+test('valid arithmetic at both safe-integer boundaries remains supported', async () => {
+  const { calculateAccountBalances } = await import('../src/lib/accountBalances.js')
+  const max = Number.MAX_SAFE_INTEGER
+  const min = Number.MIN_SAFE_INTEGER
+  const accounts = [
+    { id: 'a', starting_balance_kopecks: max - 1 },
+    { id: 'b', starting_balance_kopecks: min + 1 },
+  ]
+  const balances = calculateAccountBalances(accounts, [
+    { type: 'income', amount_kopecks: 1, account_id: 'a', planned: false },
+    { type: 'expense', amount_kopecks: 1, account_id: 'b', planned: false },
+  ])
+  assert.equal(balances.get('a'), max)
+  assert.equal(balances.get('b'), min)
+})
