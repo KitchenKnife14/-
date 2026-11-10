@@ -967,3 +967,10 @@ HEAD до:
 - Общий прогресс остаётся 1/12 (≈8,3%); 11 этапов остаются. Этапы 2 и 6 существенно продвинулись, но runtime-проверка и другие части P1-аудита не завершены.
 - Очередь M-01—M-03 без изменений; сейчас действий от пользователя не требуется.
 - Изменения только в ветке ispravleniya; main, Production Apps Script, основная Google Sheet, Vercel Production и Telegram webhook не изменялись.
+
+
+#### Дополнение к работе № 09/12 — проверка допустимых enum для категорий и регулярных платежей
+
+- Дополнительно backend отклоняет неизвестные значения categories.kind и recurring_payments.type; разрешённые значения соответствуют типам приложения.
+- Повторный финальный CI после этого уточнения: коммит a17e47f6a8d36c2c92a416889d37d98f499cd382, build/typecheck success, npm test 80/80, Apps Script syntax check success. Ссылка: https://github.com/KitchenKnife14/-/actions/runs/42817909430.
+- Текущая ветка остаётся изолированной ispravleniya. Production и реальные данные не затронуты.
