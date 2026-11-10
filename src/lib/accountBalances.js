@@ -9,15 +9,25 @@ export function calculateAccountBalances(accounts, transactions) {
     if (transaction.planned) continue;
     const amount = Number(transaction.amount_kopecks);
     if (!Number.isSafeInteger(amount) || amount <= 0) continue;
+
     if (transaction.type === 'income' && transaction.account_id && balances.has(transaction.account_id)) {
-      balances.set(transaction.account_id, balances.get(transaction.account_id) + amount);
+      const current = balances.get(transaction.account_id);
+      const next = current + amount;
+      if (Number.isSafeInteger(next)) balances.set(transaction.account_id, next);
     } else if (transaction.type === 'expense' && transaction.account_id && balances.has(transaction.account_id)) {
-      balances.set(transaction.account_id, balances.get(transaction.account_id) - amount);
+      const current = balances.get(transaction.account_id);
+      const next = current - amount;
+      if (Number.isSafeInteger(next)) balances.set(transaction.account_id, next);
     } else if (transaction.type === 'transfer') {
       const from = transaction.account_id, to = transaction.to_account_id;
       if (!from || !to || from === to || !balances.has(from) || !balances.has(to)) continue;
-      balances.set(from, balances.get(from) - amount);
-      balances.set(to, balances.get(to) + amount);
+      const nextFrom = balances.get(from) - amount;
+      const nextTo = balances.get(to) + amount;
+      // A transfer is atomic: never update one side if the other side would overflow.
+      if (Number.isSafeInteger(nextFrom) && Number.isSafeInteger(nextTo)) {
+        balances.set(from, nextFrom);
+        balances.set(to, nextTo);
+      }
     }
   }
   return balances;
