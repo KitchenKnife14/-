@@ -1197,6 +1197,22 @@ test('new registrations require 15 characters while existing shorter passwords r
   assert.equal(parts[0], 'p2');
   assert.equal(parts[1], '30000');
 });
+test('legacy integer kopecks stored as text are normalized to numbers when read', () => {
+  const h = makeHarness();
+  const user = h.signup('legacy-text-kopecks@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Старые копейки' }).data;
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 4510, operation_date: '2026-11-10' },
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const sheet = h.context.sheet_('transactions');
+  sheet.getRange(2, 4, 1, 1).setValues([['4510']]);
+  const read = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(read.error, null, read.error?.message);
+  assert.equal(read.data[0].amount_kopecks, 4510);
+  assert.equal(typeof read.data[0].amount_kopecks, 'number');
+});
 test('PBKDF2-HMAC-SHA256 matches Node crypto for Unicode and SHA-256 block boundaries', () => {
   const h = makeHarness();
   const vectors = [
