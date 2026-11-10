@@ -173,7 +173,7 @@ function PlanForm({ open, onClose, onSaved, categories, familyId, monthDate }: {
       <form onSubmit={submit} className="space-y-3">
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {(['income', 'expense', 'savings'] as const).map((t) => (
-            <button key={t} type="button" onClick={() => setType(t)} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{t === 'income' ? 'Доход' : t === 'expense' ? 'Расход' : 'Накопления'}</button>
+            <button key={t} type="button" onClick={() => { setType(t); setCategoryId('') }} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{t === 'income' ? 'Доход' : t === 'expense' ? 'Расход' : 'Накопления'}</button>
           ))}
         </div>
         <div><label className="label">Категория</label><select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{visibleCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
