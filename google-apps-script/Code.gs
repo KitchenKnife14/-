@@ -488,6 +488,16 @@ function validateRelations_(table,row,user,previous){
     if(!['expense','income','transfer'].includes(String(row.kind||'')))throw new Error('Неизвестный тип категории');
     check('parent_id','categories','Родительская категория');
     const hierarchyChanged=!previous||String(previous.parent_id||'')!==String(row.parent_id||'')||String(previous.kind)!==String(row.kind);
+    const kindChanged=!!previous&&String(previous.kind)!==String(row.kind);
+    if(kindChanged&&row.id){
+      const categoryId=String(row.id);
+      const referenced=rows_('transactions').some(x=>String(x.category_id||'')===categoryId)||
+        rows_('recurring_payments').some(x=>String(x.category_id||'')===categoryId)||
+        rows_('budgets').some(x=>String(x.category_id||'')===categoryId)||
+        rows_('monthly_plans').some(x=>String(x.category_id||'')===categoryId)||
+        rows_('planned_purchases').some(x=>String(x.category_id||'')===categoryId);
+      if(referenced)throw new Error('Нельзя менять тип категории, пока она используется в операциях, бюджетах или планах. Создайте новую категорию либо перенесите связанные записи.');
+    }
     if(hierarchyChanged&&row.parent_id){
       const parent=rows_('categories').find(x=>String(x.id)===String(row.parent_id));
       if(parent&&String(parent.kind)!==String(row.kind))throw new Error('Тип подкатегории должен совпадать с типом родительской категории');
