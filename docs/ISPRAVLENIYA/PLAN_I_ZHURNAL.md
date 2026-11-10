@@ -1,6 +1,6 @@
 # Family Cash — план исправлений и журнал работ
 
-> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 118 из 267 пунктов плана закрыто (44.2%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
+> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 120 из 267 пунктов плана закрыто (44.9%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
 > Дата фиксации плана: 2026-11-09.
 > Рабочая ветка: `ispravleniya`.
 > Базовый Production-коммит: `a7f105df927a54fe7351fc928b896fe473714386`.
@@ -324,9 +324,9 @@
 - [ ] Добавить интеграционные проверки Apps Script на отдельной тестовой таблице.
 - [ ] Добавить concurrency tests для критических операций и Telegram.
 - [ ] Добавить браузерные E2E: вход, создание/изменение/удаление операции, перевод, бюджеты, цели, Telegram linking.
-- [ ] Добавить dependency audit/security scan в CI с понятной политикой блокировки.
+- [x] Добавить dependency audit/security scan в CI с понятной политикой блокировки.
 - [x] Сохранить текущие регрессионные тесты; не удалять тест ради прохождения сборки.
-- [ ] Записывать версии Node/npm и результаты CI.
+- [x] Записывать версии Node/npm и результаты CI.
 
 **Условие перехода:** уязвимые зависимости устранены либо остаточный риск документирован; сборка, unit, integration и E2E проходят.
 
@@ -1529,7 +1529,17 @@ HEAD до:
 - При проверке обнаружено, что ранее выполненные задачи фиксировались в текстовом журнале, но соответствующие чекбоксы общего плана не всегда отмечались. Поэтому процент оставался 37.5%, хотя часть работ фактически была выполнена. Сверка проведена по конкретным изменениям, тестам и результатам; непроверенные пункты оставлены открытыми.
 - По результатам сверки отмечены 18 ранее открытых пунктов: проверка формата/legacy password hashes и сохранение постепенной миграции без массового сброса; проверенные webhook timeouts и безопасный retry; подтверждённая миграционная подготовка React Router; завершённые шаги обновления Vite и lockfile; уже существующие и проходящие тесты webhook и frontend adapter.
 - Новый контрольный счёт: 118 закрыто / 149 открыто / 267 всего. Расчёт: 118 ÷ 267 × 100 = 44.19%, округлено до 44.2%. Число пунктов не менялось; закрыты только проверенные пункты.
-- В изолированной среде выполнен npm audit по итоговому lockfile: 0 info, 0 low, 0 moderate, 0 high, 0 critical vulnerabilities. Это разовая проверка; постоянный audit gate ещё не добавлен в CI.
+- В изолированной среде выполнен npm audit по итоговому lockfile: 0 info, 0 low, 0 moderate, 0 high, 0 critical vulnerabilities. После этого постоянный audit gate добавлен в validate.yml: npm audit --audit-level=high блокирует CI при high/critical findings.
 - Официальный Vite advisory GHSA-p4f5-76q4-ffq7 опубликован 2026-11-10: затронуты версии Vite 4.0.0–6.4.5, исправленная версия для ветки 6.4 — 6.4.6. Уязвимость касается dev server, если он явно доступен из сети через --host или server.host. В vite.config.ts установлен host 127.0.0.1; сетевое раскрытие dev server не настроено. Обновление до 6.4.6 всё равно устраняет уязвимую версию. Источники: https://github.com/vitejs/vite/security/advisories/GHSA-p4f5-76q4-ffq7 ; https://vite.dev/releases
 - Контрольный GitHub CI для commit 941e98190ef3c236610336c06a3f9a7ef1d18177 завершился успешно: npm ci, TypeScript + production build, 140/140 тестов, синтаксис Code.gs и PBKDF2 runtime diagnostics. Run: https://github.com/KitchenKnife14/-/actions/runs/42867730435
-- Следующий шаг: добавить в постоянный CI запись версий Node/npm и npm audit --audit-level=high; затем подтвердить CI. Локальный Preview на актуальном HEAD и браузерный smoke test остаются отдельными проверками.
+- Постоянный CI дополнен записью Node/npm и npm audit --audit-level=high. Run 42868078385 завершился success: Node v22.23.4, npm 10.9.9, npm audit — 0 vulnerabilities, TypeScript + production build — success, 140/140 tests, синтаксис Code.gs и PBKDF2 diagnostics — success. Локальный Preview на актуальном HEAD и браузерный smoke test остаются отдельными проверками.
+
+### Подтверждение CI security gate — 2026-11-10
+
+- Run: https://github.com/KitchenKnife14/-/actions/runs/42868078385
+- Среда CI: Node v22.23.4, npm 10.9.9.
+- npm ci: success; npm audit --audit-level=high: success, найдено 0 vulnerabilities.
+- TypeScript + production build: success.
+- Полный regression suite: 140 tests, 140 pass, 0 fail.
+- Синтаксис google-apps-script/Code.gs и PBKDF2_RUNTIME_DIAGNOSTICS.gs: success.
+- Закрыты ещё два пункта FC-17: dependency security gate и фиксация версий Node/npm и CI. Контрольный прогресс: 120/267 = 44.9%.
