@@ -2223,3 +2223,39 @@ test('category kind cannot change while the category is referenced by financial 
     assert.equal(saved.data[0].kind, 'expense', table + ' failed category update must not mutate the category');
   }
 });
+
+
+test('cross-family isolation covers every family-scoped table through direct select, update and delete', () => {
+  const h = makeHarness();
+  const owner = h.signup('matrix-owner@example.com');
+  const outsider = h.signup('matrix-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Изолированная семья' }).data;
+  const fixtures = [
+    ['categories', { id: 'iso-category', family_id: family.id, name: 'Личная категория' }, { name: 'Подмена' }],
+    ['accounts', { id: 'iso-account', family_id: family.id, name: 'Личный счёт' }, { name: 'Подмена' }],
+    ['transactions', { id: 'iso-transaction', family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-10-29', description: 'Личная операция' }, { description: 'Подмена' }],
+    ['recurring_payments', { id: 'iso-recurring', family_id: family.id, description: 'Личный платёж' }, { description: 'Подмена' }],
+    ['budgets', { id: 'iso-budget', family_id: family.id, limit_kopecks: 1000 }, { limit_kopecks: 2000 }],
+    ['goals', { id: 'iso-goal', family_id: family.id, name: 'Личная цель' }, { name: 'Подмена' }],
+    ['planned_purchases', { id: 'iso-purchase', family_id: family.id, name: 'Личная покупка' }, { name: 'Подмена' }],
+    ['monthly_plans', { id: 'iso-monthly-plan', family_id: family.id, note: 'Личный план' }, { note: 'Подмена' }],
+  ];
+
+  fixtures.forEach(([table, row]) => h.context.appendRows_(table, [row]));
+
+  fixtures.forEach(([table, row, patch]) => {
+    const filters = [{ column: 'id', op: 'eq', value: row.id }];
+    const outsiderRead = h.call({ action: 'query', token: outsider.token, table, mode: 'select', filters });
+    assert.equal(outsiderRead.error, null, outsiderRead.error?.message);
+    assert.equal(outsiderRead.data.length, 0, table + ' leaked a foreign row on select');
+
+    const outsiderUpdate = h.call({ action: 'query', token: outsider.token, table, mode: 'update', filters, values: patch });
+    assert.equal(outsiderUpdate.error, null, outsiderUpdate.error?.message);
+    const outsiderDelete = h.call({ action: 'query', token: outsider.token, table, mode: 'delete', filters });
+    assert.equal(outsiderDelete.error, null, outsiderDelete.error?.message);
+
+    const ownerRead = h.call({ action: 'query', token: owner.token, table, mode: 'select', filters });
+    assert.equal(ownerRead.error, null, ownerRead.error?.message);
+    assert.equal(ownerRead.data.length, 1, table + ' row was changed or deleted by another family');
+  });
+});
