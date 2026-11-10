@@ -1438,20 +1438,63 @@ test('schema migration appends transaction participant column without changing p
   assert.equal(sheet.getRange(2, oldHeaders.length + 1, 1, 1).getValues()[0][0], '');
 });
 
-test('table revision polling changes after a successful write', () => {
+test('table revisions are isolated by family and reject cross-family reads', () => {
   const h = makeHarness();
-  const user = h.signup('revision-polling@example.com');
-  const family = h.call({ action: 'createFamily', token: user.token, name: 'Версии таблиц' }).data;
-  const before = h.call({ action: 'rpc', token: user.token, name: 'get_table_revision', params: { p_table: 'transactions' } });
-  const insert = h.call({
-    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
-    values: { family_id: family.id, type: 'expense', amount_kopecks: 4500, operation_date: '2026-11-03' }
+  const userA = h.signup('revision-family-a@example.com');
+  const userB = h.signup('revision-family-b@example.com');
+  const familyA = h.call({ action: 'createFamily', token: userA.token, name: 'Семья A' }).data;
+  const familyB = h.call({ action: 'createFamily', token: userB.token, name: 'Семья B' }).data;
+  const read = (token, familyId) => h.call({
+    action: 'rpc', token, name: 'get_table_revision',
+    params: { p_table: 'transactions', p_family_id: familyId }
   });
-  const after = h.call({ action: 'rpc', token: user.token, name: 'get_table_revision', params: { p_table: 'transactions' } });
+  const beforeA = read(userA.token, familyA.id);
+  const beforeB = read(userB.token, familyB.id);
+  assert.equal(beforeA.error, null, beforeA.error?.message);
+  assert.equal(beforeB.error, null, beforeB.error?.message);
+  const denied = read(userA.token, familyB.id);
+  assert.ok(denied.error);
+  const insert = h.call({
+    action: 'query', token: userA.token, table: 'transactions', mode: 'insert',
+    values: { family_id: familyA.id, type: 'expense', amount_kopecks: 4500, operation_date: '2026-11-03' }
+  });
+  const afterA = read(userA.token, familyA.id);
+  const afterB = read(userB.token, familyB.id);
   assert.equal(insert.error, null, insert.error?.message);
-  assert.equal(before.error, null, before.error?.message);
-  assert.equal(after.error, null, after.error?.message);
-  assert.notEqual(after.data, before.data);
+  assert.equal(afterA.error, null, afterA.error?.message);
+  assert.equal(afterB.error, null, afterB.error?.message);
+  assert.notEqual(afterA.data, beforeA.data);
+  assert.equal(afterB.data, beforeB.data);
+});
+
+test('notification revisions are scoped to the authenticated user within a family', () => {
+  const h = makeHarness();
+  const owner = h.signup('revision-notif-owner@example.com');
+  const partner = h.signup('revision-notif-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Уведомления семьи' }).data;
+  const joined = h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  assert.equal(joined.error, null, joined.error?.message);
+  const read = (token, userId) => h.call({
+    action: 'rpc', token, name: 'get_table_revision',
+    params: { p_table: 'notifications', p_family_id: family.id, p_user_id: userId }
+  });
+  const beforeOwner = read(owner.token, owner.user.id);
+  const beforePartner = read(partner.token, partner.user.id);
+  assert.equal(beforeOwner.error, null, beforeOwner.error?.message);
+  assert.equal(beforePartner.error, null, beforePartner.error?.message);
+  const denied = read(owner.token, partner.user.id);
+  assert.ok(denied.error);
+  const inserted = h.call({
+    action: 'query', token: owner.token, table: 'notifications', mode: 'insert',
+    values: { family_id: family.id, kind: 'test', title: 'Тест', body: 'Тест', read: false }
+  });
+  const afterOwner = read(owner.token, owner.user.id);
+  const afterPartner = read(partner.token, partner.user.id);
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.equal(afterOwner.error, null, afterOwner.error?.message);
+  assert.equal(afterPartner.error, null, afterPartner.error?.message);
+  assert.notEqual(afterOwner.data, beforeOwner.data);
+  assert.equal(afterPartner.data, beforePartner.data);
 });
 
 
