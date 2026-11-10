@@ -1641,3 +1641,11 @@ HEAD до:
 - Код аутентификации не менялся. SEC-04 проверка TTL/expiry/revocation/cleanup/rate-limit по коду и регрессионным тестам закрыта. Реальный флаг SIGNUP_DISABLED в тестовом Apps Script UI не проверен; production setting не трогался.
 - Прогресс: 139/272 = 51.1%.
 
+
+### SEC-05 — проверка диагностического endpoint и безопасных логов — 2026-11-10 (CI pending)
+
+- Code.gs: doGet возвращает status/message/API_VERSION; имя активной таблицы раскрывается только при Script Property DEBUG_INFO=1. Фактическое значение DEBUG_INFO в Apps Script UI недоступно через GitHub и не подтверждено.
+- Единственный console.log в doPost пишет только action, размер batch и числовые метрики lock/work/total/read/write; в payload логирования не передаются token, email, текст операции или сумма. Telegram handler не содержит console.log/Logger.log.
+- Добавлены regression tests: doGet не раскрывает имя таблицы при DEBUG_INFO off и добавляет его только при явном opt-in; логи signup/createFamily/transaction insert содержат только разрешённые поля метрик и не включают email, пароль, токен, название семьи, описание операции или сумму.
+- Изменений runtime Code.gs/handler не делалось. CI pending, прогресс не меняется. Проверка фактического DEBUG_INFO и настройки публичного deployment остаётся ручной проверкой в Apps Script UI.
+

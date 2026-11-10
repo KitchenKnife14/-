@@ -119,6 +119,51 @@ function makeHarness() {
   };
 }
 
+test('doGet omits spreadsheet diagnostics unless DEBUG_INFO is explicitly enabled', () => {
+  const h = makeHarness();
+  const parse = output => JSON.parse(output.getContent());
+  const normal = parse(h.context.doGet());
+  assert.deepEqual(Object.keys(normal).sort(), ['message', 'status', 'version']);
+  assert.equal(normal.status, 'ok');
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('DEBUG_INFO', '1');
+  const debug = parse(h.context.doGet());
+  assert.equal(debug.spreadsheet, 'Семейный бюджет');
+});
+
+test('Apps Script request logs contain metrics only and never payload secrets or financial values', () => {
+  const h = makeHarness();
+  const logs = [];
+  h.context.console = { log: value => logs.push(String(value)) };
+  const email = 'diagnostic-private@example.com';
+  const password = 'private-password-never-log';
+  const secretDescription = 'private-expense-description-never-log';
+  const user = h.call({ action: 'signup', email, password });
+  assert.equal(user.error, null, user.error?.message);
+  const family = h.call({ action: 'createFamily', token: user.data.token, name: 'Private family name' });
+  assert.equal(family.error, null, family.error?.message);
+  const inserted = h.call({
+    action: 'query', token: user.data.token, table: 'transactions', mode: 'insert',
+    values: {
+      family_id: family.data.id, type: 'expense', amount_kopecks: 987654321,
+      operation_date: '2026-11-10', description: secretDescription
+    }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.equal(logs.length, 3);
+  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'reads', 'writes', 'readMs', 'writeMs'];
+  for (const line of logs) {
+    const record = JSON.parse(line);
+    assert.deepEqual(Object.keys(record).sort(), allowed.sort());
+    assert.ok(!line.includes(email));
+    assert.ok(!line.includes(password));
+    assert.ok(!line.includes(user.data.token));
+    assert.ok(!line.includes(secretDescription));
+    assert.ok(!line.includes('987654321'));
+    assert.ok(!line.includes('Private family name'));
+  }
+});
+
 test('signup and signin return the token and user in the API data envelope', () => {
   const h = makeHarness();
   const signup = h.call({ action: 'signup', email: 'auth-shape@example.com', password: 'correct-horse-battery' });
