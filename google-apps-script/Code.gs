@@ -483,14 +483,51 @@ function validateRelations_(table,row,user){
     const related=rows_(relatedTable).find(x=>String(x.id)===String(value));
     if(!related||String(related.family_id)!==familyId)throw new Error(label+' не найдена в этой семье');
   };
-  if(table==='categories')check('parent_id','categories','Родительская категория');
+  if(table==='categories'){
+    check('parent_id','categories','Родительская категория');
+    if(row.parent_id){
+      const parent=rows_('categories').find(x=>String(x.id)===String(row.parent_id));
+      if(parent&&String(parent.kind)!==String(row.kind))throw new Error('Тип подкатегории должен совпадать с типом родительской категории');
+    }
+  }
   if(table==='transactions'){
     check('category_id','categories','Категория');check('account_id','accounts','Счёт списания');check('to_account_id','accounts','Счёт зачисления');check('parent_recurring_id','recurring_payments','Регулярный платёж');
+    if(row.category_id){
+      const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&String(category.kind)!==String(row.type))throw new Error('Тип категории не соответствует типу операции');
+    }
     if(row.account_id&&row.to_account_id&&String(row.account_id)===String(row.to_account_id))throw new Error('Счета перевода должны различаться');
   }
-  if(table==='recurring_payments'){check('category_id','categories','Категория');check('account_id','accounts','Счёт');}
-  if(table==='budgets'||table==='monthly_plans')check('category_id','categories','Категория');
-  if(table==='planned_purchases'){check('category_id','categories','Категория');check('goal_id','goals','Цель');check('linked_transaction_id','transactions','Связанная операция');}
+  if(table==='recurring_payments'){
+    check('category_id','categories','Категория');check('account_id','accounts','Счёт');
+    if(row.category_id){
+      const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&String(category.kind)!==String(row.type))throw new Error('Тип категории не соответствует типу регулярного платежа');
+    }
+  }
+  if(table==='budgets'){
+    check('category_id','categories','Категория');
+    if(row.category_id){
+      const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&category.kind!=='expense')throw new Error('Бюджет можно назначить только категории расходов');
+    }
+  }
+  if(table==='monthly_plans'){
+    check('category_id','categories','Категория');
+    if(!['income','expense','savings'].includes(String(row.type||'')))throw new Error('Неизвестный тип плановой строки');
+    if(row.category_id){
+      const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      const expectedKind=row.type==='income'?'income':'expense';
+      if(category&&String(category.kind)!==expectedKind)throw new Error('Тип категории не соответствует типу месячного плана');
+    }
+  }
+  if(table==='planned_purchases'){
+    check('category_id','categories','Категория');check('goal_id','goals','Цель');check('linked_transaction_id','transactions','Связанная операция');
+    if(row.category_id){
+      const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&category.kind!=='expense')throw new Error('Планируемую покупку можно отнести только к категории расходов');
+    }
+  }
 }
 function matchesFilterValue_(row,filter){
   const a=row[filter.column],b=filter.value;
