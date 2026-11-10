@@ -113,3 +113,20 @@ button, input, select, textarea {
     }
   }
 }
+
+/* Mobile Safari: avoid focus zoom on controls and use the dynamic viewport. */
+@media (max-width: 767px) {
+  input.input, select.input, textarea.input {
+    font-size: 16px;
+  }
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+@supports (min-height: 100dvh) {
+  .app-shell {
+    min-height: 100dvh;
+  }
+}
