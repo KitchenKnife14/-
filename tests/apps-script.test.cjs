@@ -2095,13 +2095,32 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
   assert.equal(transactions[0].amount_kopecks, 500000);
   assert.equal(transactions[0].description, 'Доход');
 
+  const salary = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7507, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Зарплата 5000 рублей' } },
+  });
+  assert.equal(salary.error, null, salary.error?.message);
+  assert.match(salary.data.text, /Записал доход: 5000,00 ₽/);
+
+  const salaryWithPrefix = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7508, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Доход 5000 рублей зарплата' } },
+  });
+  assert.equal(salaryWithPrefix.error, null, salaryWithPrefix.error?.message);
+
   const expense = h.call({
     action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
     update: { update_id: 7506, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Потратил 500 рублей' } },
   });
   assert.equal(expense.error, null, expense.error?.message);
   const updatedTransactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
-  assert.equal(updatedTransactions.length, 2);
+  assert.equal(updatedTransactions.length, 4);
+  const savedSalary = updatedTransactions.filter(row => row.type === 'income' && row.amount_kopecks === 500000);
+  assert.equal(savedSalary.length, 3);
+  const salaryCategory = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .find(row => row.name === 'Зарплата первого участника');
+  assert.ok(salaryCategory);
+  assert.ok(savedSalary.every(row => row.category_id === salaryCategory.id));
   const savedExpense = updatedTransactions.find(row => row.type === 'expense');
   assert.equal(savedExpense.amount_kopecks, 50000);
   assert.equal(savedExpense.description, 'Расход');
