@@ -1836,3 +1836,58 @@ test('categories with references cannot be deleted, but can be archived', () => 
   });
   assert.equal(safeDelete.error, null, safeDelete.error?.message);
 });
+
+
+test('transaction inserts are idempotent for the same ID and exact payload', () => {
+  const h = makeHarness();
+  const owner = h.signup('transaction-idempotency-owner@example.com');
+  const partner = h.signup('transaction-idempotency-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Идемпотентные операции' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  const payload = {
+    id: 'tx-idempotency-stable-001',
+    family_id: family.id,
+    type: 'expense',
+    amount_kopecks: 4500,
+    operation_date: '2026-11-10',
+    operation_time: null,
+    category_id: null,
+    account_id: null,
+    to_account_id: null,
+    description: 'Проезд',
+    responsible_user_id: owner.user.id,
+    planned: false,
+    parent_recurring_id: null,
+  };
+  const first = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true, values: payload,
+  });
+  assert.equal(first.error, null, first.error?.message);
+  const retry = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true, values: payload,
+  });
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(retry.data[0].id, first.data[0].id);
+  assert.equal(retry.data[0].created_at, first.data[0].created_at);
+
+  const changedPayload = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert',
+    values: { ...payload, amount_kopecks: 4600 },
+  });
+  assert.match(changedPayload.error?.message || '', /таким ID уже существует|другие данные/);
+
+  const differentAuthor = h.call({
+    action: 'query', token: partner.token, table: 'transactions', mode: 'insert',
+    values: payload,
+  });
+  assert.match(differentAuthor.error?.message || '', /таким ID уже существует|другие данные/);
+
+  const separateLegitimateTransaction = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert',
+    values: { ...payload, id: 'tx-idempotency-stable-002' },
+  });
+  assert.equal(separateLegitimateTransaction.error, null, separateLegitimateTransaction.error?.message);
+
+  const all = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' });
+  assert.equal(all.data.length, 2);
+});
