@@ -233,7 +233,7 @@
 
 ### SEC-04 — signup/session
 - [ ] Проверить фактическое состояние `SIGNUP_DISABLED` в Apps Script UI, не копируя значение секрета в чат.
-- [ ] Проверить TTL, истечение, отзыв сессии, очистку старых сессий и лимит входов.
+- [x] Проверить TTL, истечение, отзыв сессии, очистку старых сессий и лимит входов.
 - [ ] Проверить, что регистрация закрыта или контролируется ожидаемым образом для частного приложения.
 - [ ] Не менять настройку Production без согласования.
 
@@ -1629,4 +1629,15 @@ HEAD до:
 - Сессия не продлевается при каждом запросе (абсолютный TTL), refresh-token механизма нет. На каждый защищённый запрос authRows_ читает _auth и ищет пользователя; это дополнительное чтение Sheets, масштабируемость зависит от числа аккаунтов. Для пары пользователей это не требует изменения сейчас.
 - Добавлены три regression tests: expired token rejected and deleted; signout immediately revokes token; signup cleanup removes expired/malformed session and expired loginfail properties while preserving live session.
 - Изменений runtime Code.gs не делалось; проверяется уже существующее поведение. CI pending, пункты не закрыты, прогресс не меняется.
+
+
+### AUTH-SESSION — регрессионные тесты жизненного цикла сессий пройдены — 2026-11-10
+
+- Commit: a082f127a5d9b502668d037289ae1094c509aad3
+- CI: https://github.com/KitchenKnife14/-/actions/runs/42871998125 — success.
+- Node v22.23.4; npm ci и npm audit прошли, 0 vulnerabilities; TypeScript/Vite production build, Apps Script syntax checks — success.
+- Полный regression suite: 147 тестов, 147 pass, 0 fail (до этого было 144).
+- Три новых теста подтверждают: просроченная сессия отклоняется и удаляется; logout отзывает токен сразу; cleanup при signup удаляет expired/malformed session и просроченные loginfail записи, сохраняя активную сессию.
+- Код аутентификации не менялся. SEC-04 проверка TTL/expiry/revocation/cleanup/rate-limit по коду и регрессионным тестам закрыта. Реальный флаг SIGNUP_DISABLED в тестовом Apps Script UI не проверен; production setting не трогался.
+- Прогресс: 139/272 = 51.1%.
 
