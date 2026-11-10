@@ -162,8 +162,33 @@ function safeCell_(value) {
   // A leading apostrophe makes Sheets store the content as literal text.
   return typeof value==='string' && value.startsWith('=') ? "'"+value : value;
 }
-function touchTableRevision_(name){
-  try{PropertiesService.getScriptProperties().setProperty('table_revision:'+name,String(Date.now())+':'+Utilities.getUuid());}catch(_){}
+function tableRevisionKey_(table,familyId,userId){
+  const base='table_revision:v2:'+table+':'+encodeURIComponent(String(familyId));
+  return table==='notifications'?base+':'+encodeURIComponent(String(userId)):base;
+}
+function touchTableRevision_(name,data){
+  try{
+    const rows=Array.isArray(data)?data:[];
+    const props=PropertiesService.getScriptProperties();
+    const keys=new Set();
+    rows.forEach(row=>{
+      if(!row)return;
+      let familyId='';
+      if(name==='families')familyId=String(row.id||'');
+      else if(name==='goal_contributions'){
+        const goal=rows_('goals').find(g=>String(g.id)===String(row.goal_id));
+        familyId=goal?String(goal.family_id||''):'';
+      }else familyId=String(row.family_id||'');
+      if(!familyId)return;
+      if(name==='notifications'){
+        const userId=String(row.user_id||'');
+        if(userId)keys.add(tableRevisionKey_(name,familyId,userId));
+      }else keys.add(tableRevisionKey_(name,familyId));
+    });
+    if(!keys.size)return;
+    const revision=String(Date.now())+':'+Utilities.getUuid();
+    keys.forEach(key=>props.setProperty(key,revision));
+  }catch(_){}
 }
 function appendRows_(name, data) {
   if (!data.length) return;
@@ -173,7 +198,7 @@ function appendRows_(name, data) {
   delete ROWS_CACHE[name];
   timedSheetWrite_(()=>sh.getRange(start,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
   SHEET_WRITES++;
-  touchTableRevision_(name);
+  touchTableRevision_(name,data);
 }
 function updateRows_(name, data) {
   if (!data.length) return;
@@ -191,7 +216,7 @@ function updateRows_(name, data) {
   sorted.forEach(row=>{if(group.length&&row.__row!==group[group.length-1].__row+1)flush();group.push(row);});
   flush();
   SHEET_WRITES++;
-  touchTableRevision_(name);
+  touchTableRevision_(name,data);
 }
 function deleteRows_(name, data) {
   const rowNumbers=[...new Set(data.map(r=>Number(r.__row)).filter(n=>Number.isInteger(n)&&n>=2))].sort((a,b)=>b-a);
@@ -205,7 +230,7 @@ function deleteRows_(name, data) {
     timedSheetWrite_(()=>sh.deleteRows(low,high-low+1));
   }
   SHEET_WRITES++;
-  touchTableRevision_(name);
+  touchTableRevision_(name,data);
 }
 function writeRows_(name, data) {
   SHEET_WRITES++;
@@ -215,7 +240,7 @@ function writeRows_(name, data) {
   const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
   if (data.length) timedSheetWrite_(()=>sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
   const last=sh.getLastRow(); if(last>data.length+1) timedSheetWrite_(()=>sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent());
-  touchTableRevision_(name);
+  touchTableRevision_(name,data);
 }
 function now_(){return new Date().toISOString();}
 function id_(){return Utilities.getUuid();}
@@ -893,10 +918,15 @@ function syncGoalTotals_(goalIds){
 function rpc_(req,user){
   const name=req.name, p=req.params||{};
   if(name==='get_table_revision'){
-    const table=String(p.p_table||'');
-    if(!TABLES[table]||table==='telegram_links'||table==='telegram_link_codes')throw new Error('Таблица недоступна');
-    if(!allowedFamilyIds_(user).length)throw new Error('Нет доступа к семейному пространству');
-    return PropertiesService.getScriptProperties().getProperty('table_revision:'+table)||'0';
+    const table=String(p.p_table||''),familyId=String(p.p_family_id||'');
+    if(!TABLES[table]||table==='telegram_links'||table==='telegram_link_codes'||table==='profiles')throw new Error('Таблица недоступна для отслеживания изменений');
+    if(!familyId||!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    if(table==='notifications'){
+      const userId=String(p.p_user_id||'');
+      if(!userId||userId!==user.id)throw new Error('Нет доступа к ревизии уведомлений другого пользователя');
+      return PropertiesService.getScriptProperties().getProperty(tableRevisionKey_(table,familyId,userId))||'0';
+    }
+    return PropertiesService.getScriptProperties().getProperty(tableRevisionKey_(table,familyId))||'0';
   }
   if(name==='ensure_supplemental_categories'){
     const familyId=String(p.p_family_id||'');
