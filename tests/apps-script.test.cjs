@@ -2038,6 +2038,13 @@ test('Telegram balance excludes planned operations and transfers from realized t
   });
   assert.equal(linked.error, null, linked.error?.message);
 
+  const originalFormatDate = h.context.Utilities.formatDate;
+  h.context.Utilities.formatDate = (date, timezone, pattern) => {
+    const iso = new Date(date).toISOString();
+    if (pattern === 'yyyy-MM') return iso.slice(0, 7);
+    if (pattern === 'yyyy-MM-dd') return iso.slice(0, 10);
+    return originalFormatDate(date, timezone, pattern);
+  };
   const operationDate = h.context.Utilities.formatDate(new Date(), 'Europe/Moscow', 'yyyy-MM-dd');
   const addAccount = name => h.call({
     action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
