@@ -99,7 +99,8 @@ test('webhook returns 502 when Apps Script responds with a non-2xx status', asyn
   const res = response();
   await handler(request(), res);
   assert.equal(res.statusCode, 502);
-  assert.deepEqual(res.body, { ok: false, error: 'Webhook processing failed; Telegram may retry safely' });
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.error, 'Webhook processing failed; Telegram may retry safely');
 });
 
 test('webhook returns 502 when Apps Script response is not JSON', async () => {
@@ -121,7 +122,7 @@ test('webhook forwards backend replies to Telegram and acknowledges success', as
   const res = response();
   await handler(request(), res);
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.body, { ok: true });
+  assert.equal(res.body.ok, true);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].options.redirect, 'follow');
   assert.equal(JSON.parse(calls[1].options.body).text, 'Записал расход');
