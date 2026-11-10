@@ -131,7 +131,8 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
           try {
             requestId = getOrCreatePendingTransactionId(window.localStorage, storageKey, fingerprint, createTransactionRequestId)
           } catch {
-            // Storage may be disabled or full. Keep retry protection for this mounted form.
+            // Storage may be disabled or full. Remove any stale record before using the in-memory fallback.
+            try { window.localStorage.removeItem(storageKey) } catch { /* Storage is unavailable. */ }
             requestId = createTransactionRequestId()
           }
           pendingInsertRef.current = { key: storageKey, fingerprint, id: requestId }
