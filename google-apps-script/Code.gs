@@ -437,8 +437,11 @@ function assertUniqueBudget_(rows,row,excludeId){
 function assertKopecks_(value,label,options){
   const opts=options||{};
   if(opts.optional&&value===undefined)return;
-  if(typeof value!=='number'||!Number.isSafeInteger(value))throw new Error(label+' должно быть безопасным целым числом копеек');
-  if(opts.positive&&value<=0)throw new Error(label+' должно быть положительным целым числом копеек');
+  if(opts.positive){
+    if(typeof value!=='number'||!Number.isSafeInteger(value)||value<=0)throw new Error(label+': требуется положительное целое число копеек');
+    return;
+  }
+  if(typeof value!=='number'||!Number.isSafeInteger(value))throw new Error(label+': требуется безопасное целое число копеек');
 }
 function validateRelations_(table,row,user){
   const familyId=String(row.family_id||'');
