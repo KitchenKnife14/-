@@ -239,9 +239,9 @@
 
 ### SEC-05 — DEBUG_INFO и диагностические данные
 - [ ] Проверить фактический статус DEBUG_INFO.
-- [ ] Убедиться, что диагностические endpoints не раскрывают персональные/финансовые данные.
-- [ ] Оставить только безопасные метрики: время, количество чтений/записей, тип действия.
-- [ ] Не логировать токены, email, тексты операций и суммы.
+- [x] Убедиться, что диагностические endpoints не раскрывают персональные/финансовые данные.
+- [x] Оставить только безопасные метрики: время, количество чтений/записей, тип действия.
+- [x] Не логировать токены, email, тексты операций и суммы.
 
 ### FC-07 — manifest Apps Script
 - [ ] Проверить реальный `appsscript.json` в редакторе Apps Script.
@@ -1648,4 +1648,16 @@ HEAD до:
 - Единственный console.log в doPost пишет только action, размер batch и числовые метрики lock/work/total/read/write; в payload логирования не передаются token, email, текст операции или сумма. Telegram handler не содержит console.log/Logger.log.
 - Добавлены regression tests: doGet не раскрывает имя таблицы при DEBUG_INFO off и добавляет его только при явном opt-in; логи signup/createFamily/transaction insert содержат только разрешённые поля метрик и не включают email, пароль, токен, название семьи, описание операции или сумму.
 - Изменений runtime Code.gs/handler не делалось. CI pending, прогресс не меняется. Проверка фактического DEBUG_INFO и настройки публичного deployment остаётся ручной проверкой в Apps Script UI.
+
+
+### SEC-05 — CI безопасных диагностик и логирования пройден — 2026-11-10
+
+- Commit: 25abfda749c1a335aa0d9225bb178c1b2825146f
+- CI: https://github.com/KitchenKnife14/-/actions/runs/42872409244 — success.
+- Node v22.23.4; npm ci; npm audit — 0 vulnerabilities; TypeScript/Vite production build — success; Apps Script syntax checks — success.
+- Regression suite: 149/149 passed, 0 failed.
+- Закрыты три пункта SEC-05: диагностический endpoint по умолчанию не показывает имя таблицы; request logs содержат только action/batch count и числовые метрики; тесты подтверждают отсутствие email, password, token, названия семьи, описания операции и суммы в логах.
+- Открытым остаётся только фактическая проверка DEBUG_INFO в UI Apps Script. Через GitHub это Script Property прочитать нельзя; не предполагал его значение и не менял production.
+- Vercel deployments, доступные на момент проверки, не содержат SHA 25abfda; новый Preview для этого коммита не подтверждён. CI green не равен проверке живого Preview.
+- Прогресс: 142/272 = 52.2%.
 
