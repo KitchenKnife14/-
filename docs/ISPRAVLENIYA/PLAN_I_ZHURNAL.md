@@ -380,12 +380,12 @@
 
 ### FRONT-02 — HTTP/API response validation
 Файл: `src/lib/googleSheets.ts`.
-- [ ] Проверять HTTP status и структуру ответа.
-- [ ] Проверять наличие ожидаемого data/error envelope.
-- [ ] Не считать пустой/неполный JSON успешным ответом.
-- [ ] Сохранить корректную обработку редиректа Apps Script.
-- [ ] Проверить 4xx/5xx, HTML login page, malformed JSON, пустой ответ, timeout, abort.
-- [ ] Проверить, что ошибка не превращается в успешное сохранение UI.
+- [x] Проверять HTTP status и JSON envelope; неуспешный HTTP без серверной ошибки отклоняется.
+- [x] Проверять объект envelope, наличие data либо корректного error.message.
+- [x] Пустой, null, массив, объект без data/error, HTML и некорректное описание ошибки отклоняются.
+- [x] redirect: 'follow' сохранён без изменений; parser работает после получения конечного ответа.
+- [ ] Проверить 4xx/5xx, HTML login page, malformed JSON и неполные envelopes в unit-тестах; timeout/abort и реальный redirect остаются для интеграционного smoke test.
+- [x] Некорректный ответ теперь отклоняется до возврата data, поэтому адаптер не принимает его как успешный результат.
 
 ### FC-05 — recurring date anchor
 - [x] Повторно проверено в аудите: `nextDate_()` сохраняет исходную дату-якорь; сценарий 31 января → 28 февраля → 31 марта не подтверждён как дефект.
@@ -1063,4 +1063,17 @@ HEAD до:
 - Это частичное исправление FC-22: остальные формы и browser/VoiceOver тесты ещё не проверены.
 - Общий прогресс остаётся 1/12 (≈8,3%); 11 этапов остаются. Этап 9 (UX/доступность) продвинулся, но не завершён.
 - Очередь M-01—M-03 без изменений; действий от пользователя сейчас не требуется.
+- Изменения только в ветке ispravleniya; Production, основная Google Sheet, опубликованный Apps Script и Telegram webhook не изменялись.
+
+
+### Журнал — 2026-11-10: FRONT-02, проверка HTTP и структуры ответа Apps Script (работа № 17)
+
+- Добавлен изолированный parser src/lib/apiResponse.ts. Он требует JSON object, валидирует data/error envelope, проверяет тип error.message и отклоняет malformed JSON, HTML login page, null, массив, пустой объект и ответ без data/error.
+- rawRequest() теперь перед возвратом data вызывает parser с response.status и response.ok. HTTP non-2xx без корректного server error отклоняется; корректный error envelope продолжает возвращать исходное сообщение backend. redirect:'follow' и AbortController/45s timeout сохранены.
+- Добавлены тесты успешного data envelope, backend error envelope, error на HTTP 502, malformed/HTML/null/array/empty envelope и HTTP 502 без server error.
+- Первый build прогон выявил TS2322 из-за nullable `error:null` в типе envelope. Локальный тип result уточнён до допуска null; повторный прогон прошёл. Промежуточная ошибка зафиксирована.
+- GitHub Actions на коммите e7bc9bc312416c0c83b3e6438cf4f4b981d16627: TypeScript/production build — success; npm test — 89/89, 0 failures; Apps Script syntax check — success. Ссылка: https://github.com/KitchenKnife14/-/actions/runs/42821670273.
+- Не проверены: реальный HTTP redirect Apps Script, timeout/abort в браузере, реальные 4xx/5xx от deployment. Это требует интеграционного теста с изолированным Web App.
+- Общий прогресс остаётся 1/12 (≈8,3%); 11 этапов остаются. FRONT-02 частично закрыт на уровне parser/unit tests, live network проверки впереди.
+- Очередь M-01—M-03 без изменений; от пользователя сейчас действий не требуется.
 - Изменения только в ветке ispravleniya; Production, основная Google Sheet, опубликованный Apps Script и Telegram webhook не изменялись.
