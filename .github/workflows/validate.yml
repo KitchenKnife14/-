@@ -26,3 +26,5 @@ jobs:
         run: npm test
       - name: Apps Script syntax check
         run: node --check < google-apps-script/Code.gs
+      - name: Apps Script runtime diagnostics syntax check
+        run: node --check < google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs
