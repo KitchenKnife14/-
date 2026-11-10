@@ -170,8 +170,8 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, e
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Редактировать бюджет' : 'Новый бюджет'}>
       <form onSubmit={submit} className="space-y-3">
-        <div><label className="label">Категория</label><select className="input" required value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={!!editing}><option value="">Выберите…</option>{expenseCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
-        <div><label className="label">Лимит на месяц, ₽</label><input className="input" type="number" step="0.01" min="0" required value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="10000" autoFocus /></div>
+        <div><label className="label" htmlFor="budget-category">Категория</label><select id="budget-category" className="input" required value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={!!editing}><option value="">Выберите…</option>{expenseCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
+        <div><label className="label" htmlFor="budget-limit">Лимит на месяц, ₽</label><input id="budget-limit" className="input" type="number" step="0.01" min="0" required value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="10000" autoFocus /></div>
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
         <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : 'Сохранить'}</button></div>
       </form>
