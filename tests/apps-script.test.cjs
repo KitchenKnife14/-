@@ -2010,6 +2010,12 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
     assert.match(result.error?.message || '', /переводы через Telegram пока не поддерживаются/i);
   }
 
+  const unknown = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7505, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Что-то непонятное 500 рублей' } },
+  });
+  assert.match(unknown.error?.message || '', /не понял, это расход или доход/i);
+
   const income = h.call({
     action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
     update: { update_id: 7504, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Доход 5000 рублей' } },
