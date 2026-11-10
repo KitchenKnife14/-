@@ -18,7 +18,7 @@ const ENV = {
   TELEGRAM_APPS_SCRIPT_URL: 'https://script.google.com/macros/s/test-deployment/exec',
 };
 
-function setup(fetchImpl, env = ENV) {
+function setup(fetchImpl, env = ENV, abortSignal = AbortSignal) {
   const module = { exports: {} };
   const context = {
     module,
@@ -26,6 +26,7 @@ function setup(fetchImpl, env = ENV) {
     process: { env },
     fetch: fetchImpl,
     URL,
+    AbortSignal: abortSignal,
   };
   context.globalThis = context;
   vm.runInNewContext(javascript, context, { filename: 'telegram-webhook/handler.ts' });
@@ -209,4 +210,48 @@ test('webhook retries an uncertain send at-least-once with the same update and r
   assert.equal(sentMessages.length, 2);
   assert.equal(sentMessages[0].text, sentMessages[1].text);
   assert.equal(sentMessages[0].chat_id, sentMessages[1].chat_id);
+});
+
+test('webhook applies a bounded timeout to the Apps Script request and returns 502 on timeout', async () => {
+  const timeoutValues = [];
+  const abortSignal = {
+    timeout(ms) {
+      timeoutValues.push(ms);
+      const controller = new AbortController();
+      controller.abort(new Error('simulated Apps Script timeout'));
+      return controller.signal;
+    },
+  };
+  const handler = setup(async (_url, options) => {
+    assert.equal(options.signal.aborted, true);
+    throw new Error('request aborted');
+  }, ENV, abortSignal);
+  const res = response();
+  await handler(request(), res);
+  assert.equal(res.statusCode, 502);
+  assert.deepEqual(timeoutValues, [35_000]);
+});
+
+test('webhook applies a separate timeout to Telegram sendMessage', async () => {
+  const timeoutValues = [];
+  const abortSignal = {
+    timeout(ms) {
+      timeoutValues.push(ms);
+      const controller = new AbortController();
+      if (ms === 10_000) controller.abort(new Error('simulated Telegram timeout'));
+      return controller.signal;
+    },
+  };
+  const handler = setup(async (url, options) => {
+    if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
+      assert.equal(options.signal.aborted, false);
+      return { ok: true, text: async () => JSON.stringify({ data: { chat_id: 123, text: 'Ответ' } }) };
+    }
+    assert.equal(options.signal.aborted, true);
+    throw new Error('Telegram request aborted');
+  }, ENV, abortSignal);
+  const res = response();
+  await handler(request(), res);
+  assert.equal(res.statusCode, 502);
+  assert.deepEqual(timeoutValues, [35_000, 10_000]);
 });
