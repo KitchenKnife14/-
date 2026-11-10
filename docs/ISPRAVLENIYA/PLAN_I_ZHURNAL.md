@@ -1491,3 +1491,11 @@ HEAD до:
 - Финальная чистая версия подтверждена полным CI [42864662273](https://github.com/KitchenKnife14/-/actions/runs/42864662273): production build, весь набор regression tests, проверка синтаксиса Code.gs и PBKDF2 runtime diagnostics прошли успешно.
 - Изменения остаются только в ветке `ispravleniya`. Основная таблица, production Apps Script, Telegram webhook и Production Vercel не затрагивались.
 - Ограничение остаётся: алгоритм PBKDF2 проверен контрольными векторами и Node crypto, но производительность реального Apps Script ещё не измерена. Для этого подготовленный `runPbkdf2RuntimeDiagnostics()` должен быть запущен в тестовом Apps Script на заключительном ручном этапе.
+### Работа № 51 — предварительная проверка миграции зависимостей
+
+- Проверены `package.json`, `vite.config.ts`, `tsconfig.app.json`, `src/main.tsx`, `src/App.tsx`, `vercel.json` и структура `src/`. Приложение использует обычный Declarative Mode React Router: `BrowserRouter`, `Routes`, `Route`, `Navigate`; серверные loaders/actions, Framework Mode и кастомный Vite plugin не обнаружены в проверенных точках входа.
+- Текущие версии: Vite `^5.4.8`, `@vitejs/plugin-react` `^4.3.2`, React/React DOM `^18.3.1`, React Router DOM `^6.26.2`. Миграция на React Router v7 должна оставаться в Declarative Mode; React 18 не нужно обновлять ради v7.
+- Официальный changelog React Router подтверждает выпуск v7.18.0 (16 июня 2026); актуальная документация уже показывает последующие patch-релизы v7.18.x. Не переходить на v8 в рамках этой задачи: официальная документация v8 требует React/React DOM 19.2.7+ и Vite 7+ для Framework Mode, что выходит за согласованный стек.
+- Официальная страница Vite указывает ветку 6.4 как поддерживаемую для security fixes; npm registry на момент проверки показывает Vite 6.4.6 как предыдущую ветку (current tag latest уже 8.x). Поэтому 6.4.6 — разумная точечная цель без скачка на Vite 7/8.
+- Источники: https://reactrouter.com/changelog ; https://reactrouter.com/upgrading/v7 ; https://vite.dev/releases ; https://www.npmjs.com/package/vite
+- Изменение зависимостей пока не внесено. Следующий шаг — проверить peerDependencies `@vitejs/plugin-react` и lockfile-совместимость, затем обновить Vite и React Router в одном контролируемом dependency-коммите с полным CI. Production не затрагивать.
