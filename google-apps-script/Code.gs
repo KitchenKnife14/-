@@ -385,6 +385,18 @@ function passwordMatches_(password,salt,stored){
   }
   return safeEqual_(hash_(password,salt),stored); // старые аккаунты: медленный прежний способ, при успешном входе хеш обновляется
 }
+function benchmarkPasswordHash_(){
+  // Editor-only diagnostic: fixed dummy input; never reads or writes user credentials.
+  const password='local-only-pbkdf2-benchmark', salt='non-secret-fixed-benchmark-salt';
+  const candidates=Array.from(new Set([PW_ITERATIONS,600000]));
+  const results=candidates.map(iterations=>{
+    const started=Date.now();
+    const digest=pbkdf2Hex_(password,salt,iterations);
+    return {iterations,elapsedMs:Date.now()-started,outputLength:digest.length};
+  });
+  console.log('PBKDF2 benchmark (dummy data only): '+JSON.stringify(results));
+  return results;
+}
 function pruneSessions_(){
   const props=PropertiesService.getScriptProperties(), all=props.getProperties(), now=Date.now();
   Object.keys(all).forEach(key=>{

@@ -1378,6 +1378,21 @@ test('PBKDF2-HMAC-SHA256 matches Node crypto for Unicode and SHA-256 block bound
   }
 });
 
+test('password hash benchmark uses only dummy data and compares current and OWASP iteration targets', () => {
+  const h = makeHarness();
+  const calls = [];
+  h.context.pbkdf2Hex_ = (password, salt, iterations) => {
+    calls.push({ password, salt, iterations });
+    return 'a'.repeat(64);
+  };
+  const results = h.context.benchmarkPasswordHash_();
+  assert.deepEqual(calls.map(call => call.iterations), [30000, 600000]);
+  assert.ok(calls.every(call => call.password === 'local-only-pbkdf2-benchmark'));
+  assert.ok(calls.every(call => call.salt === 'non-secret-fixed-benchmark-salt'));
+  assert.deepEqual(results.map(result => result.outputLength), [64, 64]);
+  assert.ok(results.every(result => !('digest' in result)));
+});
+
 test('PBKDF2 stored hashes reject malformed parameters before expensive derivation', () => {
   const h = makeHarness();
   const malformed = [
