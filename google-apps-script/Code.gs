@@ -1079,9 +1079,11 @@ function telegramWebhook_(req){
     if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
     const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
     const accountId=accounts.length===1?accounts[0].id:null;
-    const operationDate=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM-dd');
-    const operationTime=Utilities.formatDate(new Date(),'Europe/Moscow','HH:mm');
-    query_({table:'transactions',mode:'insert',returning:true,values:{family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,responsible_user_id:link.user_id,description:description,planned:false}}, {id:String(link.user_id)});
+    const messageTimestamp=Number(message.date);
+    const operationAt=Number.isSafeInteger(messageTimestamp)&&messageTimestamp>0?new Date(messageTimestamp*1000):new Date();
+    const operationDate=Utilities.formatDate(operationAt,'Europe/Moscow','yyyy-MM-dd');
+    const operationTime=Utilities.formatDate(operationAt,'Europe/Moscow','HH:mm');
+    query_({table:'transactions',mode:'insert',returning:true,values:{id:updateId?'telegram_'+updateId:undefined,family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,responsible_user_id:link.user_id,description:description,planned:false}}, {id:String(link.user_id)});
     const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
     reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\nКатегория: '+category.name:'\nКатегория не определена; проверьте её в приложении.')};
   }
