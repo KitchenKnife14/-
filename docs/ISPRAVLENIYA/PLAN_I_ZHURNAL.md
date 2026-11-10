@@ -1449,3 +1449,20 @@ HEAD до:
 - Источники: https://vercel.com/docs/functions/configuring-functions/duration ; https://core.telegram.org/bots/api
 - Тайм-ауты в handler пока не добавлялись: нужно сначала получить фактическую настройку Fluid Compute и измерить длительность полного запроса Apps Script, включая ожидание ScriptLock. Нельзя считать лимит платформы тайм-аутом сетевого вызова.
 - Production, основной Apps Script deployment, Telegram webhook, Production env vars и основная Google Sheet не изменялись.
+### Журнал — 2026-11-10: WEBHOOK-01, тайм-ауты и закрытие CI (работа № 49, продолжение)
+
+- В `telegram-webhook/handler.ts` добавлены независимые ограничения времени сетевых запросов: 35 000 мс для Apps Script и 10 000 мс для Telegram `sendMessage` через `AbortSignal.timeout()`.
+- В `tests/telegram-webhook.test.cjs` добавлены тесты на оба тайм-аута. Первый CI для реализации выявил 4 регрессии в тестовом harness: он не передавал подменяемый `AbortSignal` в VM. Harness исправлен в следующем коммите; финальный CI [42861763475](https://github.com/KitchenKnife14/-/actions/runs/42861763475) прошёл успешно (TypeScript/production build, полный набор regression tests, Apps Script syntax check).
+- Первый неудачный запуск и его причина зафиксированы в [42861756245](https://github.com/KitchenKnife14/-/actions/runs/42861756245). Исправление подтверждено повторным полным CI.
+- Семантика повторной доставки остаётся at-least-once: после неопределённого исхода Telegram sendMessage повторное текстовое подтверждение возможно. Стабильный `telegram_<update_id>` защищает финансовую запись от повторного создания, но не гарантирует exactly-once доставку сообщения.
+- Ограничение: `AbortSignal` ограничивает ожидание на стороне Vercel; он не доказывает, что Apps Script прекратил обработку на удалённой стороне. Серверная идемпотентность обязательна.
+- Vercel Preview для SHA `0c8b893996865c1aad6aec3a64e6dbedc6074e38` не подтверждён. Последний найденный READY Preview относится к более раннему SHA `6e801348323cbde8d993b7b294f0546a5bc8f30d`. Не считать новый код развернутым до проверки deployment.
+- Production, основной Apps Script deployment, Telegram webhook, Production env vars и основная Google Sheet не изменялись.
+
+### Работа № 50 — изолированные runtime-тесты Apps Script и измерение PBKDF2 (начата)
+
+- Текущий `tests/apps-script.test.cjs` уже проверяет PBKDF2-HMAC-SHA256 против Node `crypto.pbkdf2Sync` на нескольких итерациях, Unicode и границах SHA-256 блоков; также проверяется запись `p2$30000$...` и миграция legacy-хеша после успешного входа.
+- В `google-apps-script/Code.gs` установлено `PW_ITERATIONS = 30000`; реализация PBKDF2 выполняется собственным JavaScript SHA-256, а старый legacy-путь использует 10 000 вызовов `Utilities.computeDigest`.
+- Эти тесты исполняют код в Node VM с mock-объектами Google Apps Script. Они подтверждают соответствие алгоритма контрольным векторам, но не измеряют производительность в настоящем Apps Script runtime.
+- Следующий шаг: изучить изоляцию текущего VM harness и добавить воспроизводимые тесты граничных сценариев аутентификации; отдельно подготовить безопасный тестовый runtime probe, который измерит PBKDF2 в тестовом Apps Script без обращения к основной таблице и без изменения пользовательских данных. Реальное измерение не объявлять выполненным, пока не получен фактический результат тестового deployment.
+- Не менять число PBKDF2 итераций и формат хешей до завершения измерений и проверки совместимости старых аккаунтов.
