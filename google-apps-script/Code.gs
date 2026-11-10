@@ -472,6 +472,7 @@ function validateRelations_(table,row,user,previous){
   }
   if(table==='recurring_payments'){
     if(row.type==='transfer')throw new Error('Регулярные переводы пока не поддерживаются');
+    if(!['income','expense'].includes(String(row.type||'')))throw new Error('Неизвестный тип регулярного платежа');
   }
   if(!familyId)return;
   if(['transactions','goals','planned_purchases','recurring_payments'].includes(table)&&row.responsible_user_id){
@@ -484,6 +485,7 @@ function validateRelations_(table,row,user,previous){
     if(!related||String(related.family_id)!==familyId)throw new Error(label+' не найдена в этой семье');
   };
   if(table==='categories'){
+    if(!['expense','income','transfer'].includes(String(row.kind||'')))throw new Error('Неизвестный тип категории');
     check('parent_id','categories','Родительская категория');
     const hierarchyChanged=!previous||String(previous.parent_id||'')!==String(row.parent_id||'')||String(previous.kind)!==String(row.kind);
     if(hierarchyChanged&&row.parent_id){
