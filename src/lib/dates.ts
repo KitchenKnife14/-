@@ -27,6 +27,17 @@ export const formatDateInMoscow = (iso: string): string => {
   }
 }
 
+export const formatDateTimeInMoscow = (iso: string): string => {
+  try {
+    return new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).format(new Date(iso))
+  } catch {
+    return iso
+  }
+}
+
 export const monthsUntilDate = (targetDate: string, fromDate: string = todayISO()): number | null => {
   const parseCalendarDate = (value: string): number | null => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null

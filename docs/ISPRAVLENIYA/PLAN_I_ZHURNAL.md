@@ -1853,3 +1853,7 @@ HEAD до:
 - Добавлен `tests/dates.test.cjs`: отдельные Node-процессы в UTC, America/Los_Angeles и Europe/Amsterdam проверяют одинаковое отображение календарных дат, одинаковое отображение московского timestamp, а также расчёт месяцев и отклонение невозможной даты.
 - Изменены только frontend date helpers, отображение уведомлений, расчёт срока цели и regression test. Данные, Apps Script, Google Sheets, Vercel Production и основная ветка не затрагивались.
 - Прогресс чек-листа не увеличен: исправление и тесты должны пройти CI; реальные браузерные проверки на iPhone и Apps Script timezone остаются отдельными.
+
+
+- CI run [42905920639](https://github.com/KitchenKnife14/-/actions/runs/42905920639) остановился на TypeScript build: `todayISO` используется ещё в двух местах `GoalsPage.tsx`, поэтому импорт должен сохраниться. Ошибка только компиляционная; regression tests не запускались. Исправлен импорт.
+- Продолжен поиск timezone-зависимых timestamp отображений: `TelegramPage.tsx` использовал локальный `toLocaleString()` для `linked_at` и `expires_at`. Добавлено единое форматирование даты/времени в Europe/Moscow и заменены оба локальных вызова. Эти поля — реальные timestamp, а не календарные даты.

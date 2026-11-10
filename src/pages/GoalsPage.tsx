@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
-import { formatDate, monthsUntilDate } from '../lib/dates'
+import { formatDate, todayISO, monthsUntilDate } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
 

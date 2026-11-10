@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Copy, Link2, Link2Off, MessageCircle, RefreshCw, ShieldCheck } from 'lucide-react'
 import { googleSheets } from '../lib/googleSheets'
+import { formatDateTimeInMoscow } from '../lib/dates'
 
 type TelegramStatus = { linked: boolean; linked_at?: string; telegram_chat_id?: string }
 type LinkCode = { code: string; expires_at: string }
@@ -82,7 +83,7 @@ export default function TelegramPage() {
         {loading ? <p className="text-sm text-muted">Проверяем статус подключения…</p> : status?.linked ? (
           <div className="rounded-xl border border-primary-200 bg-primary-50/60 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-primary-900"><ShieldCheck size={17} /> Telegram привязан</div>
-            {status.linked_at && <p className="mt-1 text-xs text-muted">Дата привязки: {new Date(status.linked_at).toLocaleString('ru-RU')}</p>}
+            {status.linked_at && <p className="mt-1 text-xs text-muted">Дата привязки: {formatDateTimeInMoscow(status.linked_at)}</p>}
             <button type="button" onClick={unlink} disabled={unlinking} className="btn-secondary mt-3 text-danger-600">
               <Link2Off size={16} /> {unlinking ? 'Отвязываем…' : 'Отвязать Telegram'}
             </button>
@@ -103,7 +104,7 @@ export default function TelegramPage() {
                     <button type="button" onClick={copyCode} className="btn-secondary px-3 py-2"><Copy size={15} /> Копировать команду</button>
                   </div>
                   <p className="mt-2 text-xs text-muted">Отправьте боту: <code className="font-semibold">/link {code.code}</code></p>
-                  <p className="mt-1 text-xs text-muted">Истекает: {new Date(code.expires_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.</p>
+                  <p className="mt-1 text-xs text-muted">Истекает: {formatDateTimeInMoscow(code.expires_at)}.</p>
                 </div>
               )}
             </div>

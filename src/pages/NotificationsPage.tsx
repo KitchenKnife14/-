@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { AppNotification } from '../lib/types'
-import { formatDateInMoscow } from '../lib/dates'
+import { formatDate } from '../lib/dates'
 import { Check, Trash2, Bell } from 'lucide-react'
 
 export default function NotificationsPage() {
@@ -71,7 +71,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="text-sm text-slate-600 mt-0.5">{n.title}</div>
                   {n.body && <div className="text-xs text-slate-400 mt-1">{n.body}</div>}
-                  <div className="text-xs text-slate-400 mt-1">{formatDateInMoscow(n.created_at)}</div>
+                  <div className="text-xs text-slate-400 mt-1">{formatDate(n.created_at)}</div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
                   {!n.read && <button onClick={() => markRead(n)} className="btn-ghost px-2" title="Прочитано"><Check size={16} /></button>}
