@@ -490,11 +490,12 @@ function route_(req,user){
   if(req.action==='joinFamily'){
     const code=String(req.invite_code||'').trim().toUpperCase(), f=rows_('families').find(x=>String(x.invite_code).toUpperCase()===code);
     if(!f)throw new Error('Код приглашения не найден');
-    setProfileName_(user.id,req.display_name);
     const members=rows_('family_members').filter(m=>m.family_id===f.id);
-    if(members.some(m=>m.user_id===user.id))return f;
+    if(members.some(m=>m.user_id===user.id)){setProfileName_(user.id,req.display_name);return f;}
     if(members.length>=2)throw new Error('В семье уже два участника');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Вы уже состоите в другой семье');
+    // Validate membership constraints before changing the profile: a rejected join must have no side effects.
+    setProfileName_(user.id,req.display_name);
     const member={id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()};appendRows_('family_members',[member]);
     return f;
   }

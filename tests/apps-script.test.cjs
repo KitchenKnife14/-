@@ -242,6 +242,29 @@ test('family data is hidden until a user joins the family', () => {
   assert.equal(visible.data[0].amount_kopecks, 12345);
 });
 
+test('joinFamily validates membership before changing profile and remains idempotent', () => {
+  const h = makeHarness();
+  const owner = h.signup('join-owner@example.com');
+  const partner = h.signup('join-partner@example.com');
+  const outsider = h.signup('join-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Основная семья' }).data;
+  const otherFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Другая семья' }).data;
+
+  const joined = h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code, display_name: 'Участник' });
+  assert.equal(joined.error, null, joined.error?.message);
+  const repeated = h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code, display_name: 'Новое имя' });
+  assert.equal(repeated.error, null, repeated.error?.message);
+  assert.equal(h.context.rows_('family_members').filter(row => row.user_id === partner.user.id).length, 1);
+  assert.equal(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, 'Новое имя');
+
+  const before = h.context.rows_('profiles').find(row => row.id === outsider.user.id).display_name;
+  const rejected = h.call({ action: 'joinFamily', token: outsider.token, invite_code: family.invite_code, display_name: 'Не менять профиль' });
+  assert.match(rejected.error.message, /два участника|другой семье/);
+  assert.equal(h.context.rows_('profiles').find(row => row.id === outsider.user.id).display_name, before);
+  assert.equal(h.context.rows_('family_members').filter(row => row.user_id === outsider.user.id).length, 1);
+  assert.ok(otherFamily.id);
+});
+
 test('recurring payment confirmation can retry after a partial write without duplicating the transaction', () => {
   const h = makeHarness();
   const user = h.signup('owner@example.com');
