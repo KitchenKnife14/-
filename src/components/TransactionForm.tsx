@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
 import type { Account, Category, TxType } from '../lib/types'
-import { rublesToKopecks } from '../lib/money'
+import { parseRublesToKopecks } from '../lib/money'
 import { todayISO } from '../lib/dates'
 import { Loader as Loader2 } from 'lucide-react'
 
@@ -88,8 +88,8 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
     e.preventDefault()
     if (!family || !userId) return
     setError(null)
-    const amt = rublesToKopecks(parseFloat(amount.replace(',', '.')))
-    if (!Number.isSafeInteger(amt) || amt <= 0) {
+    const amt = parseRublesToKopecks(amount)
+    if (amt === null || amt <= 0) {
       setError('Введите корректную сумму больше нуля')
       return
     }
