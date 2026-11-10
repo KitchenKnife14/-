@@ -2040,6 +2040,53 @@ test('legacy category mismatches do not block unrelated edits to historical reco
 });
 
 
+test('archived accounts cannot be assigned to new transactions or recurring payments', () => {
+  const h = makeHarness();
+  const user = h.signup('archived-account-assignment@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Архивные счета' }).data;
+  const createAccount = name => h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name, kind: 'bank', starting_balance_kopecks: 0, archived: false },
+  }).data[0];
+  const source = createAccount('Архивный источник');
+  const active = createAccount('Активный счёт');
+  const destination = createAccount('Архивное назначение');
+  const existingTransaction = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-10', account_id: source.id },
+  }).data[0];
+  const existingRecurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, account_id: source.id, description: 'Регулярный', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
+  }).data[0];
+  for (const account of [source, destination]) {
+    const archived = h.call({
+      action: 'query', token: user.token, table: 'accounts', mode: 'update',
+      filters: [{ column: 'id', op: 'eq', value: account.id }], values: { archived: true },
+    });
+    assert.equal(archived.error, null, archived.error?.message);
+  }
+  const updateTransaction = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: existingTransaction.id }], values: { description: 'Историческая операция' },
+  });
+  const updateRecurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: existingRecurring.id }], values: { description: 'Исторический платёж' },
+  });
+  assert.equal(updateTransaction.error, null, updateTransaction.error?.message);
+  assert.equal(updateRecurring.error, null, updateRecurring.error?.message);
+  const rejected = [
+    ['transactions', { family_id: family.id, type: 'expense', amount_kopecks: 2000, operation_date: '2026-11-11', account_id: source.id }],
+    ['recurring_payments', { family_id: family.id, type: 'expense', amount_kopecks: 2000, account_id: source.id, description: 'Новый', start_date: '2026-11-11', next_due_date: '2026-11-11', frequency: 'monthly', active: true }],
+    ['transactions', { family_id: family.id, type: 'transfer', amount_kopecks: 2000, operation_date: '2026-11-11', account_id: source.id, to_account_id: active.id }],
+    ['transactions', { family_id: family.id, type: 'transfer', amount_kopecks: 2000, operation_date: '2026-11-11', account_id: active.id, to_account_id: destination.id }],
+  ];
+  for (const [table, values] of rejected) {
+    const result = h.call({ action: 'query', token: user.token, table, mode: 'insert', values });
+    assert.match(result.error?.message || '', /архивный счёт/ , table);
+  }
+});
 test('archived categories cannot be assigned to new records but remain valid on existing records', () => {
   const h = makeHarness();
   const user = h.signup('archived-category-assignment@example.com');
