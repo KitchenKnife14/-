@@ -834,6 +834,64 @@ test('goal contributions require positive integer kopecks and deletion recalcula
   assert.equal(Number(h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0].saved_kopecks), 0);
 });
 
+
+
+test('goal contribution totals reject safe-integer overflow before writing rows', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-total-overflow@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка переполнения цели' }).data;
+  const max = Number.MAX_SAFE_INTEGER;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Резерв', target_kopecks: max }
+  }).data[0];
+
+  const first = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true,
+    values: { goal_id: goal.id, amount_kopecks: max - 1, contribution_date: '2026-11-10' }
+  });
+  assert.equal(first.error, null, first.error?.message);
+
+  const overflowInsert = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: goal.id, amount_kopecks: 2, contribution_date: '2026-11-10' }
+  });
+  assert.match(overflowInsert.error?.message || '', /превышает безопасный диапазон/);
+  let contributions = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'select' }).data;
+  let savedGoal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
+  assert.equal(contributions.length, 1);
+  assert.equal(savedGoal.saved_kopecks, max - 1);
+
+  const smallGoal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Отпуск', target_kopecks: max }
+  }).data[0];
+  const smallA = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true,
+    values: { goal_id: smallGoal.id, amount_kopecks: 2, contribution_date: '2026-11-10' }
+  }).data[0];
+  h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: smallGoal.id, amount_kopecks: 1, contribution_date: '2026-11-10' }
+  });
+  const overflowUpdate = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: smallA.id }],
+    values: { amount_kopecks: max }
+  });
+  assert.match(overflowUpdate.error?.message || '', /превышает безопасный диапазон/);
+  contributions = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: smallA.id }]
+  }).data;
+  savedGoal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: smallGoal.id }]
+  }).data[0];
+  assert.equal(contributions[0].amount_kopecks, 2);
+  assert.equal(savedGoal.saved_kopecks, 3);
+});
+
 test('transfers require two distinct family accounts and referenced accounts cannot be deleted', () => {
   const h = makeHarness();
   const user = h.signup('account-transfer-guards@example.com');
