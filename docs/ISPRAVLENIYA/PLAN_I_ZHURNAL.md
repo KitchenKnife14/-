@@ -1501,3 +1501,14 @@ HEAD до:
 - Изменение зависимостей пока не внесено. Следующий шаг — проверить peerDependencies `@vitejs/plugin-react` и lockfile-совместимость, затем обновить Vite и React Router в одном контролируемом dependency-коммите с полным CI. Production не затрагивать.
 - Дополнительная проверка официального changelog `@vitejs/plugin-react`: версия 4.3.4 явно добавила Vite 6 в peer dependency range; текущая 4.3.2 старше этой поддержки. Поэтому dependency-коммит должен включать минимум `@vitejs/plugin-react@4.3.4` вместе с `vite@6.4.6`, иначе возможен peer dependency warning/conflict.
 - Источник: https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/CHANGELOG.md (раздел 4.3.4).
+### Работа № 51 — обновление Vite и React Router: dependency migration подготовлена
+
+- В package.json обновлены диапазоны: vite ^6.4.6, @vitejs/plugin-react ^4.3.4, react-router-dom ^7.18.5. React и React DOM оставлены на ^18.3.1.
+- В изолированном Vercel Sandbox на Node 24 выполнены npm install --package-lock-only, чистая установка npm ci, полный npm test и npm run build: 140/140 тестов прошли, TypeScript и production build прошли. Итоговая сборка Vite 6.4.6 успешно обработала 2 434 модуля.
+- Фактические версии из lockfile после npm resolution: Vite 6.4.6, @vitejs/plugin-react 4.7.0, React Router DOM 7.18.5, React/React DOM 18.3.1. @vitejs/plugin-react 4.7.0 peer-compatible с Vite 6 (^6.0.0) и 7 (^7.0.0); Vercel project Node runtime проверен: 24.x. Существующий GitHub CI использует Node 22, который удовлетворяет Node >=20 у React Router 7.
+- Проверены все найденные импорты маршрутизатора: BrowserRouter, Routes, Route, Navigate, NavLink, Outlet, Link, useNavigate. Приложение остаётся в Declarative Mode; loaders/actions и Framework Mode не используются. Импорты react-router-dom поддерживаются React Router v7 для миграции с v6, поэтому менять исходники приложения не потребовалось.
+- Первая попытка временного lockfile workflow не стартовала из-за ошибочного отступа YAML block scalar; отступ исправлен до повторного запуска. Ошибка не затронула исходники приложения, lockfile или данные.
+- Изменения выполняются только в ispravleniya. Основная таблица, production Apps Script, main и Production Vercel не затрагиваются.
+- Временный workflow удалит себя в том же коммите, который обновит package-lock.json и запишет этот раздел. После этого требуется проверить GitHub CI и Vercel Preview.
+- Общий чек-лист не пересчитывался: 100 закрыто / 267 = 37.5%. Пункты не отмечаются закрытыми до прохождения CI и Preview.
+
