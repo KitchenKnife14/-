@@ -1857,3 +1857,6 @@ HEAD до:
 
 - CI run [42905920639](https://github.com/KitchenKnife14/-/actions/runs/42905920639) остановился на TypeScript build: `todayISO` используется ещё в двух местах `GoalsPage.tsx`, поэтому импорт должен сохраниться. Ошибка только компиляционная; regression tests не запускались. Исправлен импорт.
 - Продолжен поиск timezone-зависимых timestamp отображений: `TelegramPage.tsx` использовал локальный `toLocaleString()` для `linked_at` и `expires_at`. Добавлено единое форматирование даты/времени в Europe/Moscow и заменены оба локальных вызова. Эти поля — реальные timestamp, а не календарные даты.
+
+
+- После восстановления импорта `todayISO` второй CI run [42905920639](https://github.com/KitchenKnife14/-/actions/runs/42905920639) был дополнен ещё одним timezone-сценарием: дата и время Telegram link status/code также фиксируются в Europe/Moscow. В итоговом коммите regression test добавлен в актуальное дерево ветки и расширен проверкой полного timestamp формата.
