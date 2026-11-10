@@ -1738,3 +1738,14 @@ HEAD до:
 - CI для коммита с runbook `4f7ae78` завершился успешно: [run 42889623502](https://github.com/KitchenKnife14/-/actions/runs/42889623502). Последующий коммит с этой записью журнала также прошёл CI: [run 42889666810](https://github.com/KitchenKnife14/-/actions/runs/42889666810), `completed / success`, HEAD `f6cc0b1b982e6b50c0061d4055292e1a5863e14b`.
 - Дополнительная сверка `Code.gs` подтвердила заголовки `_auth`: `id,email,salt,password_hash,display_name,created_at`; подтверждены только используемые ключи Script Properties: `TELEGRAM_BACKEND_SECRET`, `SIGNUP_DISABLED`, `DEBUG_INFO`, `session:*`, `loginfail:*`, `table_revision:v2:*`, `telegram:update:*`, `telegram:last_prune`. В runbook перечислены только имена/шаблоны, значения секретов не раскрываются.
 - Прогресс чек-листа не увеличен; 145/272 (53.3%) остаётся прежним.
+
+
+### Журнал — 2026-11-10: контроль CI и проверка следующего этапа (работа № 44)
+
+- Повторно проверена ветка `ispravleniya`; HEAD перед записью — `3ee338cad4341960a4656e858da1793c05435b6f`. Production и `main` не затрагивались.
+- Проверен workflow [42890123816](https://github.com/KitchenKnife14/-/actions/runs/42890123816) для HEAD `3ee338c`: `completed / success`. Build, dependency audit, regression tests, Apps Script syntax, runtime diagnostics syntax и manifest validation прошли.
+- Повторно сверены текущие `Code.gs` и `appsscript.json`: API_VERSION=11; manifest указывает `Europe/Moscow` и runtime `V8`. Это подтверждает значения в репозитории, но не фактические настройки live/test Apps Script.
+- Повторно проверен LOCK-01/SEC-02: `requestLockMode_()` остаётся только классификатором; `doPost` по-прежнему удерживает общий ScriptLock для чтений, записей, авторизации, batch и Telegram webhook. Это сознательно не менялось: VM mock не доказывает поведение реальной конкурентной среды, а read path содержит потенциальные side effects через `sheet_()`/`authSheet_()`. Не отключать lock без изолированного GAS concurrency test.
+- Для выполнения реального backup/restore нужен доступ к тестовой Google Sheet и Google Drive. Проверка доступных интеграций показала, что Google Drive connector недоступен для подключения в текущей среде; прямого инструмента для создания копии таблицы у меня нет. Поэтому фактическая копия и восстановление не выполнялись. Это ограничение доступа, а не успешный тест.
+- Следующее необходимое действие для FC-11/FC-12: вручную создать копию именно тестовой таблицы через Google Sheets → Файл → Создать копию, оставить её приватной и подтвердить наличие листов по `BACKUP_RESTORE_RUNBOOK.md`. После этого можно продолжить проверку восстановления на отдельной копии. Не присылать пароли, токены или содержимое `_auth`.
+- SAFE-01/FC-11/FC-12 и SEC-02 остаются открытыми; прогресс не увеличен: 145/272 (53.3%). Основная таблица, Apps Script properties/deployments, Vercel, Production и Telegram webhook не изменялись.
