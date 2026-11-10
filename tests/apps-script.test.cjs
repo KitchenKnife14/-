@@ -1467,6 +1467,32 @@ test('table revisions are isolated by family and reject cross-family reads', () 
   assert.equal(afterB.data, beforeB.data);
 });
 
+test('goal contribution writes refresh the owning family goals revision', () => {
+  const h = makeHarness();
+  const user = h.signup('revision-goal-contribution@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Ревизия целей' }).data;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Резерв', target_kopecks: 100000, status: 'active' }
+  });
+  assert.equal(goal.error, null, goal.error?.message);
+  const read = () => h.call({
+    action: 'rpc', token: user.token, name: 'get_table_revision',
+    params: { p_table: 'goals', p_family_id: family.id }
+  });
+  const before = read();
+  const contribution = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: goal.data[0].id, amount_kopecks: 2500, contribution_date: '2026-11-10' }
+  });
+  const after = read();
+  assert.equal(contribution.error, null, contribution.error?.message);
+  assert.equal(after.error, null, after.error?.message);
+  assert.notEqual(after.data, before.data);
+  const saved = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
+  assert.equal(saved.saved_kopecks, 2500);
+});
+
 test('notification revisions are scoped to the authenticated user within a family', () => {
   const h = makeHarness();
   const owner = h.signup('revision-notif-owner@example.com');
