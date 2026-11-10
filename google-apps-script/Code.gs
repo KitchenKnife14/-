@@ -1101,6 +1101,8 @@ function telegramWebhook_(req){
     for(const pair of aliases){if(pair[0].test(description)){categoryName=pair[1];break;}}
     let category=categoryName?categories.find(x=>x.name===categoryName):null;
     if(!category)category=categories.find(x=>String(description).toLowerCase().includes(String(x.name).toLowerCase())||String(x.name).toLowerCase().includes(String(description).toLowerCase()));
+    const explicitExpense=/(?:^|\s)(?:расход|потратил|потратила|купил|купила|оплатил|оплатила|покупка)(?=\s|$)/i.test(text);
+    if(!isIncome&&!explicitExpense&&!categoryName&&!category)throw new Error('Не понял, это расход или доход. Уточните тип: «Расход ...» или «Доход ...».');
     if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
     const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
     const accountId=accounts.length===1?accounts[0].id:null;
