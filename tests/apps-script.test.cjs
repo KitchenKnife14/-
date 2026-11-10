@@ -2028,6 +2028,17 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
   assert.equal(transactions[0].type, 'income');
   assert.equal(transactions[0].amount_kopecks, 500000);
   assert.equal(transactions[0].description, 'Доход');
+
+  const expense = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7506, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Потратил 500 рублей' } },
+  });
+  assert.equal(expense.error, null, expense.error?.message);
+  const updatedTransactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(updatedTransactions.length, 2);
+  const savedExpense = updatedTransactions.find(row => row.type === 'expense');
+  assert.equal(savedExpense.amount_kopecks, 50000);
+  assert.equal(savedExpense.description, 'Расход');
 });
 
 
