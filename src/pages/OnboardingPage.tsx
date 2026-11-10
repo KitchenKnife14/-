@@ -64,18 +64,18 @@ export default function OnboardingPage() {
 
         <form onSubmit={submit} className="card space-y-3">
           <div>
-            <label className="label">Ваше имя</label>
-            <input className="input" value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Как вас зовут" />
+            <label className="label" htmlFor="onboarding-user-name">Ваше имя</label>
+            <input id="onboarding-user-name" className="input" value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Как вас зовут" />
           </div>
           {mode === 'create' ? (
             <div>
-              <label className="label">Название семьи</label>
-              <input className="input" value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
+              <label className="label" htmlFor="onboarding-family-name">Название семьи</label>
+              <input id="onboarding-family-name" className="input" value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
             </div>
           ) : (
             <div>
-              <label className="label">Код приглашения</label>
-              <input className="input" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="Введите код от партнёра" />
+              <label className="label" htmlFor="onboarding-invite-code">Код приглашения</label>
+              <input id="onboarding-invite-code" className="input" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="Введите код от партнёра" />
               <p className="text-xs text-slate-400 mt-1">Код выдаётся первым участником после создания семьи.</p>
             </div>
           )}
