@@ -31,7 +31,7 @@ test('form labels in account, budget, category, goal, onboarding, planning, purc
       assert.match(source, new RegExp(`<label\\b[^>]*htmlFor=["']${id}["']`), `${file}: label missing htmlFor for ${id}`)
       assert.match(source, new RegExp(`<(?:input|select|textarea)\\b[^>]*id=["']${id}["']`), `${file}: control missing id ${id}`)
     }
-    const styledLabels = [...source.matchAll(/<label\\b(?=[^>]*className=["']label["'])[^>]*>/g)]
+    const styledLabels = [...source.matchAll(/<label\b(?=[^>]*className=["']label["'])[^>]*>/g)]
     for (const [label] of styledLabels) {
       assert.match(label, /htmlFor=/, `${file}: visible form label is not associated`)
     }
