@@ -48,3 +48,21 @@ test('ruble input parsing rejects malformed, over-precise and unsafe values', as
   assert.equal(parseRublesToKopecks('0'), 0)
   assert.equal(parseRublesToKopecks('0,00'), 0)
 })
+test('all ruble amount forms use strict parsing instead of silent rounding', () => {
+  const files = [
+    '../src/components/TransactionForm.tsx',
+    '../src/pages/AccountsPage.tsx',
+    '../src/pages/BudgetsPage.tsx',
+    '../src/pages/PlanningPage.tsx',
+    '../src/pages/RecurringPage.tsx',
+    '../src/pages/PurchasesPage.tsx',
+    '../src/pages/GoalsPage.tsx',
+  ]
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(__dirname, file), 'utf8')
+    assert.match(source, /parseRublesToKopecks/, file)
+    assert.doesNotMatch(source, /Math\.round\(parseFloat/, file)
+  }
+  const accounts = fs.readFileSync(path.join(__dirname, '../src/pages/AccountsPage.tsx'), 'utf8')
+  assert.match(accounts, /allowNegative:\s*true/)
+})
