@@ -151,11 +151,23 @@ function readRows_(name) {
 }
 function tz_(){ if(!TZ_CACHE) TZ_CACHE=ss_().getSpreadsheetTimeZone()||'Europe/Moscow'; return TZ_CACHE; }
 // Если Google Sheets всё же превратил текст в Date, восстанавливаем осмысленное значение по имени столбца.
+const KOPECK_COLUMNS_ = new Set([
+  'amount_kopecks','starting_balance_kopecks','limit_kopecks',
+  'target_kopecks','saved_kopecks','estimated_kopecks','planned_kopecks'
+]);
 function normal_(v,col) {
-  if(!(v instanceof Date)) return v;
-  if(col==='operation_time') return Utilities.formatDate(v,tz_(),'HH:mm');
-  if(/_at$/.test(col||'')) return v.toISOString();
-  return Utilities.formatDate(v,tz_(),'yyyy-MM-dd');
+  if(v instanceof Date){
+    if(col==='operation_time') return Utilities.formatDate(v,tz_(),'HH:mm');
+    if(/_at$/.test(col||'')) return v.toISOString();
+    return Utilities.formatDate(v,tz_(),'yyyy-MM-dd');
+  }
+  // Google Sheets normally returns numeric cells as numbers, but legacy/imported
+  // integer kopecks may be stored as text. Normalize only exact safe integers.
+  if(KOPECK_COLUMNS_.has(col)&&typeof v==='string'&&/^-?\\d+$/.test(v.trim())){
+    const numeric=Number(v.trim());
+    if(Number.isSafeInteger(numeric))return numeric;
+  }
+  return v;
 }
 function safeCell_(value) {
   // setValues treats strings beginning with '=' as formulas even when the cell is formatted as text.
