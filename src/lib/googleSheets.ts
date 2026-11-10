@@ -9,7 +9,7 @@ const AUTH_ERRORS=['Сессия завершена','Требуется вхо�
 async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
   if(!API_URL)throw new Error('Не настроен VITE_GOOGLE_APPS_SCRIPT_URL')
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),45000)
-  let result={} as {data?:T;error?:{message:string}}
+  let result={} as {data?:T;error?:{message:string}|null}
   try{
     const response=await fetch(API_URL,{method:'POST',redirect:'follow',signal:controller.signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,token:readSession()?.access_token})})
     const text=await response.text()
