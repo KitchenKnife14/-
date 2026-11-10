@@ -1527,3 +1527,84 @@ test('baseline: a read-only query currently acquires and releases the global Scr
   assert.equal(selected.error, null, selected.error?.message);
   assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
 });
+
+
+test('all monetary fields reject coercible strings, booleans and fractional kopecks across insert, update and upsert', () => {
+  const h = makeHarness();
+  const user = h.signup('strict-money@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Строгие денежные поля' }).data;
+  const goalResult = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Цель для теста', target_kopecks: 50000 }
+  });
+  assert.equal(goalResult.error, null, goalResult.error?.message);
+  const goalId = goalResult.data[0].id;
+
+  const cases = [
+    ['accounts', 'starting_balance_kopecks', { family_id: family.id, name: 'Наличные', kind: 'cash', starting_balance_kopecks: 123 }],
+    ['transactions', 'amount_kopecks', { family_id: family.id, type: 'expense', amount_kopecks: 123, operation_date: '2026-11-10' }],
+    ['recurring_payments', 'amount_kopecks', { family_id: family.id, type: 'expense', amount_kopecks: 123, description: 'Платёж', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true }],
+    ['budgets', 'limit_kopecks', { family_id: family.id, category_id: null, month_date: '2026-11-01', limit_kopecks: 123 }],
+    ['goals', 'target_kopecks', { family_id: family.id, name: 'Вторая цель', target_kopecks: 123 }],
+    ['goal_contributions', 'amount_kopecks', { goal_id: goalId, amount_kopecks: 123, contribution_date: '2026-11-10' }],
+    ['planned_purchases', 'estimated_kopecks', { family_id: family.id, name: 'Покупка', estimated_kopecks: 123, status: 'planned' }],
+    ['monthly_plans', 'planned_kopecks', { family_id: family.id, month_date: '2026-11-01', type: 'expense', planned_kopecks: 123 }],
+  ];
+
+  for (const [table, field, base] of cases) {
+    const invalidInsert = h.call({
+      action: 'query', token: user.token, table, mode: 'insert',
+      values: { ...base, [field]: '123' },
+    });
+    assert.match(invalidInsert.error?.message || '', /целым числом копеек/, table + ' insert must reject numeric strings');
+
+    const created = h.call({
+      action: 'query', token: user.token, table, mode: 'insert', returning: true, values: base,
+    });
+    assert.equal(created.error, null, table + ' valid insert: ' + created.error?.message);
+    const row = created.data[0];
+
+    const invalidUpdate = h.call({
+      action: 'query', token: user.token, table, mode: 'update',
+      filters: [{ column: 'id', op: 'eq', value: row.id }],
+      values: { [field]: true },
+    });
+    assert.match(invalidUpdate.error?.message || '', /целым числом копеек/, table + ' update must reject booleans');
+
+    const upsertRow = { ...row, [field]: 1.5 };
+    delete upsertRow.saved_kopecks;
+    const invalidUpsert = h.call({
+      action: 'query', token: user.token, table, mode: 'upsert',
+      onConflict: 'id', values: upsertRow,
+    });
+    assert.match(invalidUpsert.error?.message || '', /целым числом копеек/, table + ' upsert must reject fractional kopecks');
+
+    const after = h.call({ action: 'query', token: user.token, table, mode: 'select' });
+    assert.equal(after.error, null, table + ' select after rejected writes');
+    assert.equal(after.data.some(item => item.id === row.id && item[field] === 123), true, table + ' invalid writes must not alter stored value');
+  }
+});
+
+test('monetary fields reject integers outside the JavaScript safe integer range', () => {
+  const h = makeHarness();
+  const user = h.signup('unsafe-money@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Границы копеек' }).data;
+  const result = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: Number.MAX_SAFE_INTEGER + 1, operation_date: '2026-11-10' },
+  });
+  assert.match(result.error?.message || '', /целым числом копеек/);
+});
+
+test('create_goal_with_purchase rejects numeric strings for target kopecks', () => {
+  const h = makeHarness();
+  const user = h.signup('strict-goal-rpc@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Строгий RPC' }).data;
+  const result = h.call({
+    action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
+    params: { p_family_id: family.id, p_name: 'Цель', p_target_kopecks: '10000', p_priority: 3, p_create_purchase: false },
+  });
+  assert.match(result.error?.message || '', /целым числом копеек/);
+  const goals = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' });
+  assert.equal(goals.data.length, 0);
+});
