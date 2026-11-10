@@ -1633,3 +1633,95 @@ test('batch requests enforce the same strict kopecks validation as direct query 
   assert.equal(transactions.data.length, 0);
   assert.equal(plans.data.length, 0);
 });
+
+
+test('transaction and related financial records reject categories of the wrong kind', () => {
+  const h = makeHarness();
+  const user = h.signup('category-kind-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Типы категорий' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  const incomeCategory = categories.find(c => c.kind === 'income' && c.parent_id);
+  const expenseCategory = categories.find(c => c.kind === 'expense' && c.parent_id);
+  assert.ok(incomeCategory);
+  assert.ok(expenseCategory);
+
+  for (const [type, categoryId] of [
+    ['expense', incomeCategory.id],
+    ['income', expenseCategory.id],
+    ['transfer', expenseCategory.id],
+  ]) {
+    const rejected = h.call({
+      action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+      values: { family_id: family.id, type, amount_kopecks: 1000, category_id: categoryId, operation_date: '2026-11-10' },
+    });
+    assert.match(rejected.error?.message || '', /Тип категории не соответствует типу операции/);
+  }
+
+  const validExpense = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, category_id: expenseCategory.id, operation_date: '2026-11-10' },
+  });
+  assert.equal(validExpense.error, null, validExpense.error?.message);
+
+  const invalidUpdate = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: validExpense.data[0].id }],
+    values: { category_id: incomeCategory.id },
+  });
+  assert.match(invalidUpdate.error?.message || '', /Тип категории не соответствует типу операции/);
+
+  const invalidUpsert = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'upsert',
+    onConflict: 'id',
+    values: { ...validExpense.data[0], category_id: incomeCategory.id },
+  });
+  assert.match(invalidUpsert.error?.message || '', /Тип категории не соответствует типу операции/);
+});
+
+test('category hierarchy, recurring payments, budgets, monthly plans and planned purchases enforce category kinds', () => {
+  const h = makeHarness();
+  const user = h.signup('related-category-kind@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Связанные типы категорий' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  const incomeRoot = categories.find(c => c.kind === 'income' && !c.parent_id);
+  const incomeChild = categories.find(c => c.kind === 'income' && c.parent_id === incomeRoot.id);
+  const expenseRoot = categories.find(c => c.kind === 'expense' && !c.parent_id);
+  const expenseChild = categories.find(c => c.kind === 'expense' && c.parent_id === expenseRoot.id);
+  assert.ok(incomeChild && expenseChild);
+
+  const wrongChild = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert',
+    values: { family_id: family.id, parent_id: incomeRoot.id, name: 'Неверная подкатегория', kind: 'expense' },
+  });
+  assert.match(wrongChild.error?.message || '', /Тип подкатегории должен совпадать/);
+
+  const wrongRecurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, category_id: incomeChild.id, description: 'Платёж', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
+  });
+  assert.match(wrongRecurring.error?.message || '', /Тип категории не соответствует типу регулярного платежа/);
+
+  const wrongBudget = h.call({
+    action: 'query', token: user.token, table: 'budgets', mode: 'insert',
+    values: { family_id: family.id, category_id: incomeChild.id, month_date: '2026-11-01', limit_kopecks: 1000 },
+  });
+  assert.match(wrongBudget.error?.message || '', /только категории расходов/);
+
+  const wrongIncomePlan = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'insert',
+    values: { family_id: family.id, month_date: '2026-11-01', category_id: expenseChild.id, type: 'income', planned_kopecks: 1000 },
+  });
+  assert.match(wrongIncomePlan.error?.message || '', /Тип категории не соответствует типу месячного плана/);
+
+  const validSavingsPlan = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'insert',
+    values: { family_id: family.id, month_date: '2026-11-01', category_id: expenseChild.id, type: 'savings', planned_kopecks: 1000 },
+  });
+  assert.equal(validSavingsPlan.error, null, validSavingsPlan.error?.message);
+
+  const wrongPurchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert',
+    values: { family_id: family.id, name: 'Покупка', estimated_kopecks: 1000, category_id: incomeChild.id, status: 'planned' },
+  });
+  assert.match(wrongPurchase.error?.message || '', /только к категории расходов/);
+});
