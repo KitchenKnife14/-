@@ -2,19 +2,21 @@
 
 This folder contains the Google Apps Script API used by the React family-budget app.
 
-## Current backend
+## Source of truth
 
-- Source: `Code.gs`
-- API version: **11**
+- Backend source: `Code.gs`
+- Manifest: `appsscript.json`
+- API version constant: see `API_VERSION` in `Code.gs` (independent of Google's deployment version number)
 - Database: Google Sheets
-- Runtime: Google Apps Script Web App
-- Spreadsheet: `Семейный бюджет`
-- Time zone: `Europe/Moscow`
+- Runtime: Google Apps Script V8
+- Intended timezone: `Europe/Moscow`
 
-The script must be bound to the intended spreadsheet and deployed as a Web App executing as the script owner. The spreadsheet itself must remain private. Application authentication, session checks, and family-level access validation are enforced by the Apps Script API.
+The manifest in this repository is version-controlled configuration. It does **not** prove that a live Apps Script project has already been synchronized with it. The actual project timezone, OAuth scopes, web-app execution identity, access level, Script Properties, and deployment version must be checked in the Apps Script editor before any release.
 
-## Release branch and deployment
+## Safety and deployment
 
-The current implementation is maintained in `work/final-features-performance` and reviewed through PR #8. The main website's Production deployment has not yet been switched to this release. Do not update the Production branch or deploy the live webhook until the test backend, two-user access isolation, CRUD operations, and Telegram flow have been verified.
+All work in the `ispravleniya` branch is audit/test work. Use a separate test spreadsheet and a test Apps Script project. Do not connect this code to the primary family spreadsheet, change the production deployment, or publish the live Telegram webhook as part of the audit.
 
-For step-by-step setup and safe deployment instructions, see [SETUP.md](SETUP.md).
+The spreadsheet must remain private. The web app may need anonymous HTTP access so the frontend can call it without a Google sign-in; if configured that way, the endpoint is publicly reachable and relies on the application's own authentication and authorization checks. Verify the actual deployment access setting rather than inferring it from this repository.
+
+For safe setup and manual verification steps, see [SETUP.md](SETUP.md).

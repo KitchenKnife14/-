@@ -1661,3 +1661,16 @@ HEAD до:
 - Vercel deployments, доступные на момент проверки, не содержат SHA 25abfda; новый Preview для этого коммита не подтверждён. CI green не равен проверке живого Preview.
 - Прогресс: 142/272 = 52.2%.
 
+
+### FC-07 — manifest Apps Script: версия конфигурации и аудит инструкций — 2026-11-10 (CI pending)
+
+- В ветке `ispravleniya` файл `google-apps-script/appsscript.json` отсутствовал. GitHub Contents API и recursive tree не находят manifest в репозитории. Это подтверждает отсутствие version-controlled manifest, но не доказывает отсутствие manifest в реальном редакторе Apps Script.
+- Добавлен минимальный явный manifest: `timeZone=Europe/Moscow`, `runtimeVersion=V8`, `exceptionLogging=STACKDRIVER`, пустой `dependencies`. OAuth scopes намеренно не зафиксированы вручную: фактический набор нужно сверить с разрешениями проекта/вызовами и не расширять без необходимости. Deployment settings `webapp.executeAs/access` не добавлялись, потому что фактическая конфигурация тестового deployment не подтверждена.
+- В CI добавлена проверка JSON manifest и трёх фиксированных параметров. Это проверяет конфигурационный файл в Git, но не синхронизацию с Google Apps Script.
+- Переписаны README и SETUP: убраны ссылки на устаревшую ветку `work/final-features-performance`, опасная рекомендация создавать фиктивные версии Apps Script ради номера 11 и инструкция временно раскрывать имя таблицы через публичный doGet. Инструкции теперь явно ограничивают работу отдельной тестовой копией и веткой `ispravleniya`.
+- По Code.gs сервисы ограничены SpreadsheetApp, PropertiesService, LockService, CacheService, Utilities и Session; UrlFetchApp/DriveApp/GmailApp и прочие внешние сервисы не используются. Точный effective OAuth scope set не выводится только из списка вызовов и требует проверки Apps Script UI.
+- SETUP содержит служебные функции `setupSheets()`, `selfTest()`, `closeSignup()`, `showInfo()`. `selfTest()` создаёт и удаляет временный лист; запускать только в отдельной тестовой таблице. `showInfo()` включает раскрытие имени таблицы в публичном GET; не запускать на публичном deployment. `closeSignup()` закрывает signup через Script Property; фактическое значение свойства неизвестно.
+- Frontend `src/lib/dates.ts` формирует текущую дату через Intl с `Europe/Moscow`; backend форматирует операции/Telegram через `Europe/Moscow`. `setupSheets()` и `selfTest()` логируют timezone таблицы и Apps Script, но фактические значения тестового spreadsheet/script из GitHub недоступны.
+- Открытые проверки: фактический timezone spreadsheet/script, профильные timezone, effective OAuth scopes, web app executeAs/access, Script Properties DEBUG_INFO/SIGNUP_DISABLED и отсутствие сдвига существующих дат. Никакие существующие даты не изменялись.
+- CI pending; процент не повышать до зелёного CI. Production и основная таблица не затрагивались.
+
