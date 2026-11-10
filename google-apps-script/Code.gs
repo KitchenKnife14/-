@@ -1066,7 +1066,7 @@ function telegramWebhook_(req){
     const members=rows_('family_members').filter(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
     if(!members.length)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
     const month=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM');
-    const txs=rows_('transactions').filter(x=>String(x.family_id)===String(link.family_id)&&String(x.operation_date||'').slice(0,7)===month);
+    const txs=rows_('transactions').filter(x=>String(x.family_id)===String(link.family_id)&&String(x.operation_date||'').slice(0,7)===month&&!x.planned);
     const income=txs.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
     const expense=txs.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
     const rubles=n=>(n/100).toFixed(2).replace('.',',')+' ₽';
