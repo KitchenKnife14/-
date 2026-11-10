@@ -1857,6 +1857,19 @@ test('all monetary fields reject coercible strings, booleans and fractional kope
   }
 });
 
+test('kopecks validator rejects empty, null, non-finite, fractional and invalid-sign values', () => {
+  const h = makeHarness();
+  const validate = h.context.assertKopecks_;
+  for (const value of ['123', '', null, true, NaN, Infinity, -Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => validate(value, 'Сумма', { positive: true }), /целым числом копеек/, String(value));
+  }
+  assert.throws(() => validate(0, 'Сумма', { positive: true }), /положительным целым числом копеек/);
+  assert.throws(() => validate(-1, 'Сумма', { positive: true }), /положительным целым числом копеек/);
+  assert.doesNotThrow(() => validate(-1, 'Начальный остаток'));
+  assert.doesNotThrow(() => validate(0, 'Начальный остаток'));
+  assert.doesNotThrow(() => validate(undefined, 'Начальный остаток', { optional: true }));
+  assert.throws(() => validate(null, 'Начальный остаток', { optional: true }), /целым числом копеек/);
+});
 test('monetary fields reject integers outside the JavaScript safe integer range', () => {
   const h = makeHarness();
   const user = h.signup('unsafe-money@example.com');
