@@ -673,6 +673,16 @@ function query_(req,user){
         rows_('recurring_payments').some(payment=>accountIds.has(String(payment.account_id||'')));
       if(referenced)throw new Error('Счёт используется в истории. Архивируйте его вместо удаления.');
     }
+    if(mode==='delete'&&table==='categories'){
+      const categoryIds=new Set(all.filter(r=>matches(r)&&canAccessRow_(table,r,user)).map(r=>String(r.id)));
+      const referenced=rows_('categories').some(row=>categoryIds.has(String(row.parent_id||'')))||
+        rows_('transactions').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('recurring_payments').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('budgets').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('planned_purchases').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('monthly_plans').some(row=>categoryIds.has(String(row.category_id||'')));
+      if(referenced)throw new Error('Категория используется в связанных данных. Архивируйте её вместо удаления.');
+    }
     const changed=[],affectedGoalIds=new Set();
     all.forEach(r=>{
       if(matches(r)&&canAccessRow_(table,r,user)){
