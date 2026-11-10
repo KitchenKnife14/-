@@ -207,30 +207,38 @@ function updateRows_(name, data) {
   const sorted=[...byRow.values()].sort((a,b)=>a.__row-b.__row);
   if(!sorted.length)return;
   delete ROWS_CACHE[name];
-  let group=[];
+  let group=[],wrote=false;
   const flush=()=>{
     if(!group.length)return;
     timedSheetWrite_(()=>sh.getRange(group[0].__row,1,group.length,cols.length).setValues(group.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
+    wrote=true;
     group=[];
   };
-  sorted.forEach(row=>{if(group.length&&row.__row!==group[group.length-1].__row+1)flush();group.push(row);});
-  flush();
-  SHEET_WRITES++;
-  touchTableRevision_(name,data);
+  try{
+    sorted.forEach(row=>{if(group.length&&row.__row!==group[group.length-1].__row+1)flush();group.push(row);});
+    flush();
+  }finally{
+    // A later non-contiguous write can fail after earlier groups have committed.
+    // Publish a revision for any successful partial write so clients reload the actual state.
+    if(wrote){SHEET_WRITES++;touchTableRevision_(name,data);}
+  }
 }
 function deleteRows_(name, data) {
   const rowNumbers=[...new Set(data.map(r=>Number(r.__row)).filter(n=>Number.isInteger(n)&&n>=2))].sort((a,b)=>b-a);
   if(!rowNumbers.length)return;
   const sh=sheet_(name);
   delete ROWS_CACHE[name];
-  let i=0;
-  while(i<rowNumbers.length){
-    const high=rowNumbers[i];let low=high;i++;
-    while(i<rowNumbers.length&&rowNumbers[i]===low-1){low=rowNumbers[i];i++;}
-    timedSheetWrite_(()=>sh.deleteRows(low,high-low+1));
+  let i=0,wrote=false;
+  try{
+    while(i<rowNumbers.length){
+      const high=rowNumbers[i];let low=high;i++;
+      while(i<rowNumbers.length&&rowNumbers[i]===low-1){low=rowNumbers[i];i++;}
+      timedSheetWrite_(()=>sh.deleteRows(low,high-low+1));
+      wrote=true;
+    }
+  }finally{
+    if(wrote){SHEET_WRITES++;touchTableRevision_(name,data);}
   }
-  SHEET_WRITES++;
-  touchTableRevision_(name,data);
 }
 function writeRows_(name, data) {
   SHEET_WRITES++;
@@ -238,9 +246,14 @@ function writeRows_(name, data) {
   delete ROWS_CACHE[name];
   // Лист по умолчанию содержит 1000 строк; без расширения запись большего числа строк падает.
   const need=data.length+1; if(sh.getMaxRows()<need){ sh.insertRowsAfter(sh.getMaxRows(), need-sh.getMaxRows()+500); formatSheet_(sh,name); }
-  if (data.length) timedSheetWrite_(()=>sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));
-  const last=sh.getLastRow(); if(last>data.length+1) timedSheetWrite_(()=>sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent());
-  touchTableRevision_(name,data);
+  let wrote=false;
+  try{
+    if(data.length){timedSheetWrite_(()=>sh.getRange(2,1,data.length,cols.length).setValues(data.map(o=>cols.map(k=>safeCell_(o[k]===undefined||o[k]===null?'':o[k])))));wrote=true;}
+    const last=sh.getLastRow();
+    if(last>data.length+1){timedSheetWrite_(()=>sh.getRange(data.length+2,1,last-data.length-1,cols.length).clearContent());wrote=true;}
+  }finally{
+    if(wrote)touchTableRevision_(name,data);
+  }
 }
 function now_(){return new Date().toISOString();}
 function id_(){return Utilities.getUuid();}
