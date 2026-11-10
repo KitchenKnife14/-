@@ -17,6 +17,9 @@ type TelegramUpdate = {
 
 type BackendReply = { chat_id?: string | number; text?: string; skip?: boolean }
 type BackendResponse = { data?: BackendReply; error?: { message?: string } | null }
+
+const APPS_SCRIPT_TIMEOUT_MS = 35_000
+const TELEGRAM_API_TIMEOUT_MS = 10_000
 type RuntimeEnvironment = typeof globalThis & {
   process?: { env?: Record<string, string | undefined> }
 }
@@ -84,6 +87,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         telegramSecret: backendSecret,
         update,
       }),
+      signal: AbortSignal.timeout(APPS_SCRIPT_TIMEOUT_MS),
     })
 
     if (!backendResponse.ok) throw new Error('Apps Script request failed')
@@ -109,6 +113,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           text: reply.text,
           disable_web_page_preview: true,
         }),
+        signal: AbortSignal.timeout(TELEGRAM_API_TIMEOUT_MS),
       })
       const telegramResult = await telegramResponse.json() as { ok?: boolean }
       if (!telegramResponse.ok || !telegramResult.ok) {
