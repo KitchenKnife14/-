@@ -127,7 +127,7 @@
 - [x] Не менять и не переклассифицировать существующие операции автоматически; старые несоответствия не блокируют несвязанные изменения записи.
 - [x] Добавить тесты на создание, update, upsert, родительские/дочерние категории и сохранение редактируемости старых записей.
 - [x] Запретить изменение `categories.kind`, если категория уже используется в transactions, recurring_payments, budgets, monthly_plans или planned_purchases; иначе связанные записи станут семантически несогласованными.
-- [ ] Повторно выполнить backend regression suite после объединения Code.gs; тест добавлен, но новый CI-результат пока не подтверждён.
+- [x] Повторно выполнить backend regression suite после объединения Code.gs; CI 42853585912 подтвердил TypeScript/build, 125 тестов и Apps Script syntax check.
 
 ### FC-06 — удаление используемой категории
 - [x] Проверить все ссылки на категорию: transactions, budgets, recurring_payments, planned_purchases, monthly_plans и дочерние categories.
@@ -135,6 +135,7 @@
 - [x] Проверить прямой backend delete API; batch использует тот же query_ маршрут.
 - [x] Ссылки и исторические строки не удаляются и не обнуляются автоматически.
 - [x] Добавить тесты на все типы ссылок, дочерние категории, архивирование и безопасное удаление неиспользуемой категории.
+- [x] Запретить назначение архивной категории новым операциям, регулярным платежам, бюджетам, месячным планам и покупкам; сохранить редактирование существующих исторических связей.
 
 ### FC-13 — переполнение балансов
 Файл: `src/lib/accountBalances.js`.
@@ -1383,3 +1384,10 @@ HEAD до:
 - CI [42852903196](https://github.com/KitchenKnife14/-/actions/runs/42852903196) passed after the localhost binding change: TypeScript/production build, regression tests and Apps Script syntax check.
 - Scope limitation: this was a targeted review of Vite and React Router advisories, not a complete npm audit of every transitive dependency. No dependency versions or lockfile entries were changed in this work.
 - Production, primary Vercel, Apps Script and Google Sheet were not changed. Checklist not increased; dependency migrations and full dependency scan remain open.
+### FC-06 — запрет новых ссылок на архивные категории (работа № 43)
+
+- Backend `validateRelations_` теперь отклоняет присвоение архивной категории новой операции, регулярному платежу, бюджету, строке месячного плана или запланированной покупке. Проверка выполняется при создании и при изменении category_id; существующая запись с неизменённой архивной категорией остаётся редактируемой.
+- Frontend формы бюджетов, месячных планов и регулярных платежей теперь показывают текущую архивную категорию при редактировании, но не предлагают её для новых записей. Формы операций и покупок уже имели такое поведение.
+- Добавлен Apps Script regression test: все пять сущностей создаются с активной категорией; категория архивируется; обновление существующих записей остаётся разрешённым; попытка создать новые записи с этой категорией отклоняется.
+- CI [42853585912](https://github.com/KitchenKnife14/-/actions/runs/42853585912) прошёл: TypeScript/production build, 125 regression tests (125 passed, 0 failed), Apps Script syntax check.
+- FC-04 regression check также подтверждён этим CI. Изменения находятся только в `ispravleniya`; Production, основная таблица, Apps Script deployment, Production Vercel и Telegram webhook не изменялись.
