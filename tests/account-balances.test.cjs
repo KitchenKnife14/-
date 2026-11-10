@@ -40,6 +40,8 @@ test('invalid, same-account, and unknown-account transfers do not corrupt balanc
   const balances = calculateAccountBalances(accounts, rows)
   assert.equal(balances.get('a'), -100)
   assert.equal(balances.get('b'), 200)
+  assert.equal(balances.invalidAccountIds.has('a'), true)
+  assert.equal(balances.invalidAccountIds.has('b'), false)
 })
 
 
@@ -68,6 +70,8 @@ test('balance arithmetic skips rows that would exceed the safe integer range', a
   assert.equal(balances.get('source'), 10)
   assert.equal(balances.get('target'), max)
   for (const value of balances.values()) assert.equal(Number.isSafeInteger(value), true)
+  assert.deepEqual([...balances.invalidAccountIds].sort(), ['max', 'min', 'source', 'target'])
+  assert.equal(balances.issues.length, 4)
 })
 
 test('valid arithmetic at both safe-integer boundaries remains supported', async () => {
@@ -84,4 +88,18 @@ test('valid arithmetic at both safe-integer boundaries remains supported', async
   ])
   assert.equal(balances.get('a'), max)
   assert.equal(balances.get('b'), min)
+  assert.equal(balances.invalidAccountIds.size, 0)
+})
+
+test('invalid opening balances and malformed transaction amounts are marked untrusted', async () => {
+  const { calculateAccountBalances } = await import('../src/lib/accountBalances.js')
+  const balances = calculateAccountBalances([
+    { id: 'bad-opening', starting_balance_kopecks: '1000' },
+    { id: 'bad-row', starting_balance_kopecks: 1000 },
+  ], [
+    { id: 'tx-string', type: 'expense', amount_kopecks: '100', account_id: 'bad-row', planned: false },
+  ])
+  assert.equal(balances.invalidAccountIds.has('bad-opening'), true)
+  assert.equal(balances.invalidAccountIds.has('bad-row'), true)
+  assert.deepEqual(balances.issues.map(issue => issue.reason).sort(), ['invalid-opening-balance', 'invalid-transaction-amount'])
 })
