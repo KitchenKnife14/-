@@ -1293,3 +1293,13 @@ HEAD до:
 - Изменения в ветке `ispravleniya`, последовательные коммиты: `39293d2d7d1962a6c6cbe86f0750b87845c835b3` (parser), `197d34d1f6f3e5579bc267ddde7b4db1c53e5e54` (TransactionForm), `aeea4d57436ccc364b89af5909c20df05e492ca0` (tests). Production и основная таблица не затронуты.
 - На момент записи тестовые CI для трёх коммитов были запущены: [42842719229](https://github.com/KitchenKnife14/-/actions/runs/42842719229), [42842733863](https://github.com/KitchenKnife14/-/actions/runs/42842733863), [42842754069](https://github.com/KitchenKnife14/-/actions/runs/42842754069). Их итог требуется проверить после завершения.
 - Checklist не увеличен: проверка на реальных формах/iPhone, Telegram fractional boundary coverage и общие UI boundary tests остаются открытыми. Макроэтапы не пересчитывались до закрытия полного набора критериев.
+
+
+#### TG-05 — граничные тесты сумм Telegram (работа № 35)
+
+- Добавлен отдельный изолированный Node VM regression test для Telegram parser. Проверяются точные преобразования `45,1` → 4510 копеек, `45.10` → 4510, `0,01` → 1; parser не использует округление.
+- Проверяются отказы для `45,123`, `45.123`, нулевой суммы и отрицательной суммы. После серии сообщений проверяется, что в таблице тестового harness ровно три корректные операции и нет записей для невалидных сообщений.
+- Это тест текущей функции `telegramWebhook_` в Node VM harness с mock Google Apps Script services; это не runtime-тест опубликованного GAS и не проверка Telegram/Vercel доставки.
+- Изменён файл `tests/apps-script.test.cjs`, commit `342b688f9f4fe7f292f58226c5d72cf36b7281f6`. Основная таблица и Production не затронуты.
+- Сводный статус CI для parser/form/test commits: [42842719229](https://github.com/KitchenKnife14/-/actions/runs/42842719229), [42842733863](https://github.com/KitchenKnife14/-/actions/runs/42842733863), [42842754069](https://github.com/KitchenKnife14/-/actions/runs/42842754069) — все успешно. Документационный run [42842860356](https://github.com/KitchenKnife14/-/actions/runs/42842860356) выполнялся при последней проверке; новый CI для Telegram regression test будет проверен отдельно.
+- Детальный checklist не увеличен: тест в harness добавлен, но runtime boundary verification и полный TG parser contract ещё не завершены.
