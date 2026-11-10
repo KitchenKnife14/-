@@ -2259,3 +2259,67 @@ test('cross-family isolation covers every family-scoped table through direct sel
     assert.equal(ownerRead.data.length, 1, table + ' row was changed or deleted by another family');
   });
 });
+
+
+test('family-scoped RPCs reject foreign family IDs and foreign purchase or recurring records', () => {
+  const h = makeHarness();
+  const owner = h.signup('rpc-boundary-owner@example.com');
+  const outsider = h.signup('rpc-boundary-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Основная семья' }).data;
+  const foreignFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Другая семья' }).data;
+
+  const foreignCategoryProvisioning = h.call({
+    action: 'rpc', token: outsider.token, name: 'ensure_supplemental_categories',
+    params: { p_family_id: family.id },
+  });
+  assert.match(foreignCategoryProvisioning.error?.message || '', /Нет доступа к этой семье/);
+
+  const foreignGoalCreation = h.call({
+    action: 'rpc', token: outsider.token, name: 'create_goal_with_purchase',
+    params: { p_family_id: family.id, p_name: 'Чужая цель', p_target_kopecks: 100000, p_priority: 2, p_create_purchase: true },
+  });
+  assert.match(foreignGoalCreation.error?.message || '', /Нет доступа к этой семье/);
+
+  const purchase = h.call({
+    action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Чужая покупка', estimated_kopecks: 200000, status: 'planned' },
+  }).data[0];
+  const purchaseConfirmation = h.call({
+    action: 'rpc', token: outsider.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-10' },
+  });
+  assert.match(purchaseConfirmation.error?.message || '', /не найдена/);
+
+  const recurring = h.call({
+    action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 9900, description: 'Чужая подписка', start_date: '2026-11-01', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
+  }).data[0];
+  const recurringConfirmation = h.call({
+    action: 'rpc', token: outsider.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-10' },
+  });
+  assert.match(recurringConfirmation.error?.message || '', /не найден/);
+
+  const ownerRows = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'select' }).data;
+  assert.equal(ownerRows.find(x => x.id === purchase.id).status, 'planned');
+  const recurringRows = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select' }).data;
+  assert.equal(recurringRows.find(x => x.id === recurring.id).next_due_date, '2026-11-10');
+  assert.notEqual(foreignFamily.id, family.id);
+});
+
+test('get_my_context exposes profiles only for members of the current user family', () => {
+  const h = makeHarness();
+  const owner = h.signup('context-isolation-owner@example.com');
+  const partner = h.signup('context-isolation-partner@example.com');
+  const outsider = h.signup('context-isolation-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Контекст семьи' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  h.call({ action: 'createFamily', token: outsider.token, name: 'Отдельная семья' });
+
+  const context = h.call({ action: 'rpc', token: owner.token, name: 'get_my_context', params: {} });
+  assert.equal(context.error, null, context.error?.message);
+  const profileIds = context.data.member_profiles.map(x => x.id);
+  assert.deepEqual(profileIds.sort(), [owner.user.id, partner.user.id].sort());
+  assert.equal(profileIds.includes(outsider.user.id), false);
+  assert.equal(context.data.family.id, family.id);
+});
