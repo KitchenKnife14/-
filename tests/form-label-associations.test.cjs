@@ -37,3 +37,30 @@ test('form labels in account, budget, category, goal, onboarding, planning, purc
     }
   }
 })
+
+
+const filterLabels = {
+  'src/pages/CategoriesPage.tsx': ['Поиск по категориям', 'Фильтр по типу категории'],
+  'src/pages/GoalsPage.tsx': [
+    'Поиск финансовых целей', 'Фильтр по статусу цели',
+    'Фильтр по приоритету цели', 'Фильтр по участнику цели',
+  ],
+  'src/pages/PurchasesPage.tsx': ['Сортировка планируемых покупок', 'Фильтр по статусу покупки'],
+  'src/pages/TransactionsPage.tsx': [
+    'Поиск операций', 'Фильтр по типу операции',
+    'Фильтр по категории операции', 'Фильтр по статусу операции',
+  ],
+  'src/pages/CalendarPage.tsx': ['Фильтр по категории операций', 'Фильтр по участнику'],
+}
+
+test('search and filter controls have accessible names, and purchase account label is associated', () => {
+  for (const [file, labels] of Object.entries(filterLabels)) {
+    const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8')
+    for (const label of labels) {
+      assert.ok(source.includes('aria-label="' + label + '"'), file + ': missing accessible name "' + label + '"')
+    }
+  }
+  const purchases = fs.readFileSync(path.join(process.cwd(), 'src/pages/PurchasesPage.tsx'), 'utf8')
+  assert.match(purchases, /<label\b[^>]*htmlFor="purchase-buy-account"/)
+  assert.match(purchases, /<select\b[^>]*id="purchase-buy-account"/)
+})
