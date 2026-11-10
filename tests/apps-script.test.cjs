@@ -1770,3 +1770,69 @@ test('legacy category mismatches do not block unrelated edits to historical reco
   assert.equal(after.category_id, incomeCategory.id);
   assert.equal(after.description, 'Историческая запись');
 });
+
+
+test('categories with references cannot be deleted, but can be archived', () => {
+  const h = makeHarness();
+  const user = h.signup('category-delete-guard@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита категорий' }).data;
+  const root = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .find(c => c.kind === 'expense' && !c.parent_id);
+  const referenceCases = [
+    ['transactions', { type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-10' }],
+    ['recurring_payments', { type: 'expense', amount_kopecks: 1000, description: 'Платёж', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true }],
+    ['budgets', { month_date: '2026-11-01', limit_kopecks: 1000 }],
+    ['planned_purchases', { name: 'Покупка', estimated_kopecks: 1000, status: 'planned' }],
+    ['monthly_plans', { month_date: '2026-11-01', type: 'expense', planned_kopecks: 1000 }],
+  ];
+
+  for (const [table, fields] of referenceCases) {
+    const category = h.call({
+      action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+      values: { family_id: family.id, parent_id: root.id, name: 'Категория ' + table, kind: 'expense' },
+    });
+    assert.equal(category.error, null, category.error?.message);
+    const values = { ...fields, category_id: category.data[0].id };
+    if (table !== 'transactions' && table !== 'goal_contributions') values.family_id = family.id;
+    const inserted = h.call({ action: 'query', token: user.token, table, mode: 'insert', values });
+    assert.equal(inserted.error, null, table + ' reference: ' + inserted.error?.message);
+
+    const deleted = h.call({
+      action: 'query', token: user.token, table: 'categories', mode: 'delete',
+      filters: [{ column: 'id', op: 'eq', value: category.data[0].id }],
+    });
+    assert.match(deleted.error?.message || '', /Категория используется в связанных данных/);
+
+    const archived = h.call({
+      action: 'query', token: user.token, table: 'categories', mode: 'update',
+      filters: [{ column: 'id', op: 'eq', value: category.data[0].id }],
+      values: { archived: true },
+    });
+    assert.equal(archived.error, null, archived.error?.message);
+  }
+
+  const parentWithChild = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: root.id, name: 'Родитель с ребёнком', kind: 'expense' },
+  }).data[0];
+  const child = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert',
+    values: { family_id: family.id, parent_id: parentWithChild.id, name: 'Дочерняя', kind: 'expense' },
+  });
+  assert.equal(child.error, null, child.error?.message);
+  const parentDelete = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: parentWithChild.id }],
+  });
+  assert.match(parentDelete.error?.message || '', /Категория используется в связанных данных/);
+
+  const unused = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: root.id, name: 'Неиспользуемая', kind: 'expense' },
+  }).data[0];
+  const safeDelete = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: unused.id }],
+  });
+  assert.equal(safeDelete.error, null, safeDelete.error?.message);
+});
