@@ -1085,24 +1085,53 @@ function telegramWebhook_(req){
     const amountKopecks=Number(parts[0])*100+Number(((parts[1]||'')+'00').slice(0,2));
     if(!Number.isSafeInteger(amountKopecks)||amountKopecks<=0||amountKopecks>1000000000000)throw new Error('Проверьте сумму операции.');
     let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)\s+/i,' ').replace(/\s+/g,' ').trim();
-    const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило)(?=\s|$)/i.test(text);
+    const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило|премия|бонус|подработка|фриланс|возврат|компенсация|кэшбек|продал|продажа|проценты)(?=\s|$)/i.test(text);
     const explicitExpense=/(?:^|\s)(?:расход|потратил|потратила|купил|купила|оплатил|оплатила|покупка)(?=\s|$)/i.test(text);
     if(!description&&isIncome)description='Доход';
     if(!description&&explicitExpense)description='Расход';
     if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
     const kind=isIncome?'income':'expense';
     const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
-    const aliases=[
-      [/(?:проезд|автобус|метро|трамвай|маршрутка|транспорт)/i,'Общественный транспорт'],
-      [/такси/i,'Такси'],[/бензин|заправк/i,'Бензин'],[/продукт|магазин|пятерочк|магнит/i,'Продукты домой'],
-      [/кафе|ресторан|обед|ужин/i,'Кафе и рестораны'],[/кофе/i,'Кофе и перекусы на работе'],
-      [/аренд/i,'Аренда квартиры'],[/коммунал|жкх/i,'Коммунальные услуги'],[/интернет/i,'Интернет'],
-      [/зарплат/i,(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника'],[/преми/i,'Премии'],[/подработ/i,'Подработки']
+    const normalizedDescription=String(description).toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    const salaryCategory=(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника';
+    // Specific phrases come before broad ones to avoid assigning a more general category.
+    const aliases=kind==='income'?[
+      [/зарплат|аванс|оклад/i,salaryCategory],
+      [/преми|бонус/i,'Премии'],
+      [/подработ|фриланс/i,'Подработки'],
+      [/возврат|компенсац|кэшбек|cashback/i,'Возвраты и компенсации'],
+      [/продал|продажа|авито/i,'Доходы от продажи вещей'],
+      [/процент|дивиденд|invest/i,'Проценты и инвестиционный доход']
+    ]:[
+      [/проезд|автобус|метро|трамва|маршрутк|транспорт/i,'Общественный транспорт'],
+      [/такси|yandex go|яндекс такси/i,'Такси'],
+      [/бензин|заправ|топлив/i,'Бензин'],
+      [/парков/i,'Парковка'],      [/шиномонтаж|то\b|ремонт авто|автосервис/i,'Обслуживание автомобиля'],
+      [/пятерочк|магнит|перекресток|лента|ашан|вкусвилл|продукт|супермаркет|магазин продукт/i,'Продукты домой'],
+      [/доставк|самокат|деливери|купер/i,'Доставка еды'],
+      [/кафе|ресторан|обед|ужин|завтрак/i,'Кафе и рестораны'],
+      [/кофе|перекус|булоч/i,'Кофе и перекусы на работе'],
+      [/аптек|лекарств|таблетк|медикамент/i,'Лекарства'],
+      [/стоматолог|зубн/i,'Стоматология'],
+      [/врач|доктор|клиник/i,'Врачи'],
+      [/аренд|квартир/i,'Аренда квартиры'],
+      [/коммунал|жкх|электричеств|водоснабж/i,'Коммунальные услуги'],
+      [/интернет|wi ?fi|вайфай/i,'Интернет'],
+      [/мобильн|связ|телефон|тариф/i,'Мобильная связь'],
+      [/бытов хим|порош|моющ/i,'Бытовая химия'],
+      [/шампун|гигиен|зубн паст/i,'Средства гигиены'],
+      [/одежд|обув|куртк|джинс/i,'Одежда и обувь'],
+      [/подписк|netflix|кинопоиск|ivi/i,'Подписки'],
+      [/игр|steam|playstation|xbox/i,'Игры'],
+      [/кино|театр|концерт/i,'Кино и мероприятия'],
+      [/подар/i,'Подарки'],
+      [/путешеств|отпуск|отел|билет/i,'Путешествия и отдых']
     ];
     let categoryName='';
-    for(const pair of aliases){if(pair[0].test(description)){categoryName=pair[1];break;}}
-    let category=categoryName?categories.find(x=>x.name===categoryName):null;
-    if(!category)category=categories.find(x=>String(description).toLowerCase().includes(String(x.name).toLowerCase())||String(x.name).toLowerCase().includes(String(description).toLowerCase()));
+    for(const pair of aliases){if(pair[0].test(normalizedDescription)){categoryName=pair[1];break;}}
+    const normalizeCategoryName=value=>String(value||'').toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    let category=categoryName?categories.find(x=>normalizeCategoryName(x.name)===normalizeCategoryName(categoryName)):null;
+    if(!category)category=categories.find(x=>normalizedDescription.includes(normalizeCategoryName(x.name)));
     if(!isIncome&&!explicitExpense&&!categoryName&&!category)throw new Error('Не понял, это расход или доход. Уточните тип: «Расход ...» или «Доход ...».');
     if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
     const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
@@ -1157,29 +1186,4 @@ function selfTest(){
   }catch(e){out.push('ОШИБКА теста: '+e.message);}
   finally{ss.deleteSheet(sh);}
   Logger.log(out.join('\n'));
-}
-
-/**
- * Classifies whether a request is a candidate for a read-only execution path.
- * This is intentionally not wired into doPost yet: sheet_() and authSheet_()
- * can still create/repair schema during reads. Keep unknown actions fail-closed.
- * Return values: "read-candidate" or "write".
- */
-function requestLockMode_(req) {
-  if (!req || typeof req !== 'object' || Array.isArray(req)) return 'write';
-  const action = String(req.action || '');
-  if (action === 'batch') {
-    if (!Array.isArray(req.requests) || req.requests.length === 0) return 'write';
-    return req.requests.every(item => requestLockMode_(item) === 'read-candidate')
-      ? 'read-candidate'
-      : 'write';
-  }
-  if (action === 'getSession' || action === 'getUser') return 'read-candidate';
-  if (action === 'query') return String(req.mode || 'select') === 'select' ? 'read-candidate' : 'write';
-  if (action === 'rpc') {
-    return ['get_table_revision', 'get_telegram_link_status', 'get_my_context'].includes(String(req.name || ''))
-      ? 'read-candidate'
-      : 'write';
-  }
-  return 'write';
 }
