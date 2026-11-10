@@ -1789,3 +1789,10 @@ HEAD до:
 - Следующий шаг SEC-01: вручную запустить benchmarkPasswordHash_() в отдельном тестовом Apps Script, снять время для обеих конфигураций и проверить UX/лимиты. До фактического замера PW_ITERATIONS остаётся 30 000; существующие хеши и учётные записи не меняются.
 
 - Источники SEC-01 сверены 2026-11-10: OWASP Password Storage Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html); Google Apps Script quotas (https://developers.google.com/apps-script/guides/services/quotas); Google Apps Script best practices (https://developers.google.com/apps-script/guides/support/best-practices). Официальные материалы подтверждают ориентиры, но не заменяют замер в тестовом проекте.
+
+
+### Журнал — 2026-11-10: исправление проверки benchmark в CI (работа № 49)
+
+- CI run [42893210253](https://github.com/KitchenKnife14/-/actions/runs/42893210253) обнаружил одну ошибку нового теста SEC-01: массив `results`, возвращаемый из VM-контекста Apps Script, имеет другой realm, поэтому Node `deepStrictEqual` не принимает его вложенный массив как локальный, несмотря на совпадающие значения `[64,64]`.
+- Исправлен только тест: результат из VM преобразуется в локальный массив через `Array.from` перед сравнением. Производственная PBKDF2-функция и параметры не менялись.
+- До исправления все предыдущие build шаги проходили; падал только regression test №65. Повторный CI требуется подтвердить после коммита.

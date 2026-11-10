@@ -1389,7 +1389,7 @@ test('password hash benchmark uses only dummy data and compares current and OWAS
   assert.deepEqual(calls.map(call => call.iterations), [30000, 600000]);
   assert.ok(calls.every(call => call.password === 'local-only-pbkdf2-benchmark'));
   assert.ok(calls.every(call => call.salt === 'non-secret-fixed-benchmark-salt'));
-  assert.deepEqual(results.map(result => result.outputLength), [64, 64]);
+  assert.deepEqual(Array.from(results, result => result.outputLength), [64, 64]);
   assert.ok(results.every(result => !('digest' in result)));
 });
 
