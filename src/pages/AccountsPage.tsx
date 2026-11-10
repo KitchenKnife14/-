@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
-import { formatRubles, rublesToKopecks } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { calculateAccountBalances } from '../lib/accountBalances.js'
 import { Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import Modal from '../components/Modal'
@@ -65,9 +65,9 @@ export default function AccountsPage() {
     event.preventDefault()
     if (!family) return
     const normalizedName = name.trim()
-    const balance = rublesToKopecks(Number(startingBalance.replace(',', '.')))
+    const balance = parseRublesToKopecks(startingBalance, { allowNegative: true })
     if (!normalizedName) { setError('Введите название счёта'); return }
-    if (!Number.isSafeInteger(balance)) { setError('Введите корректный начальный остаток'); return }
+    if (balance === null) { setError('Введите корректный начальный остаток с точностью до копейки'); return }
     setSaving(true); setError(null)
     try {
       const payload = { family_id: family.id, name: normalizedName, kind, starting_balance_kopecks: balance }
