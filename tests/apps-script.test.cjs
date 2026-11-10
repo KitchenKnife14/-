@@ -2040,6 +2040,67 @@ test('legacy category mismatches do not block unrelated edits to historical reco
 });
 
 
+test('archived categories cannot be assigned to new records but remain valid on existing records', () => {
+  const h = makeHarness();
+  const user = h.signup('archived-category-assignment@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Архивные категории' }).data;
+  const root = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .find(category => category.kind === 'expense' && !category.parent_id);
+  const category = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: root.id, name: 'Архивная категория', kind: 'expense' },
+  }).data[0];
+  const created = {};
+  created.transaction = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, operation_date: '2026-11-10', category_id: category.id },
+  }).data[0];
+  created.recurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1000, category_id: category.id, description: 'Регулярный', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
+  }).data[0];
+  created.budget = h.call({
+    action: 'query', token: user.token, table: 'budgets', mode: 'insert', returning: true,
+    values: { family_id: family.id, category_id: category.id, month_date: '2026-11-01', limit_kopecks: 10000 },
+  }).data[0];
+  created.plan = h.call({
+    action: 'query', token: user.token, table: 'monthly_plans', mode: 'insert', returning: true,
+    values: { family_id: family.id, category_id: category.id, month_date: '2026-11-01', type: 'expense', planned_kopecks: 10000 },
+  }).data[0];
+  created.purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Покупка', category_id: category.id, estimated_kopecks: 10000, status: 'planned' },
+  }).data[0];
+  for (const [table, id, values] of [
+    ['transactions', created.transaction.id, { description: 'Обновлено' }],
+    ['recurring_payments', created.recurring.id, { description: 'Обновлено' }],
+    ['budgets', created.budget.id, { limit_kopecks: 12000 }],
+    ['monthly_plans', created.plan.id, { note: 'Обновлено' }],
+    ['planned_purchases', created.purchase.id, { comment: 'Обновлено' }],
+  ]) {
+    const updated = h.call({
+      action: 'query', token: user.token, table, mode: 'update',
+      filters: [{ column: 'id', op: 'eq', value: id }], values,
+    });
+    assert.equal(updated.error, null, table + ' existing archived reference: ' + updated.error?.message);
+  }
+  const archived = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true },
+  });
+  assert.equal(archived.error, null, archived.error?.message);
+  const rejected = [
+    ['transactions', { family_id: family.id, type: 'expense', amount_kopecks: 2000, operation_date: '2026-11-11', category_id: category.id }],
+    ['recurring_payments', { family_id: family.id, type: 'expense', amount_kopecks: 2000, category_id: category.id, description: 'Новый', start_date: '2026-11-11', next_due_date: '2026-11-11', frequency: 'monthly', active: true }],
+    ['budgets', { family_id: family.id, category_id: category.id, month_date: '2026-12-01', limit_kopecks: 20000 }],
+    ['monthly_plans', { family_id: family.id, category_id: category.id, month_date: '2026-12-01', type: 'expense', planned_kopecks: 20000 }],
+    ['planned_purchases', { family_id: family.id, name: 'Новая покупка', category_id: category.id, estimated_kopecks: 20000, status: 'planned' }],
+  ];
+  for (const [table, values] of rejected) {
+    const result = h.call({ action: 'query', token: user.token, table, mode: 'insert', values });
+    assert.match(result.error?.message || '', /архивную категорию/ , table);
+  }
+});
 test('categories with references cannot be deleted, but can be archived', () => {
   const h = makeHarness();
   const user = h.signup('category-delete-guard@example.com');
