@@ -1796,3 +1796,5 @@ HEAD до:
 - CI run [42893210253](https://github.com/KitchenKnife14/-/actions/runs/42893210253) обнаружил одну ошибку нового теста SEC-01: массив `results`, возвращаемый из VM-контекста Apps Script, имеет другой realm, поэтому Node `deepStrictEqual` не принимает его вложенный массив как локальный, несмотря на совпадающие значения `[64,64]`.
 - Исправлен только тест: результат из VM преобразуется в локальный массив через `Array.from` перед сравнением. Производственная PBKDF2-функция и параметры не менялись.
 - До исправления все предыдущие build шаги проходили; падал только regression test №65. Повторный CI требуется подтвердить после коммита.
+
+- Исправление cross-realm assertion подтверждено CI: [run 42893417092](https://github.com/KitchenKnife14/-/actions/runs/42893417092) завершился `completed / success`; production build, regression suite, Apps Script syntax, runtime diagnostics syntax и manifest validation прошли. Предыдущие неуспешные runs 42893210253/42893300383 были вызваны только тестовым сравнением массивов из VM-контекста; код PBKDF2 не падал.
