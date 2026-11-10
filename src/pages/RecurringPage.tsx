@@ -149,7 +149,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, members, 
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { if (open) { setType('expense'); setAmount(''); setCategoryId(''); setAccountId(''); setResponsibleUserId(userId ?? ''); setDescription(''); setFrequency('monthly'); setCustomDays('30'); setStartDate(todayISO()); setEndDate(''); setError(null) } }, [open, userId])
-  const visibleCats = categories.filter((c) => c.kind === type && !c.archived)
+  const visibleCats = categories.filter((c) => c.kind === type && (!c.archived || c.id === categoryId))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
