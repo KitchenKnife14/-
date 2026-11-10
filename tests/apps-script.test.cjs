@@ -1608,3 +1608,28 @@ test('create_goal_with_purchase rejects numeric strings for target kopecks', () 
   const goals = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' });
   assert.equal(goals.data.length, 0);
 });
+
+
+test('batch requests enforce the same strict kopecks validation as direct query requests', () => {
+  const h = makeHarness();
+  const user = h.signup('strict-money-batch@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Денежный batch' }).data;
+  const result = h.call({
+    action: 'batch', token: user.token,
+    requests: [
+      { action: 'query', table: 'transactions', mode: 'insert', values: {
+        family_id: family.id, type: 'expense', amount_kopecks: '2500', operation_date: '2026-11-10',
+      }},
+      { action: 'query', table: 'monthly_plans', mode: 'insert', values: {
+        family_id: family.id, month_date: '2026-11-01', type: 'expense', planned_kopecks: 2500.5,
+      }},
+    ],
+  });
+  assert.equal(result.error, null, result.error?.message);
+  assert.match(result.data[0].error?.message || '', /целым числом копеек/);
+  assert.match(result.data[1].error?.message || '', /целым числом копеек/);
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  const plans = h.call({ action: 'query', token: user.token, table: 'monthly_plans', mode: 'select' });
+  assert.equal(transactions.data.length, 0);
+  assert.equal(plans.data.length, 0);
+});
