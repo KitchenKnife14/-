@@ -1935,5 +1935,5 @@ test('Telegram retry after a transaction write but before update cache does not 
   assert.equal(transactions.length, 1);
   assert.equal(transactions[0].id, 'telegram_7402');
   assert.equal(transactions[0].amount_kopecks, 4500);
-  assert.equal(transactions[0].operation_time, '12:00');
+  assert.equal(transactions[0].operation_time, '2026-11-10T12:00:00.000Z');
 });
