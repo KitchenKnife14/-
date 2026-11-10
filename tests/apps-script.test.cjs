@@ -2039,12 +2039,18 @@ test('Telegram balance excludes planned operations and transfers from realized t
   assert.equal(linked.error, null, linked.error?.message);
 
   const operationDate = h.context.Utilities.formatDate(new Date(), 'Europe/Moscow', 'yyyy-MM-dd');
+  const addAccount = name => h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name, kind: 'bank', starting_balance_kopecks: 0 },
+  }).data[0];
+  const from = addAccount('Счёт списания');
+  const to = addAccount('Счёт зачисления');
   const rows = [
     { type: 'income', amount_kopecks: 100000, description: 'Фактический доход', planned: false },
     { type: 'expense', amount_kopecks: 25000, description: 'Фактический расход', planned: false },
     { type: 'income', amount_kopecks: 50000, description: 'Плановый доход', planned: true },
     { type: 'expense', amount_kopecks: 15000, description: 'Плановый расход', planned: true },
-    { type: 'transfer', amount_kopecks: 10000, description: 'Перевод', planned: false },
+    { type: 'transfer', amount_kopecks: 10000, description: 'Перевод', account_id: from.id, to_account_id: to.id, planned: false },
   ];
   const inserted = h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'insert',
