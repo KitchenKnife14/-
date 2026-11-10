@@ -149,7 +149,7 @@ function PlanForm({ open, onClose, onSaved, categories, familyId, monthDate }: {
 
   useEffect(() => { if (open) { setType('expense'); setCategoryId(''); setAmount(''); setNote(''); setError(null) } }, [open])
   const expectedCategoryKind = type === 'income' ? 'income' : 'expense'
-  const visibleCats = categories.filter((c) => c.kind === expectedCategoryKind && !c.archived)
+  const visibleCats = categories.filter((c) => c.kind === expectedCategoryKind && (!c.archived || c.id === categoryId))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
