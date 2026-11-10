@@ -93,10 +93,10 @@ export default function PurchasesPage() {
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex flex-wrap gap-2">
-        <select className="input w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
+        <select aria-label="Сортировка планируемых покупок" className="input w-auto" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
           <option value="date">По сроку</option><option value="cost">По стоимости</option><option value="priority">По приоритету</option><option value="category">По категории</option>
         </select>
-        <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select aria-label="Фильтр по статусу покупки" className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="all">Все статусы</option>{Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </div>
@@ -144,7 +144,7 @@ export default function PurchasesPage() {
       <Modal open={!!buying} onClose={() => setBuying(null)} title="Отметить как купленное?">
         <p className="text-sm text-slate-600 mb-2">Будет создан фактический расход на сумму <strong>{formatRubles(buying?.estimated_kopecks ?? 0)}</strong>. Покупка получит статус «Куплено».</p>
         <p className="text-xs text-slate-400 mb-3">Расход не будет учтён дважды — он заменит плановую стоимость, а не добавится поверх.</p>
-        <div className="mb-4"><label className="label">Списать со счёта</label><select className="input" value={buyAccountId} onChange={(e) => setBuyAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.filter((a) => !a.archived).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+        <div className="mb-4"><label className="label" htmlFor="purchase-buy-account">Списать со счёта</label><select id="purchase-buy-account" className="input" value={buyAccountId} onChange={(e) => setBuyAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.filter((a) => !a.archived).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         <div className="flex gap-2"><button onClick={() => setBuying(null)} className="btn-secondary flex-1">Отмена</button><button onClick={confirmBuy} className="btn-primary flex-1">Подтвердить покупку</button></div>
       </Modal>
     </div>
