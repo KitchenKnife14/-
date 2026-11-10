@@ -347,6 +347,7 @@
 - [x] Добавить safe-area отступы сверху, снизу и по горизонтали для мобильной ширины.
 - [ ] Проверить нижнюю навигацию, модалки, кнопки и поля ввода на реальном iPhone; CSS/CI-тест не заменяет device smoke test.
 - [x] Ограничить safe-area padding мобильной шириной (до 767px); desktop не затрагивается по CSS. Android/device rendering ещё не проверен.
+- [x] Использовать `100dvh` на поддерживаемых браузерах и 16px для `.input` на мобильной ширине, чтобы избежать auto-zoom Safari при фокусе.
 
 ### FC-22 — labels и поля
 - [x] Проверить и исправить labels в TransactionForm.tsx, AuthPage.tsx и остальных формах: Accounts, Budgets, Categories, Goals (включая пополнение), Onboarding, Planning, Purchases и Recurring. В TelegramPage отдельных полей формы нет.
@@ -1423,3 +1424,11 @@ HEAD до:
 - Frontend test использует тот же синтетический fixture, что и Apps Script `/balance` test: фактический доход 100 000 коп., фактический расход 25 000 коп., плановый доход 50 000 коп., плановый расход 15 000 коп., перевод 10 000 коп. Ожидаемый итог: доход 1 000 ₽, расход 250 ₽, разница 750 ₽.
 - CI [42856173243](https://github.com/KitchenKnife14/-/actions/runs/42856173243) прошёл: TypeScript/production build, 132 regression tests (132 passed, 0 failed), Apps Script syntax check.
 - TG-03 checklist закрыт. Реальные операции и Telegram production updates не затрагивались.
+### FC-21 — iOS viewport и масштабирование полей (работа № 48)
+
+- Сохранены `viewport-fit=cover` и safe-area inset для всех четырёх сторон в мобильном media query.
+- Корневой app shell получил `100vh` fallback и `100dvh` для браузеров с dynamic viewport support; это уменьшает расхождение высоты страницы при появлении/скрытии панели Safari.
+- На мобильной ширине поля `.input` получают `font-size: 16px`, чтобы Safari не увеличивал страницу автоматически при фокусе на полях с меньшим шрифтом.
+- Добавлены source-level тесты: viewport-fit, четыре safe-area inset, `100dvh`, 16px mobile input и глобальный `:focus-visible` индикатор.
+- CI [42856649470](https://github.com/KitchenKnife14/-/actions/runs/42856649470) прошёл: TypeScript/production build, 135 regression tests (135 passed, 0 failed), Apps Script syntax check.
+- Ограничение: настоящий iPhone/VoiceOver smoke test не выполнялся. Нижняя навигация и модальные окна в системных safe areas остаются открытой ручной проверкой. Production не изменялся.
