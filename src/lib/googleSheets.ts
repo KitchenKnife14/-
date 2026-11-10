@@ -80,26 +80,35 @@ export const googleSheets={
  from:(table:string)=>new QueryBuilder<any>(table),
  rpc:async(name:string,params:Record<string,unknown>={})=>{try{return{data:await request({action:'rpc',name,params}),error:null}}catch(e){return{data:null,error:new Error(e instanceof Error?e.message:'Ошибка RPC')}}},
  channel:(_name:string)=>{
-  const subs:{table:string;filters:Filter[];callback:()=>void;previous:string}[]=[]
+  const subs:{table:string;familyId:string;callback:()=>void;previous:string}[]=[]
   let timer:ReturnType<typeof setInterval>|null=null
   const subscription={unsubscribe:()=>{if(timer!==null)clearInterval(timer);timer=null}}
   const channel:{on:(event:string,config:unknown,cb:()=>void)=>any;subscribe:()=>{unsubscribe:()=>void};unsubscribe:()=>void}={
     on:(_event:string,config:unknown,cb:()=>void)=>{
       const cfg=config as {table?:string;filter?:string}
       if(cfg.table){
-        const match=(cfg.filter||'').match(/^([a-zA-Z0-9_]+)=eq\.(.+)$/)
-        subs.push({table:cfg.table,filters:match?[{column:match[1],op:'eq',value:match[2]}]:[],callback:cb,previous:''})
+        const match=(cfg.filter||'').match(/^family_id=eq\.(.+)$/)
+        subs.push({table:cfg.table,familyId:match?.[1]||'',callback:cb,previous:''})
       }
       return channel
     },
     subscribe:()=>{
       let running=false
       const poll=async()=>{
-        if(running||!subs.length||!readSession()||document.hidden)return
+        const session=readSession()
+        if(running||!subs.length||!session||document.hidden)return
         running=true
         try{
           await Promise.all(subs.map(async sub=>{
-            try{const revision=await request<string>({action:'rpc',name:'get_table_revision',params:{p_table:sub.table}});const signature=String(revision??'0');if(sub.previous&&signature!==sub.previous)sub.callback();sub.previous=signature}catch{}
+            if(!sub.familyId)return
+            try{
+              const params:Record<string,unknown>={p_table:sub.table,p_family_id:sub.familyId}
+              if(sub.table==='notifications')params.p_user_id=session.user.id
+              const revision=await request<string>({action:'rpc',name:'get_table_revision',params})
+              const signature=String(revision??'0')
+              if(sub.previous&&signature!==sub.previous)sub.callback()
+              sub.previous=signature
+            }catch{}
           }))
         }finally{running=false}
       }
