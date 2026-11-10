@@ -1940,3 +1940,38 @@ test('Telegram retry after a transaction write but before update cache does not 
   assert.equal(transactions[0].amount_kopecks, 4500);
   assert.equal(transactions[0].operation_time, '2026-11-10T12:00:00.000Z');
 });
+
+
+test('transaction idempotency lookup scans only the ID column, not the full ledger', () => {
+  const h = makeHarness();
+  const user = h.signup('transaction-id-lookup@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Быстрый поиск ID' }).data;
+  const seed = Array.from({ length: 250 }, (_, index) => ({
+    family_id: family.id, type: 'expense', amount_kopecks: 1000 + index,
+    operation_date: '2026-11-10', description: 'Старая операция ' + index,
+  }));
+  const seeded = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'insert', values: seed });
+  assert.equal(seeded.error, null, seeded.error?.message);
+
+  const sheet = h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions');
+  let fullSheetReads = 0;
+  let idColumnReads = 0;
+  const originalGetDataRange = sheet.getDataRange.bind(sheet);
+  const originalGetRange = sheet.getRange.bind(sheet);
+  sheet.getDataRange = (...args) => { fullSheetReads++; return originalGetDataRange(...args); };
+  sheet.getRange = (...args) => {
+    if (args[0] >= 2 && args[1] === 1 && args[3] === 1) idColumnReads++;
+    return originalGetRange(...args);
+  };
+
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: {
+      id: 'tx-fast-id-lookup', family_id: family.id, type: 'expense', amount_kopecks: 2500,
+      operation_date: '2026-11-10', description: 'Новая операция', planned: false,
+    },
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.equal(fullSheetReads, 0);
+  assert.equal(idColumnReads, 1);
+});
