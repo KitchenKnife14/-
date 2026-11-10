@@ -54,7 +54,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-canvas md:flex">
+    <div className="app-shell min-h-screen bg-canvas md:flex">
       <aside className="sticky top-0 hidden h-screen w-[268px] shrink-0 flex-col border-r border-line bg-surface px-4 py-5 md:flex">
         <div className="mb-7 flex items-center gap-3 px-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-100 text-lg font-semibold text-primary-800">Б</div>
