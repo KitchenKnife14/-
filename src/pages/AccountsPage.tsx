@@ -128,9 +128,9 @@ export default function AccountsPage() {
       ))}</div>}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Изменить счёт' : 'Новый счёт'}>
         <form onSubmit={save} className="space-y-3">
-          <div><label className="label">Название</label><input className="input" required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Например, Основная карта" /></div>
-          <div><label className="label">Тип</label><select className="input" value={kind} onChange={e => setKind(e.target.value as Account['kind'])}><option value="bank">Банковский счёт</option><option value="cash">Наличные</option><option value="savings">Накопительный</option><option value="other">Другой</option></select></div>
-          <div><label className="label">Начальный остаток, ₽</label><input className="input" type="number" step="0.01" value={startingBalance} onChange={e => setStartingBalance(e.target.value)} /></div>
+          <div><label className="label" htmlFor="account-name">Название</label><input id="account-name" className="input" required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Например, Основная карта" /></div>
+          <div><label className="label" htmlFor="account-kind">Тип</label><select id="account-kind" className="input" value={kind} onChange={e => setKind(e.target.value as Account['kind'])}><option value="bank">Банковский счёт</option><option value="cash">Наличные</option><option value="savings">Накопительный</option><option value="other">Другой</option></select></div>
+          <div><label className="label" htmlFor="account-opening-balance">Начальный остаток, ₽</label><input id="account-opening-balance" className="input" type="number" step="0.01" value={startingBalance} onChange={e => setStartingBalance(e.target.value)} /></div>
           <div className="flex gap-2"><button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : 'Сохранить'}</button></div>
         </form>
       </Modal>
