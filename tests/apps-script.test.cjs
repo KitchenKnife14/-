@@ -2117,10 +2117,11 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
   assert.equal(updatedTransactions.length, 4);
   const savedSalary = updatedTransactions.filter(row => row.type === 'income' && row.amount_kopecks === 500000);
   assert.equal(savedSalary.length, 3);
-  const salaryCategory = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
-    .find(row => row.name === 'Зарплата первого участника');
-  assert.ok(salaryCategory);
-  assert.ok(savedSalary.every(row => row.category_id === salaryCategory.id));
+  const salaryCategories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .filter(row => /^Зарплата (первого|второго) участника$/.test(row.name) && row.kind === 'income');
+  assert.equal(salaryCategories.length, 2);
+  const salaryCategoryIds = new Set(salaryCategories.map(row => row.id));
+  assert.ok(savedSalary.every(row => salaryCategoryIds.has(row.category_id)));
   const savedExpense = updatedTransactions.find(row => row.type === 'expense');
   assert.equal(savedExpense.amount_kopecks, 50000);
   assert.equal(savedExpense.description, 'Расход');
