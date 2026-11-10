@@ -137,18 +137,20 @@ export default function CategoriesPage() {
         onSaved={load}
         editing={editing}
         parentId={parentId}
+        parentKind={parentId ? cats.find((category) => category.id === parentId)?.kind ?? null : null}
         familyId={family?.id ?? null}
       />
     </div>
   )
 }
 
-function CategoryForm({ open, onClose, onSaved, editing, parentId, familyId }: {
+function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, familyId }: {
   open: boolean
   onClose: () => void
   onSaved: () => void
   editing: Category | null
   parentId: string | null
+  parentKind: CategoryKind | null
   familyId: string | null
 }) {
   const [name, setName] = useState('')
@@ -162,10 +164,10 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, familyId }: {
     if (editing) {
       setName(editing.name); setKind(editing.kind); setIcon(editing.icon); setColor(editing.color)
     } else {
-      setName(''); setKind(parentId ? 'expense' : 'expense'); setIcon('🏷️'); setColor('#64748b')
+      setName(''); setKind(parentKind ?? 'expense'); setIcon('🏷️'); setColor('#64748b')
     }
     setError(null)
-  }, [editing, open, parentId])
+  }, [editing, open, parentId, parentKind])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -173,7 +175,7 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, familyId }: {
     setError(null)
     setSaving(true)
     try {
-      const payload = { name: name.trim(), kind, icon, color }
+      const payload = { name: name.trim(), kind: parentId && parentKind ? parentKind : kind, icon, color }
       if (editing) {
         const { error: err } = await googleSheets.from('categories').update(payload).eq('id', editing.id)
         if (err) throw err
