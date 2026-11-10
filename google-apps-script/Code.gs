@@ -570,6 +570,7 @@ function validateRelations_(table,row,user,previous){
     const categoryChanged=!previous||String(previous.category_id||'')!==String(row.category_id||'')||String(previous.type)!==String(row.type);
     if(categoryChanged&&row.category_id){
       const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&category.archived)throw new Error('Нельзя назначить архивную категорию новой операции');
       if(category&&String(category.kind)!==String(row.type))throw new Error('Тип категории не соответствует типу операции');
     }
     if(row.account_id&&row.to_account_id&&String(row.account_id)===String(row.to_account_id))throw new Error('Счета перевода должны различаться');
@@ -579,6 +580,7 @@ function validateRelations_(table,row,user,previous){
     const categoryChanged=!previous||String(previous.category_id||'')!==String(row.category_id||'')||String(previous.type)!==String(row.type);
     if(categoryChanged&&row.category_id){
       const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&category.archived)throw new Error('Нельзя назначить архивную категорию новому регулярному платежу');
       if(category&&String(category.kind)!==String(row.type))throw new Error('Тип категории не соответствует типу регулярного платежа');
     }
   }
@@ -587,6 +589,7 @@ function validateRelations_(table,row,user,previous){
     const categoryChanged=!previous||String(previous.category_id||'')!==String(row.category_id||'');
     if(categoryChanged&&row.category_id){
       const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&category.archived)throw new Error('Нельзя назначить архивную категорию новому бюджету');
       if(category&&category.kind!=='expense')throw new Error('Бюджет можно назначить только категории расходов');
     }
   }
@@ -597,6 +600,7 @@ function validateRelations_(table,row,user,previous){
     if(categoryChanged&&row.category_id){
       const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
       const expectedKind=row.type==='income'?'income':'expense';
+      if(category&&category.archived)throw new Error('Нельзя назначить архивную категорию новой строке плана');
       if(category&&String(category.kind)!==expectedKind)throw new Error('Тип категории не соответствует типу месячного плана');
     }
   }
@@ -605,6 +609,7 @@ function validateRelations_(table,row,user,previous){
     const categoryChanged=!previous||String(previous.category_id||'')!==String(row.category_id||'');
     if(categoryChanged&&row.category_id){
       const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
+      if(category&&category.archived)throw new Error('Нельзя назначить архивную категорию новой покупке');
       if(category&&category.kind!=='expense')throw new Error('Планируемую покупку можно отнести только к категории расходов');
     }
   }
