@@ -1688,3 +1688,15 @@ HEAD до:
 - Остались открытыми реальные значения manifest/deployment в Google Apps Script UI: OAuth scopes, project timezone, webapp executeAs/access, actual DEBUG_INFO/SIGNUP_DISABLED, spreadsheet timezone. Git manifest не доказывает, что live project уже синхронизирован.
 - Текущий прогресс: 145/272 = 53.3%. Это доля закрытых пунктов чек-листа, не процент готовности продукта.
 
+
+### FC-08 — статический аудит цепочки часовых поясов — 2026-11-10
+
+- Frontend `src/lib/dates.ts`: `todayISO()` явно получает календарную дату через `Intl.DateTimeFormat(..., timeZone: 'Europe/Moscow')`; `currentMoscowDate()` и `currentMoscowMonth()` строятся из этой даты. `monthRange()` вычисляет последний день месяца через UTC, без зависимости от локального timezone браузера.
+- Форматирование `formatDate/formatDateShort/formatDateLong` использует date-fns `parseISO` + `format` в локальном timezone браузера. Для date-only значений `YYYY-MM-DD` это должно сохранять календарный день, но поведение для datetime ISO со временем и Z-offset требует проверить места вызова и реальные данные; пока не менялось.
+- Backend `tz_()` берёт timezone самой активной Google-таблицы через `getSpreadsheetTimeZone()`, с fallback на Europe/Moscow только если API вернул пустое значение. Значит, если timezone таблицы установлен неверно, форматирование значений Date из Sheets может расходиться с Moscow.
+- Профиль при создании получает `timezone: 'Europe/Moscow'`; в проверенном Code.gs это поле далее не используется для форматирования запросов. Backend месячные расчёты и Telegram timestamps используют явный `Europe/Moscow`.
+- Существующий regression test фиксирует границу: `2026-10-31T21:30:00Z` соответствует `2026-11-01` в Europe/Moscow. Это подтверждает Telegram/backend month boundary, но не реальный timezone тестовой таблицы, Apps Script project или браузера.
+- Фактические timezone таблицы и Apps Script нельзя получить из GitHub. Функции `setupSheets()` и `selfTest()` выводят их в execution log, но запуск не выполнялся: он требует доступа к реальному тестовому Apps Script; `selfTest()` создаёт и удаляет временный лист и допустим только на тестовой копии.
+- Не менялись существующие даты, timezone Google-таблицы или timezone Apps Script. Не делались ручные вызовы и не затрагивались production.
+- Вывод: кодовая политика для новых дат преимущественно Europe/Moscow; остаётся runtime verification и проверка date-fns datetime callers. Пункты timezone остаются открытыми; прогресс чек-листа не меняется.
+
