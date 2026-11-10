@@ -1432,3 +1432,10 @@ HEAD до:
 - Добавлены source-level тесты: viewport-fit, четыре safe-area inset, `100dvh`, 16px mobile input и глобальный `:focus-visible` индикатор.
 - CI [42856649470](https://github.com/KitchenKnife14/-/actions/runs/42856649470) прошёл: TypeScript/production build, 135 regression tests (135 passed, 0 failed), Apps Script syntax check.
 - Ограничение: настоящий iPhone/VoiceOver smoke test не выполнялся. Нижняя навигация и модальные окна в системных safe areas остаются открытой ручной проверкой. Production не изменялся.
+### WEBHOOK-01 — аудит сетевых тайм-аутов и повторной доставки (работа № 49)
+
+- Проверен `telegram-webhook/handler.ts`: оба сетевых вызова (`script.google.com` и Telegram `sendMessage`) используют `fetch` без `AbortSignal`/явного timeout. `vercel.json` не задаёт `functions.maxDuration`.
+- Если вызов Apps Script завершается ошибкой/тайм-аутом, handler возвращает HTTP 502, после чего Telegram может повторить update. Для финансовой записи повтор защищён стабильным ID `telegram_<update_id>` и кешем ответа на 24 часа.
+- Если Telegram Bot API уже принял `sendMessage`, но ответ потерялся/timeout сработал после приёма, повтор webhook отправит тот же текст ещё раз. Дублирующая финансовая запись не создаётся, но дублирующее текстовое подтверждение возможно.
+- Exactly-once отправка сообщения через Bot API текущим контрактом не гарантируется. Отметка «отправлено» до сетевого вызова даст at-most-once с риском потерять подтверждение; отметка после вызова сохраняет at-least-once с риском дублирования. Автоматически менять эту семантику нельзя.
+- В этой работе тайм-ауты не добавлялись: сначала требуется подтвердить фактический Vercel maxDuration/runtime и выбрать семантику повторной отправки. Иначе слишком короткий timeout может увеличивать число retry и дублировать подтверждения. Открытые runtime тесты остаются в WEBHOOK-01.
