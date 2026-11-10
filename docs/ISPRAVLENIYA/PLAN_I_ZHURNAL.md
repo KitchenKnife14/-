@@ -1832,3 +1832,5 @@ HEAD до:
 - Исправлено: в лог попадает только allowlist известных верхнеуровневых action; все остальные значения заменяются на фиксированное `unknown`. Количество batch элементов и числовые метрики сохранены; payload, RPC name, текст сообщения и секреты не логируются.
 - Добавлен regression test с неизвестным action, содержащим email и секретный маркер; проверяется, что в журнале фиксируется только `unknown` и исходная строка отсутствует.
 - Изменение только в ispravleniya. Production, Apps Script deployment, Script Properties, таблицы и Telegram webhook не затронуты. Прогресс чек-листа не увеличен до прохождения CI.
+
+- CI для работы №52: [run 42897620797](https://github.com/KitchenKnife14/-/actions/runs/42897620797) завершился `completed / success`. Production build, полный regression suite (включая тест произвольного action в логах), Apps Script syntax, runtime diagnostics syntax и manifest validation прошли.
