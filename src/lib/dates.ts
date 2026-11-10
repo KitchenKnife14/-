@@ -9,6 +9,39 @@ export const formatDate = (iso: string): string => {
   }
 }
 
+// Timestamp display is pinned to the app's Moscow timezone; date-only fields
+// continue to use parseISO so their calendar day is not shifted by the device TZ.
+export const formatDateInMoscow = (iso: string): string => {
+  try {
+    const parts = new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', year: 'numeric',
+    }).formatToParts(new Date(iso))
+    const part = (type: string) => parts.find((item) => item.type === type)?.value ?? ''
+    const day = part('day')
+    const month = part('month')
+    const year = part('year')
+    if (!day || !month || !year) return iso
+    return `${day} ${month} ${year}`
+  } catch {
+    return iso
+  }
+}
+
+export const monthsUntilDate = (targetDate: string, fromDate: string = todayISO()): number | null => {
+  const parseCalendarDate = (value: string): number | null => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+    const [year, month, day] = value.split('-').map(Number)
+    const timestamp = Date.UTC(year, month - 1, day)
+    const date = new Date(timestamp)
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+    return timestamp
+  }
+  const target = parseCalendarDate(targetDate)
+  const from = parseCalendarDate(fromDate)
+  if (target === null || from === null) return null
+  return Math.max(1, Math.round((target - from) / (1000 * 60 * 60 * 24 * 30)))
+}
+
 export const formatDateShort = (iso: string): string => {
   try {
     return format(parseISO(iso), 'd MMM', { locale: ru })

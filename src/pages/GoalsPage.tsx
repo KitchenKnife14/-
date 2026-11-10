@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
-import { formatDate, todayISO } from '../lib/dates'
+import { formatDate, monthsUntilDate } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
 
@@ -107,7 +107,7 @@ export default function GoalsPage() {
           {sortedGoals.filter((g) => filteredGoals.some((f) => f.id === g.id)).map((g, index) => {
             const pct = g.target_kopecks > 0 ? (g.saved_kopecks / g.target_kopecks) * 100 : 0
             const remaining = g.target_kopecks - g.saved_kopecks
-            const monthsLeft = g.target_date ? Math.max(1, Math.round((new Date(g.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24 * 30))) : null
+            const monthsLeft = g.target_date ? monthsUntilDate(g.target_date) : null
             const monthlyNeeded = monthsLeft && monthsLeft > 0 ? Math.round(remaining / monthsLeft) : null
             return (
               <div key={g.id}>
