@@ -95,9 +95,9 @@ export default function AccountsPage() {
   let total: number | null = 0
   for (const account of activeAccounts) {
     if (invalidAccountIds.has(account.id)) { total = null; break }
-    const next = (total ?? 0) + (balances.get(account.id) ?? 0)
-    if (!Number.isSafeInteger(next)) { total = null; break }
-    total = next
+    const nextTotal: number = (total ?? 0) + (balances.get(account.id) ?? 0)
+    if (!Number.isSafeInteger(nextTotal)) { total = null; break }
+    total = nextTotal
   }
   const invalidVisibleCount = visible.filter(account => invalidAccountIds.has(account.id)).length
 
