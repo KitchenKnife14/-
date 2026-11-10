@@ -1793,7 +1793,7 @@ test('categories with references cannot be deleted, but can be archived', () => 
     });
     assert.equal(category.error, null, category.error?.message);
     const values = { ...fields, category_id: category.data[0].id };
-    if (table !== 'transactions' && table !== 'goal_contributions') values.family_id = family.id;
+    if (table !== 'goal_contributions') values.family_id = family.id;
     const inserted = h.call({ action: 'query', token: user.token, table, mode: 'insert', values });
     assert.equal(inserted.error, null, table + ' reference: ' + inserted.error?.message);
 
