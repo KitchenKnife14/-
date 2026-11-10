@@ -51,6 +51,7 @@ const filterLabels = {
     'Фильтр по категории операции', 'Фильтр по статусу операции',
   ],
   'src/pages/CalendarPage.tsx': ['Фильтр по категории операций', 'Фильтр по участнику'],
+  'src/pages/ReportsPage.tsx': ['Период отчёта', 'Дата начала отчёта', 'Дата окончания отчёта', 'Фильтр отчёта по участнику'],
 }
 
 test('search and filter controls have accessible names, and purchase account label is associated', () => {
