@@ -5,6 +5,7 @@ import { ensureSupplementalCategories } from '../lib/categories'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles, kopecksToRubles } from '../lib/money'
 import { monthRange, currentMoscowDate } from '../lib/dates'
+import { toCsv } from '../lib/csv'
 import { Download } from 'lucide-react'
 
 type Period = 'current' | 'prev' | '3m' | '6m' | 'year' | 'custom'
@@ -81,7 +82,7 @@ export default function ReportsPage() {
     for (const t of filteredTxs) {
       rows.push([t.operation_date, t.type === 'income' ? 'Доход' : t.type === 'expense' ? 'Расход' : 'Перевод', String(kopecksToRubles(t.amount_kopecks)), t.category_id ? catMap.get(t.category_id)?.name ?? '' : '', t.description, t.created_by ? profMap.get(t.created_by)?.display_name ?? '' : '', (t.responsible_user_id || t.created_by) ? profMap.get(t.responsible_user_id || t.created_by || '')?.display_name ?? '' : ''])
     }
-    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(';')).join('\n')
+    const csv = toCsv(rows)
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
