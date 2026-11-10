@@ -1193,7 +1193,14 @@ test('new registrations require 15 characters while existing shorter passwords r
   const signin = h.call({ action: 'signin', email, password: '12345678' });
   assert.equal(signin.error, null, signin.error?.message);
   const row = h.context.authRows_().find(user => user.id === id);
-  assert.ok(row.hash.startsWith('p2$30000
+  const parts = row.hash.split(String.fromCharCode(36));
+  assert.equal(parts[0], 'p2');
+  assert.equal(parts[1], '30000');
+});
+
+test('PBKDF2-HMAC-SHA256 matches Node crypto for Unicode and SHA-256 block boundaries', () => {
+  const h = makeHarness();
+  const vectors = [
     ['password', 'salt', 1], ['password', 'salt', 2], ['password', 'salt', 4096],
     ['пароль', 'соль', 2], ['пароль😀', 'соль🔐', 30],
     ['a'.repeat(55), 'salt', 2], ['a'.repeat(56), 'salt', 2],
