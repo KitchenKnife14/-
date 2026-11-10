@@ -631,6 +631,7 @@ test('health endpoint hides spreadsheet name unless DEBUG_INFO is enabled', () =
 test('family creation rolls back earlier writes if default category creation fails', () => {
   const h = makeHarness();
   const user = h.signup('family-rollback@example.com');
+  const profileBefore = h.context.rows_('profiles').find(row => row.id === user.user.id).display_name;
   const originalAppend = h.context.appendRows_;
   let failOnce = true;
   h.context.appendRows_ = function(name, rows) {
@@ -641,11 +642,12 @@ test('family creation rolls back earlier writes if default category creation fai
     return originalAppend(name, rows);
   };
 
-  const failed = h.call({ action: 'createFamily', token: user.token, name: 'Семья с ошибкой' });
+  const failed = h.call({ action: 'createFamily', token: user.token, name: 'Семья с ошибкой', display_name: 'Имя не должно сохраниться' });
   assert.match(failed.error.message, /simulated category append failure/);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'families', mode: 'select' }).data.length, 0);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'family_members', mode: 'select' }).data.length, 0);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data.length, 0);
+  assert.equal(h.context.rows_('profiles').find(row => row.id === user.user.id).display_name, profileBefore);
 });
 
 

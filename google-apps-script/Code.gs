@@ -477,13 +477,14 @@ function route_(req,user){
   if(req.action==='createFamily'){
     const name=String(req.name||'Наша семья').trim(); if(!name)throw new Error('Введите название семьи');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Пользователь уже состоит в семье');
-    setProfileName_(user.id,req.display_name);
     const f={id:id_(),name,invite_code:code_(),currency:'RUB',created_at:now_(),created_by:user.id};
     // Таблицы не поддерживают транзакции: при сбое на любом шаге откатываем уже записанное вручную.
     try{
       appendRows_('families',[f]);
       appendRows_('family_members',[{id:id_(),family_id:f.id,user_id:user.id,role:'owner',joined_at:now_()}]);
       seedCategories_(f.id);
+      // Update the profile only after all family writes succeed; failed creation must leave it untouched.
+      setProfileName_(user.id,req.display_name);
     }catch(err){rollbackFamily_(f.id);throw err;}
     return f;
   }
