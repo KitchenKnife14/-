@@ -196,13 +196,13 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, f
     <Modal open={open} onClose={onClose} title={editing ? 'Редактировать категорию' : parentId ? 'Новая подкатегория' : 'Новая категория'}>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label className="label">Название</label>
-          <input className="input" required value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <label className="label" htmlFor="category-name">Название</label>
+          <input id="category-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
         {!parentId && (
           <div>
-            <label className="label">Тип</label>
-            <select className="input" value={kind} onChange={(e) => setKind(e.target.value as CategoryKind)}>
+            <label className="label" htmlFor="category-kind">Тип</label>
+            <select id="category-kind" className="input" value={kind} onChange={(e) => setKind(e.target.value as CategoryKind)}>
               <option value="expense">Расход</option>
               <option value="income">Доход</option>
               <option value="transfer">Перевод</option>
@@ -211,12 +211,12 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, f
         )}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">Значок</label>
-            <input className="input" value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} />
+            <label className="label" htmlFor="category-icon">Значок</label>
+            <input id="category-icon" className="input" value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} />
           </div>
           <div>
-            <label className="label">Цвет</label>
-            <input type="color" className="input h-10 p-1" value={color} onChange={(e) => setColor(e.target.value)} />
+            <label className="label" htmlFor="category-color">Цвет</label>
+            <input id="category-color" type="color" className="input h-10 p-1" value={color} onChange={(e) => setColor(e.target.value)} />
           </div>
         </div>
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
