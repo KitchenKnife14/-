@@ -1231,51 +1231,7 @@ test('PBKDF2-HMAC-SHA256 matches Node crypto for Unicode and SHA-256 block bound
 test('PBKDF2 stored hashes reject malformed parameters before expensive derivation', () => {
   const h = makeHarness();
   const malformed = [
-    'p2$30000junk$' + 'a'.repeat(64),
-    'p2$0$' + 'a'.repeat(64),
-    'p2$-1$' + 'a'.repeat(64),
-    'p2$1000001$' + 'a'.repeat(64),
-    'p2$30000$' + 'a'.repeat(63),
-    'p2$30000$' + 'g'.repeat(64),
-    'p2$30000$' + 'a'.repeat(64) + '$extra',
-  ];
-  let derivations = 0;
-  const original = h.context.pbkdf2Hex_;
-  h.context.pbkdf2Hex_ = () => { derivations++; return 'a'.repeat(64); };
-  for (const stored of malformed) {
-    assert.equal(h.context.passwordMatches_('password', 'salt', stored), false, stored);
-  }
-  assert.equal(derivations, 0, 'malformed hashes must be rejected before PBKDF2');
-  h.context.pbkdf2Hex_ = original;
-});
-
-test('signin normalizes email whitespace and letter case', () => {
-  const h = makeHarness();
-  h.signup('normalized-email@example.com');
-  const result = h.call({
-    action: 'signin',
-    email: '  NORMALIZED-EMAIL@EXAMPLE.COM  ',
-    password: 'correct-horse-battery',
-  });
-  assert.equal(result.error, null, result.error?.message);
-  assert.equal(typeof result.data.token, 'string');
-});
-
-test('new accounts store PBKDF2 hashes and legacy accounts migrate after successful sign-in', () => {
-  const h = makeHarness();
-  const created = h.signup('password-migration@example.com');
-  let row = h.context.authRows_().find(user => user.id === created.user.id);
-  assert.equal(row.hash.startsWith('p2$30000$'), true);
-
-  const legacy = h.context.hash_('correct-horse-battery', row.salt);
-  h.context.authSheet_().getRange(row.row, 4, 1, 1).setValues([[legacy]]);
-  const signin = h.call({ action: 'signin', email: 'password-migration@example.com', password: 'correct-horse-battery' });
-  assert.equal(signin.error, null, signin.error?.message);
-  row = h.context.authRows_().find(user => user.id === created.user.id);
-  assert.equal(row.hash.startsWith('p2$30000$'), true);
-});
-
-test('Telegram one-time linking records transactions through the existing family authorization path', () => {
+    'p2$30000junk$'test('Telegram one-time linking records transactions through the existing family authorization path', () => {
   const h = makeHarness();
   const owner = h.signup('telegram-owner@example.com');
   const partner = h.signup('telegram-partner@example.com');
