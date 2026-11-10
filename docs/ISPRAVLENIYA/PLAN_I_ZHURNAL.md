@@ -340,10 +340,10 @@
 
 ### FC-21 — safe area
 Файлы: `index.html`, `src/index.css`, layout.
-- [ ] Сопоставить `viewport-fit=cover` с реальной разметкой.
-- [ ] Добавить safe-area отступы там, где элементы могут попасть под системные зоны.
-- [ ] Проверить нижнюю навигацию, модалки, кнопки и поля ввода.
-- [ ] Не добавлять отступы глобально без проверки desktop и Android.
+- [x] Сопоставить `viewport-fit=cover` с корневой разметкой #root.
+- [x] Добавить safe-area отступы сверху, снизу и по горизонтали для мобильной ширины.
+- [ ] Проверить нижнюю навигацию, модалки, кнопки и поля ввода на реальном iPhone; CSS/CI-тест не заменяет device smoke test.
+- [x] Ограничить safe-area padding мобильной шириной (до 767px); desktop не затрагивается по CSS. Android/device rendering ещё не проверен.
 
 ### FC-22 — labels и поля
 - [ ] Проверить `TransactionForm.tsx`, `AuthPage.tsx` и остальные формы.
@@ -1041,3 +1041,15 @@ HEAD до:
 - Общий прогресс остаётся 1/12 (≈8,3%); 11 этапов остаются. UX-01 частично реализован, критерий полной готовности требует проверки на устройстве и полного regression.
 - Очередь M-01—M-03 без изменений; действий от пользователя сейчас не требуется.
 - Изменения только в ветке ispravleniya; main, Production Apps Script, основная Google Sheet, Vercel Production и Telegram webhook не изменялись.
+
+
+### Журнал — 2026-11-10: FC-21, базовая поддержка iOS safe area (работа № 15)
+
+- Проверено: index.html уже содержит viewport-fit=cover, но src/index.css не использовал safe-area-inset.
+- Добавлен #root padding по safe-area-inset-top/right/bottom/left внутри @supports и media max-width 767px. Desktop layout не получает эти отступы по заданному media condition.
+- Добавлен тест mobile-safe-area.test.cjs: проверяет viewport-fit=cover, четыре safe-area inset и ограничение мобильной шириной.
+- GitHub Actions на коммите 39c8c05eb27d2190b4f5e61272d24cf6ff80d289: TypeScript/production build — success; npm test — 87/87, 0 failures; Apps Script syntax check — success. Ссылка: https://github.com/KitchenKnife14/-/actions/runs/42820977968.
+- Ограничение: это статическая проверка CSS. Реальный iPhone/Android визуальный smoke test, нижняя навигация и модалки под системными зонами не проверялись; FC-21 остаётся частично закрытым.
+- Общий прогресс остаётся 1/12 (≈8,3%); 11 этапов остаются. UX-01 и FC-21 продвинулись, но требуют проверки на устройстве.
+- Очередь M-01—M-03 без изменений; от пользователя сейчас действий не требуется.
+- Изменения только в ветке ispravleniya; Production, основная Google Sheet, опубликованный Apps Script и Telegram webhook не изменялись.
