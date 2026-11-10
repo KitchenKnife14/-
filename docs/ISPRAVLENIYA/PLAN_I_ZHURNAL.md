@@ -1,6 +1,6 @@
 # Family Cash — план исправлений и журнал работ
 
-> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 133 из 272 пунктов плана закрыто (48.9%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
+> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 138 из 272 пунктов плана закрыто (50.7%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
 > Дата фиксации плана: 2026-11-09.
 > Рабочая ветка: `ispravleniya`.
 > Базовый Production-коммит: `a7f105df927a54fe7351fc928b896fe473714386`.
@@ -219,15 +219,15 @@
 - [x] Разделить read-only, обычные записи, signup/signin и Telegram idempotency.
 - [ ] Измерить lock wait time и общее время выполнения.
 - [ ] Переносить блокировки только после доказательства атомарности критических операций.
-- [ ] Сохранить защиту от двойного signup, гонок Telegram и конфликтующих записей.
+- [x] Сохранить защиту от двойного signup, гонок Telegram и конфликтующих записей.
 - [ ] Добавить concurrency tests.
 - [ ] Не удалять блокировку целиком как упрощённое исправление.
 
 ### SEC-03 — изоляция семьи и ревизии таблиц
-- [ ] Проверить все RPC, query, create/update/delete и batch пути.
-- [ ] Проверить, что пользователь не получает строки чужой семьи.
-- [ ] Рассмотреть фильтрацию `get_table_revision` по familyId.
-- [ ] Проверить, не раскрывает ли глобальная ревизия факт активности другой семьи.
+- [x] Проверить все RPC, query, create/update/delete и batch пути.
+- [x] Проверить, что пользователь не получает строки чужой семьи.
+- [x] Рассмотреть фильтрацию `get_table_revision` по familyId.
+- [x] Проверить, не раскрывает ли глобальная ревизия факт активности другой семьи.
 - [x] Проверить notification recipients, accounts, categories, goals, purchases и Telegram links.
 - [x] Добавить отрицательные тесты двух разных семей.
 
@@ -1608,4 +1608,16 @@ HEAD до:
 - Существующие тесты дополнительно покрывают прямой API select/update/delete, все family-scoped tables, foreign category/account references, family-scoped RPC, get_my_context, table revisions и notifications revisions.
 - get_table_revision принимает только доступный familyId; ключ ревизии содержит table + familyId, а notifications дополнительно userId. touchTableRevision_ обновляет только ключи затронутых семей; отдельные тесты подтверждают, что изменение семьи A не меняет revision семьи B, а чужая notification revision недоступна.
 - Пока CI не прошёл, пункты SEC-03 не закрываются и процент не повышается.
+
+
+### SEC-03 и SEC-02 — контрольный CI пройден — 2026-11-10
+
+- Commit: 53b4dcc29b7cdb77f1221d60622bd2aeab6494c2
+- GitHub CI: https://github.com/KitchenKnife14/-/actions/runs/42870523926 — success.
+- CI: Node v22.23.4, npm 10.9.9; npm ci — success; npm audit --audit-level=high — success, 0 vulnerabilities; TypeScript + Vite production build — success; Apps Script syntax checks — success.
+- Regression tests: 144 total, 144 pass, 0 fail. Новый batch isolation test подтверждает, что batch API не может прочитать, изменить или удалить чужую транзакцию; запись владельца остаётся неизменной.
+- SEC-03 закрыт: семейная изоляция подтверждена в прямом API и batch, все семейные RPC проверены, get_table_revision scoped by familyId, notifications дополнительно scoped by userId, глобальная ревизия между семьями не используется.
+- SEC-02: защита от duplicate signup, Telegram retry и conflicting writes подтверждена исходным кодом и регрессионными тестами. Настоящие параллельные запросы в Google Apps Script не симулировались; concurrency tests и измерение lock wait на реальном GAS остаются открытыми.
+- Блокировки не менялись; ScriptLock продолжает сериализовать read/write запросы. Это осознанно оставлено без изменений до реального concurrency test.
+- Текущий прогресс: 138 закрыто / 134 открыто / 272 всего = 50.7%.
 
