@@ -1860,3 +1860,7 @@ HEAD до:
 
 
 - После восстановления импорта `todayISO` второй CI run [42905920639](https://github.com/KitchenKnife14/-/actions/runs/42905920639) был дополнен ещё одним timezone-сценарием: дата и время Telegram link status/code также фиксируются в Europe/Moscow. В итоговом коммите regression test добавлен в актуальное дерево ветки и расширен проверкой полного timestamp формата.
+
+
+- Итоговый CI для `9174e9c004e74d7e7150e92c260709e10299ff42` завершился `completed / success`: [run 42906362681](https://github.com/KitchenKnife14/-/actions/runs/42906362681). TypeScript и production build, все 159 regression tests (159 passed, 0 failed), Apps Script syntax, runtime diagnostics syntax, manifest validation и `npm audit` (0 vulnerabilities) прошли.
+- Контрольный прогресс плана остаётся 153/272 (56.3%): этап закрывает дополнительный дефект и regression coverage, но не заменяет реальную проверку на iPhone и в браузере с отличным от Москвы часовым поясом. Никакие production ресурсы не затронуты.
