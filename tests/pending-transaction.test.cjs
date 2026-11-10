@@ -77,7 +77,7 @@ test('successful request cleanup removes only the matching pending ID', async ()
   const createId = () => `tx_${String(++generated).padStart(32, '0')}`
   const key = 'family-a:user-a'
   const id = getOrCreatePendingTransactionId(storage, key, 'a'.repeat(64), createId, 1000)
-  clearPendingTransaction(storage, key, 'tx_${'f'.repeat(32)}')
+  clearPendingTransaction(storage, key, 'tx_' + 'f'.repeat(32))
   assert.ok(storage.getItem(key))
   clearPendingTransaction(storage, key, id)
   assert.equal(storage.getItem(key), null)
