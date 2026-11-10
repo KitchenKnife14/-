@@ -4,6 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
 import type { Account, Category, TxType } from '../lib/types'
 import { parseRublesToKopecks } from '../lib/money'
+import { clearPendingTransaction, fingerprintTransactionPayload, getOrCreatePendingTransactionId, pendingTransactionStorageKey } from '../lib/pendingTransaction'
 import { todayISO } from '../lib/dates'
 import { Loader as Loader2 } from 'lucide-react'
 
@@ -52,7 +53,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
   const [planned, setPlanned] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const pendingInsertRef = useRef<{ fingerprint: string; id: string } | null>(null)
+  const pendingInsertRef = useRef<{ key: string; fingerprint: string; id: string } | null>(null)
 
   useEffect(() => {
     pendingInsertRef.current = null
@@ -119,16 +120,34 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         const { error: err } = await googleSheets.from('transactions').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const fingerprint = JSON.stringify(payload)
-        if (!pendingInsertRef.current || pendingInsertRef.current.fingerprint !== fingerprint) {
-          pendingInsertRef.current = { fingerprint, id: createTransactionRequestId() }
+        const insertPayload = { ...payload, created_by: userId }
+        const fingerprint = await fingerprintTransactionPayload(insertPayload)
+        const storageKey = pendingTransactionStorageKey(family.id, userId)
+        let requestId: string
+
+        if (pendingInsertRef.current?.key === storageKey && pendingInsertRef.current.fingerprint === fingerprint) {
+          requestId = pendingInsertRef.current.id
+        } else {
+          try {
+            requestId = getOrCreatePendingTransactionId(window.localStorage, storageKey, fingerprint, createTransactionRequestId)
+          } catch {
+            // Storage may be disabled or full. Keep retry protection for this mounted form.
+            requestId = createTransactionRequestId()
+          }
+          pendingInsertRef.current = { key: storageKey, fingerprint, id: requestId }
         }
+
         const { error: err } = await googleSheets.from('transactions').insert({
-          ...payload,
-          id: pendingInsertRef.current.id,
-          created_by: userId,
+          ...insertPayload,
+          id: requestId,
         })
         if (err) throw err
+
+        try {
+          clearPendingTransaction(window.localStorage, storageKey, requestId)
+        } catch {
+          // A stale metadata record is harmless; the server remains the source of truth.
+        }
         pendingInsertRef.current = null
       }
       onSaved()
