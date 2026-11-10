@@ -1177,3 +1177,12 @@ HEAD до:
 - CI: [run 42829400912](https://github.com/KitchenKnife14/-/actions/runs/42829400912), commit `35ffaec73bc6cbb9ab5e74fcf23eb5a114335196`: build — success; 104/104 теста, 0 failures; Apps Script syntax check — success.
 - Открытыми остаются сетевые тайм-ауты, безопасное повторение при неоднозначном результате sendMessage, и отдельная проверка отсутствия чувствительных данных в логах. Текущий handler не логирует исключения или payload.
 - Изменения только в тестах и журнале рабочей ветки; Production и Telegram webhook не менялись.
+
+
+### SEC-01 — уточнение криптографического ориентира (2026-11-10)
+
+- В текущем `Code.gs` задано `PW_ITERATIONS = 30000`; PBKDF2-HMAC-SHA256 реализован на чистом JavaScript, а формат хеша хранит фактическое число итераций.
+- Актуальная OWASP Password Storage Cheat Sheet рекомендует Argon2id как основной вариант; для случая обязательного FIPS-140 указывает PBKDF2-HMAC-SHA256 с 600 000 итераций. Это в 20 раз больше текущего work factor (600 000 / 30 000 = 20).
+- Это не означает, что надо немедленно менять число итераций: OWASP отдельно требует подбирать work factor по реальной производительности, чтобы хеширование обычно занимало менее секунды и не создавало DoS-риск. Для GAS нужен замер именно в тестовом Apps Script runtime, не в Node VM.
+- Источник: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/Password_Storage_Cheat_Sheet.md
+- Код, хеши, пароли и Production не менялись. SEC-01 остаётся открытым до проверки формата legacy-хешей, бенчмарка на тестовом GAS и плана совместимого повышения work factor.
