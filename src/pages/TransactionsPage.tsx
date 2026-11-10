@@ -8,6 +8,7 @@ import { Plus, Search, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-
 import TransactionForm, { type TransactionDraft } from '../components/TransactionForm'
 import Modal from '../components/Modal'
 import { ensureSupplementalCategories } from '../lib/categories'
+import { getTransactionAttribution, matchesTransactionAttribution } from '../lib/transactionAttribution'
 
 export default function TransactionsPage() {
   const { family, session, memberProfiles } = useAuth()
@@ -20,7 +21,8 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense' | 'transfer'>('all')
   const [categoryFilter, setCategoryFilter] = useState('')
-  const [participantFilter, setParticipantFilter] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
+  const [responsibleFilter, setResponsibleFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'planned' | 'actual'>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -76,7 +78,7 @@ export default function TransactionsPage() {
   const filtered = txs.filter((t) => {
     if (typeFilter !== 'all' && t.type !== typeFilter) return false
     if (categoryFilter && t.category_id !== categoryFilter) return false
-    if (participantFilter && (t.responsible_user_id || t.created_by) !== participantFilter) return false
+    if (!matchesTransactionAttribution(t, authorFilter, responsibleFilter)) return false
     if (statusFilter === 'planned' && !t.planned) return false
     if (statusFilter === 'actual' && t.planned) return false
     const amount = t.amount_kopecks / 100
@@ -89,8 +91,8 @@ export default function TransactionsPage() {
     }
     return true
   })
-  const hasFilters = !!(search || categoryFilter || participantFilter || statusFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount || typeFilter !== 'all')
-  const clearFilters = () => { setSearch(''); setTypeFilter('all'); setCategoryFilter(''); setParticipantFilter(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount('') }
+  const hasFilters = !!(search || categoryFilter || authorFilter || responsibleFilter || statusFilter !== 'all' || dateFrom || dateTo || minAmount || maxAmount || typeFilter !== 'all')
+  const clearFilters = () => { setSearch(''); setTypeFilter('all'); setCategoryFilter(''); setAuthorFilter(''); setResponsibleFilter(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount('') }
 
   const income = filtered.filter((t) => t.type === 'income' && !t.planned).reduce((s, t) => s + t.amount_kopecks, 0)
   const expense = filtered.filter((t) => t.type === 'expense' && !t.planned).reduce((s, t) => s + t.amount_kopecks, 0)
@@ -133,7 +135,8 @@ export default function TransactionsPage() {
           <option value="transfer">Переводы</option>
         </select>
         <select className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-        <select className="input w-auto min-w-[145px]" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+        <select aria-label="Фильтр по автору записи" className="input w-auto min-w-[145px]" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)}><option value="">Все авторы</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+        <select aria-label="Фильтр по ответственному участнику" className="input w-auto min-w-[165px]" value={responsibleFilter} onChange={(e) => setResponsibleFilter(e.target.value)}><option value="">Все ответственные</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
         <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}><option value="all">Все статусы</option><option value="actual">Фактические</option><option value="planned">Плановые</option></select>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -160,7 +163,9 @@ export default function TransactionsPage() {
         <div className="space-y-2">
           {filtered.map((t) => {
             const cat = t.category_id ? catMap.get(t.category_id) : null
-            const participant = memberProfiles.find((profile) => profile.id === (t.responsible_user_id || t.created_by))
+            const attribution = getTransactionAttribution(t)
+            const author = memberProfiles.find((profile) => profile.id === attribution.authorId)
+            const responsible = memberProfiles.find((profile) => profile.id === attribution.responsibleId)
             const isIncome = t.type === 'income'
             return (
               <div key={t.id} className="card flex items-center gap-3 py-3">
@@ -170,7 +175,7 @@ export default function TransactionsPage() {
                     {t.description || cat?.name || 'Операция'}
                     {t.planned && <span className="ml-2 badge bg-warn-100 text-warn-600">план</span>}
                   </div>
-                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {t.type === 'transfer' ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}` : `${cat?.name ?? 'Без категории'} · ${accountMap.get(t.account_id ?? '') ?? 'Без счёта'}`}{participant ? ` · ${participant.display_name}` : ''}</div>
+                  <div className="text-xs text-slate-400">{formatDate(t.operation_date)} · {t.type === 'transfer' ? `${accountMap.get(t.account_id ?? '') ?? 'Счёт'} → ${accountMap.get(t.to_account_id ?? '') ?? 'Счёт'}` : `${cat?.name ?? 'Без категории'} · ${accountMap.get(t.account_id ?? '') ?? 'Без счёта'}`} · Автор: {author?.display_name ?? 'не указан'} · Ответственный: {responsible?.display_name ?? 'не указан'}</div>
                 </div>
                 <div className={`text-sm font-semibold ${isIncome ? 'text-accent-600' : 'text-slate-900'}`}>
                   {t.type === 'transfer' ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
