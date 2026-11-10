@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
@@ -40,6 +40,7 @@ function createTransactionRequestId(): string {
 
 export default function TransactionForm({ open, onClose, onSaved, categories, accounts, userId, editing, initialType = 'expense' }: Props) {
   const { family, members, memberProfiles } = useAuth()
+  const fieldId = useId()
   const [type, setType] = useState<TxType>(initialType)
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayISO())
@@ -152,18 +153,18 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         </div>
 
         <div>
-          <label className="label">Сумма, ₽</label>
-          <input className="input" type="number" step="0.01" min="0" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+          <label className="label" htmlFor={`${fieldId}-amount`}>Сумма, ₽</label>
+          <input id={`${fieldId}-amount`} className="input" type="number" step="0.01" min="0" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
         </div>
         <div>
-          <label className="label">Дата</label>
-          <input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+          <label className="label" htmlFor={`${fieldId}-date`}>Дата</label>
+          <input id={`${fieldId}-date`} className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
 
         {members.length > 1 && (
           <div>
-            <label className="label">Участник</label>
-            <select className="input" value={responsibleUserId} onChange={(e) => setResponsibleUserId(e.target.value)}>
+            <label className="label" htmlFor={`${fieldId}-responsible`}>Ответственный участник</label>
+            <select id={`${fieldId}-responsible`} className="input" value={responsibleUserId} onChange={(e) => setResponsibleUserId(e.target.value)}>
               {members.map((member) => {
                 const profile = memberProfiles.find((item) => item.id === member.user_id)
                 const fallback = member.role === 'owner' ? 'Первый участник' : 'Второй участник'
@@ -175,13 +176,13 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
 
         {type === 'transfer' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className="label">Со счёта</label><select className="input" required value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
-            <div><label className="label">На счёт</label><select className="input" required value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => a.id !== accountId && (!a.archived || a.id === toAccountId)).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
+            <div><label className="label" htmlFor={`${fieldId}-from-account`}>Со счёта</label><select id={`${fieldId}-from-account`} className="input" required value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
+            <div><label className="label" htmlFor={`${fieldId}-to-account`}>На счёт</label><select id={`${fieldId}-to-account`} className="input" required value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}><option value="">Выберите счёт</option>{accounts.filter(a => a.id !== accountId && (!a.archived || a.id === toAccountId)).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}</select></div>
           </div>
         ) : (
           <div>
-            <label className="label">Счёт (для расчёта остатка)</label>
-            <select className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <label className="label" htmlFor={`${fieldId}-account`}>Счёт (для расчёта остатка)</label>
+            <select id={`${fieldId}-account`} className="input" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               <option value="">Не учитывать в остатках счетов</option>
               {accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}
             </select>
@@ -190,8 +191,8 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         )}
 
         {type !== 'transfer' && <div>
-          <label className="label">Категория</label>
-          <select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
+          <label className="label" htmlFor={`${fieldId}-category`}>Категория</label>
+          <select id={`${fieldId}-category`} className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
             onKeyDown={(event) => {
               if (event.ctrlKey || event.metaKey || event.altKey || !/^[а-яё]$/iu.test(event.key)) return
               const letter = event.key.toLocaleLowerCase('ru-RU')
@@ -204,8 +205,8 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
           <p className="mt-1 text-xs text-slate-400">Список по алфавиту. Начните вводить русскую букву, чтобы перейти к первой подходящей категории.</p>
         </div>}
         <div>
-          <label className="label">Описание</label>
-          <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Необязательно" />
+          <label className="label" htmlFor={`${fieldId}-description`}>Описание</label>
+          <input id={`${fieldId}-description`} className="input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Необязательно" />
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={planned} onChange={(e) => setPlanned(e.target.checked)} className="rounded" />
