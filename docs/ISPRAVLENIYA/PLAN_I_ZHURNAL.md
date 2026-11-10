@@ -1,6 +1,6 @@
 # Family Cash — план исправлений и журнал работ
 
-> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 142 из 272 пунктов плана закрыто (52.2%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы. Это прогресс чек-листа аудита, а не процент готовности приложения.
+> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 145 из 272 пунктов плана закрыто (53.3%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы. Это прогресс чек-листа аудита, а не процент готовности приложения.
 > Дата фиксации плана: 2026-11-09.
 > Рабочая ветка: `ispravleniya`.
 > Базовый Production-коммит: `a7f105df927a54fe7351fc928b896fe473714386`.
@@ -247,8 +247,8 @@
 - [ ] Проверить реальный `appsscript.json` в редакторе Apps Script.
 - [ ] Зафиксировать runtimeVersion, timezone, scopes, webapp executeAs/access.
 - [ ] Сравнить с требуемой архитектурой.
-- [ ] Если manifest отсутствует в Git, определить безопасный способ его версионирования.
-- [ ] Не менять доступ к таблице на публичный.
+- [x] Если manifest отсутствует в Git, определить безопасный способ его версионирования.
+- [x] Не менять доступ к таблице на публичный.
 
 ### FC-08 — часовые пояса
 - [ ] Проверить timezone самой Google-таблицы.
@@ -258,7 +258,7 @@
 - [ ] Не переписывать существующие даты при исправлении timezone.
 
 ### FC-09 — API_VERSION и DEBUG_INFO
-- [ ] Отделить API_VERSION в исходном коде от номера опубликованной версии Apps Script deployment.
+- [x] Отделить API_VERSION в исходном коде от номера опубликованной версии Apps Script deployment.
 - [ ] Сверить фактический deployment и source commit перед публикацией.
 - [ ] Проверить DEBUG_INFO отдельно от API_VERSION.
 - [ ] Записать точную версию и URL только в закрытый рабочий журнал без секретов.
@@ -1673,4 +1673,18 @@ HEAD до:
 - Frontend `src/lib/dates.ts` формирует текущую дату через Intl с `Europe/Moscow`; backend форматирует операции/Telegram через `Europe/Moscow`. `setupSheets()` и `selfTest()` логируют timezone таблицы и Apps Script, но фактические значения тестового spreadsheet/script из GitHub недоступны.
 - Открытые проверки: фактический timezone spreadsheet/script, профильные timezone, effective OAuth scopes, web app executeAs/access, Script Properties DEBUG_INFO/SIGNUP_DISABLED и отсутствие сдвига существующих дат. Никакие существующие даты не изменялись.
 - CI pending; процент не повышать до зелёного CI. Production и основная таблица не затрагивались.
+
+
+### FC-07 / FC-09 — manifest и setup-инструкции обновлены, CI пройден — 2026-11-10
+
+- Commit: a4c0b29d16e83384d2ef8084ed897c59abe34e90
+- CI: https://github.com/KitchenKnife14/-/actions/runs/42873928253 — success.
+- Node v22.23.4; npm ci и npm audit — success, 0 vulnerabilities; TypeScript/Vite production build — success; 149/149 regression tests; Apps Script syntax checks; manifest JSON/config check — все success.
+- Добавлен `google-apps-script/appsscript.json` с `timeZone=Europe/Moscow`, `runtimeVersion=V8`, `exceptionLogging=STACKDRIVER`. В CI закреплена проверка этих значений.
+- Не задавались вручную OAuth scopes и webapp access/executeAs: их фактическое состояние в тестовом Apps Script deployment неизвестно. Не расширяли разрешения и не меняли доступ к таблице.
+- README/SETUP больше не направляют на устаревшую ветку `work/final-features-performance`, не требуют искусственно создавать промежуточные версии Apps Script ради API_VERSION=11 и не предлагают временно раскрывать имя таблицы через публичный GET.
+- В SETUP явно указано: отдельная тестовая копия, ветка `ispravleniya`, Preview-only, Production не менять. Запуск `selfTest()` разрешён только на отдельной тестовой таблице; `showInfo()` не запускать на публичном deployment.
+- Закрыты 3 проверяемых пункта FC-07/FC-09: безопасное версионирование manifest, запрет делать таблицу публичной в ходе аудита, разделение API_VERSION и номера Apps Script deployment.
+- Остались открытыми реальные значения manifest/deployment в Google Apps Script UI: OAuth scopes, project timezone, webapp executeAs/access, actual DEBUG_INFO/SIGNUP_DISABLED, spreadsheet timezone. Git manifest не доказывает, что live project уже синхронизирован.
+- Текущий прогресс: 145/272 = 53.3%. Это доля закрытых пунктов чек-листа, не процент готовности продукта.
 
