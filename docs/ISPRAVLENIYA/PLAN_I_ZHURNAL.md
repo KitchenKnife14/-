@@ -1864,3 +1864,5 @@ HEAD до:
 
 - Итоговый CI для `9174e9c004e74d7e7150e92c260709e10299ff42` завершился `completed / success`: [run 42906362681](https://github.com/KitchenKnife14/-/actions/runs/42906362681). TypeScript и production build, все 159 regression tests (159 passed, 0 failed), Apps Script syntax, runtime diagnostics syntax, manifest validation и `npm audit` (0 vulnerabilities) прошли.
 - Контрольный прогресс плана остаётся 153/272 (56.3%): этап закрывает дополнительный дефект и regression coverage, но не заменяет реальную проверку на iPhone и в браузере с отличным от Москвы часовым поясом. Никакие production ресурсы не затронуты.
+
+- При повторной проверке новой группы FRONT-01 до CI выявлено различие исходных React imports: NotificationsPage не использует `useMemo`. Импорт скорректирован без добавления ненужного hook; статический тест принимает оба допустимых варианта.

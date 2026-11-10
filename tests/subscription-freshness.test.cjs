@@ -15,7 +15,7 @@ const cases = [
 for (const [file, dependencies] of cases) {
   test(`${file} subscription refresh uses the latest load callback`, () => {
     const source = fs.readFileSync(path.join(root, 'src/pages', file), 'utf8')
-    assert.match(source, /import \{ useCallback, useEffect, useMemo, useState \} from 'react'/)
+    assert.match(source, /import \{ useCallback, useEffect, (?:useMemo, )?useState \} from 'react'/)
     assert.match(source, /const load = useCallback\(async \(\) => \{/)
     assert.match(source, /useEffect\(\(\) => \{ void load\(\) \}, \[load\]\)/)
     assert.match(source, dependencies)
