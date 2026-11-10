@@ -24,3 +24,16 @@ test('Apps Script response parser rejects malformed JSON and invalid envelopes',
   }
   assert.throws(() => parseApiResponse('{"data":1}', 502, false), /HTTP 502/)
 })
+
+test('HTTP 4xx and 5xx responses require and preserve a valid error envelope', async () => {
+  const { parseApiResponse } = await loadApiResponseModule()
+  for (const status of [400, 401, 403, 404, 409, 429, 500, 502, 503]) {
+    const message = `Ошибка HTTP ${status}`
+    const parsed = parseApiResponse(JSON.stringify({ error: { message } }), status, false)
+    assert.equal(parsed.error.message, message, `HTTP ${status}`)
+    assert.throws(() => parseApiResponse('{"data":[]}', status, false), new RegExp(`HTTP ${status}`))
+    for (const body of ['', '<!doctype html><html>login</html>', '{']) {
+      assert.throws(() => parseApiResponse(body, status, false), `HTTP ${status}: ${body || 'empty body'}`)
+    }
+  }
+})
