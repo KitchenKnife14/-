@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { calculateRealizedTotals } from '../lib/realizedTotals'
 import { ensureSupplementalCategories } from '../lib/categories'
 import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles, kopecksToRubles } from '../lib/money'
@@ -56,8 +57,7 @@ export default function ReportsPage() {
   const profMap = useMemo(() => new Map(profiles.map((p) => [p.id, p])), [profiles])
 
   const filteredTxs = txs.filter((t) => memberFilter === 'all' || (t.responsible_user_id || t.created_by) === memberFilter)
-  const income = filteredTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
-  const expense = filteredTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
+  const { income, expense } = calculateRealizedTotals(filteredTxs)
 
   const byCategory = useMemo(() => {
     const m = new Map<string, number>()
