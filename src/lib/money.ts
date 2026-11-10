@@ -16,7 +16,7 @@ export const formatRublesShort = (k: number): string => {
   const r = k / 100
   return new Intl.NumberFormat('ru-RU', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(r) + ' ₽'
 }
 
