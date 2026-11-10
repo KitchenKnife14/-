@@ -2023,3 +2023,41 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
   assert.equal(transactions[0].amount_kopecks, 500000);
   assert.equal(transactions[0].description, 'Доход');
 });
+
+
+test('Telegram balance excludes planned operations and transfers from realized totals', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-balance-planned@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Фактический баланс Telegram' }).data;
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'balance-planned-secret-0123456789abcdef');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: 'balance-planned-secret-0123456789abcdef',
+    update: { update_id: 7601, message: { chat: { id: 760, type: 'private' }, from: { id: 760 }, text: '/link ' + generated.data.code } },
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  const operationDate = h.context.Utilities.formatDate(new Date(), 'Europe/Moscow', 'yyyy-MM-dd');
+  const rows = [
+    { type: 'income', amount_kopecks: 100000, description: 'Фактический доход', planned: false },
+    { type: 'expense', amount_kopecks: 25000, description: 'Фактический расход', planned: false },
+    { type: 'income', amount_kopecks: 50000, description: 'Плановый доход', planned: true },
+    { type: 'expense', amount_kopecks: 15000, description: 'Плановый расход', planned: true },
+    { type: 'transfer', amount_kopecks: 10000, description: 'Перевод', planned: false },
+  ];
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: rows.map(row => ({ ...row, family_id: family.id, operation_date: operationDate })),
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+
+  const balance = h.call({
+    action: 'telegramWebhook', telegramSecret: 'balance-planned-secret-0123456789abcdef',
+    update: { update_id: 7602, message: { chat: { id: 760, type: 'private' }, from: { id: 760 }, text: '/balance' } },
+  });
+  assert.equal(balance.error, null, balance.error?.message);
+  assert.match(balance.data.text, /Доходы: 1000,00 ₽/);
+  assert.match(balance.data.text, /Расходы: 250,00 ₽/);
+  assert.match(balance.data.text, /Разница: 750,00 ₽/);
+});
