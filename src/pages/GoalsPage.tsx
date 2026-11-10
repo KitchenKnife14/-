@@ -85,10 +85,10 @@ export default function GoalsPage() {
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-        <input className="input" placeholder="Поиск по названию" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Все статусы</option><option value="active">Активные</option><option value="paused">На паузе</option><option value="done">Достигнутые</option><option value="cancelled">Отменённые</option></select>
-        <select className="input" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">Любой приоритет</option><option value="1">Высокий</option><option value="2">Выше среднего</option><option value="3">Обычный</option><option value="4">Низкий</option><option value="5">Минимальный</option></select>
-        <select className="input" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
+        <input aria-label="Поиск финансовых целей" className="input" placeholder="Поиск по названию" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select aria-label="Фильтр по статусу цели" className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Все статусы</option><option value="active">Активные</option><option value="paused">На паузе</option><option value="done">Достигнутые</option><option value="cancelled">Отменённые</option></select>
+        <select aria-label="Фильтр по приоритету цели" className="input" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">Любой приоритет</option><option value="1">Высокий</option><option value="2">Выше среднего</option><option value="3">Обычный</option><option value="4">Низкий</option><option value="5">Минимальный</option></select>
+        <select aria-label="Фильтр по участнику цели" className="input" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
       </div>
       {(search || statusFilter !== 'all' || priorityFilter !== 'all' || participantFilter) && <button onClick={() => { setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setParticipantFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
       {goals.filter((g) => g.status === 'active').length > 0 && (
