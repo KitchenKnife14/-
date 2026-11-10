@@ -1499,3 +1499,5 @@ HEAD до:
 - Официальная страница Vite указывает ветку 6.4 как поддерживаемую для security fixes; npm registry на момент проверки показывает Vite 6.4.6 как предыдущую ветку (current tag latest уже 8.x). Поэтому 6.4.6 — разумная точечная цель без скачка на Vite 7/8.
 - Источники: https://reactrouter.com/changelog ; https://reactrouter.com/upgrading/v7 ; https://vite.dev/releases ; https://www.npmjs.com/package/vite
 - Изменение зависимостей пока не внесено. Следующий шаг — проверить peerDependencies `@vitejs/plugin-react` и lockfile-совместимость, затем обновить Vite и React Router в одном контролируемом dependency-коммите с полным CI. Production не затрагивать.
+- Дополнительная проверка официального changelog `@vitejs/plugin-react`: версия 4.3.4 явно добавила Vite 6 в peer dependency range; текущая 4.3.2 старше этой поддержки. Поэтому dependency-коммит должен включать минимум `@vitejs/plugin-react@4.3.4` вместе с `vite@6.4.6`, иначе возможен peer dependency warning/conflict.
+- Источник: https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/CHANGELOG.md (раздел 4.3.4).
