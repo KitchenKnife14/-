@@ -4,6 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
 import type { PlannedPurchase, Category, Goal, Account } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
+import { safeHttpUrl } from '../lib/safeUrl'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Trash2, ShoppingCart, Check, ExternalLink } from 'lucide-react'
@@ -110,6 +111,7 @@ export default function PurchasesPage() {
           {sorted.map((p) => {
             const cat = p.category_id ? catMap.get(p.category_id) : null
             const goal = p.goal_id ? goalMap.get(p.goal_id) : null
+            const productUrl = safeHttpUrl(p.url)
             return (
               <div key={p.id} className={`card ${p.status === 'bought' || p.status === 'cancelled' ? 'opacity-60' : ''}`}>
                 <div className="flex items-start gap-3">
@@ -126,7 +128,7 @@ export default function PurchasesPage() {
                       {goal && ` · цель: ${goal.name}`}
                     </div>
                     {p.comment && <div className="text-xs text-slate-500 mt-1">{p.comment}</div>}
-                    {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 inline-flex items-center gap-1 mt-1"><ExternalLink size={12} /> Ссылка на товар</a>}
+                    {productUrl && <a href={productUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 inline-flex items-center gap-1 mt-1"><ExternalLink size={12} /> Ссылка на товар</a>}
                   </div>
                   <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(p.estimated_kopecks)}</div>
                   <div className="flex gap-1 flex-shrink-0">
@@ -178,13 +180,15 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
     if (!familyId || !userId) return
     setError(null)
     const estK = parseRublesToKopecks(estimated)
+    const normalizedUrl = url.trim() ? safeHttpUrl(url) : ''
+    if (url.trim() && !normalizedUrl) { setError('Укажите корректную ссылку, начинающуюся с http:// или https://'); return }
     if (estK === null || estK <= 0) { setError('Введите корректную стоимость больше нуля с точностью до копейки'); return }
     setSaving(true)
     try {
       const payload = {
         name: name.trim(), category_id: categoryId || null, estimated_kopecks: estK, priority: parseInt(priority),
         desired_month: desiredMonth ? desiredMonth + '-01' : null,
-        desired_date: desiredDate || null, url: url.trim(), comment: comment.trim(), status, goal_id: goalId || null,
+        desired_date: desiredDate || null, url: normalizedUrl, comment: comment.trim(), status, goal_id: goalId || null,
       }
       if (editing) {
         const { error: err } = await googleSheets.from('planned_purchases').update(payload).eq('id', editing.id)

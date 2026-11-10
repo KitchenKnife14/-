@@ -527,7 +527,11 @@ function validateRelations_(table,row,user,previous){
   if(table==='budgets')assertKopecks_(row.limit_kopecks,'Лимит бюджета',{positive:true});
   if(table==='goals')assertKopecks_(row.target_kopecks,'Сумма цели',{positive:true});
   if(table==='goal_contributions')assertKopecks_(row.amount_kopecks,'Сумма пополнения',{positive:true});
-  if(table==='planned_purchases')assertKopecks_(row.estimated_kopecks,'Стоимость покупки',{positive:true});
+  if(table==='planned_purchases'){
+    assertKopecks_(row.estimated_kopecks,'Стоимость покупки',{positive:true});
+    const purchaseUrl=String(row.url||'').trim();
+    if(purchaseUrl&&(purchaseUrl.length>2048||/[\u0000-\u0020\u007f\\]/.test(purchaseUrl)||!/^https?:\/\/[^/?#\\\s]+(?:[/?#][^\s\\]*)?$/i.test(purchaseUrl)))throw new Error('Ссылка на товар должна быть абсолютным HTTP(S) URL не длиннее 2048 символов');
+  }
   if(table==='monthly_plans')assertKopecks_(row.planned_kopecks,'Плановая сумма',{positive:true});
   if(table==='goal_contributions'){
     const goal=rows_('goals').find(x=>String(x.id)===String(row.goal_id));

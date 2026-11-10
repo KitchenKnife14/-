@@ -224,6 +224,37 @@ test('goal balances stay synchronized with contribution history', () => {
 });
 
 
+test('planned purchase URLs accept only absolute HTTP(S) links', () => {
+  const h = makeHarness();
+  const user = h.signup('purchase-url@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Ссылки покупок' }).data;
+  const insert = (url) => h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Товар', estimated_kopecks: 10000, status: 'planned', url }
+  });
+  for (const url of ['http://example.com/item', 'https://example.com/item?q=1']) {
+    const result = insert(url);
+    assert.equal(result.error, null, result.error?.message);
+  }
+  const invalid = [
+    'javascript:alert(1)',
+    'data:text/html,hello',
+    '//evil.example/path',
+    'ftp://example.com/file',
+    'https://example.com/path with space',
+    'https://example.com\\@evil.example',
+    'https://' + 'a'.repeat(2042),
+  ];
+  for (const url of invalid) {
+    const result = insert(url);
+    assert.ok(result.error, 'expected rejection for ' + url.slice(0, 80));
+    assert.match(result.error.message, /HTTP\(S\)/);
+  }
+  const rows = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data;
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => row.url), ['http://example.com/item', 'https://example.com/item?q=1']);
+});
+
 test('purchase confirmation can retry after a partial write without duplicating the expense', () => {
   const h = makeHarness();
   const user = h.signup('purchases@example.com');

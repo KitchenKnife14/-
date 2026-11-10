@@ -1,6 +1,6 @@
 # Family Cash — план исправлений и журнал работ
 
-> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 120 из 267 пунктов плана закрыто (44.9%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
+> Статус: план и аудит ведутся; отдельные исправления внесены в рабочую ветку ispravleniya, Production не затрагивался. Текущий контрольный прогресс: 129 из 272 пунктов плана закрыто (47.4%); методика — равный вес каждого чекбокса, пересчёт после каждой завершённой группы.
 > Дата фиксации плана: 2026-11-09.
 > Рабочая ветка: `ispravleniya`.
 > Базовый Production-коммит: `a7f105df927a54fe7351fc928b896fe473714386`.
@@ -293,10 +293,10 @@
 - Не считать эту оговорку оправданием для игнорирования FC-18.
 
 ### План решения FC-18
-- [ ] Полностью проверить все импорты и вызовы React Router, включая `Link`, `NavLink`, `Navigate`, `useNavigate`, `redirect`, `location`, внешние/динамические URL.
-- [ ] Найти места, где путь может происходить из URL-параметра, Telegram-сообщения, таблицы, пользовательского ввода или внешнего API.
-- [ ] Проверить, не передаются ли недоверенные строки напрямую в навигацию.
-- [ ] Проверить production build/config на SSR, hydration, data routers и серверные маршруты.
+- [x] Полностью проверить все импорты и вызовы React Router, включая `Link`, `NavLink`, `Navigate`, `useNavigate`, `redirect`, `location`, внешние/динамические URL.
+- [x] Найти места, где путь может происходить из URL-параметра, Telegram-сообщения, таблицы, пользовательского ввода или внешнего API.
+- [x] Проверить, не передаются ли недоверенные строки напрямую в навигацию.
+- [x] Проверить production build/config на SSR, hydration, data routers и серверные маршруты.
 - [x] Изучить migration guide React Router v7 и требования к React/Node/build.
 - [x] Подготовить отдельную веточную правку с обновлением совместимого набора `react-router` / `react-router-dom` минимум до исправленной линии 7.18.0 либо более новой проверенной безопасной версии.
 - [x] Не делать слепое обновление только одного пакета; синхронизировать package.json и package-lock.json.
@@ -304,7 +304,7 @@
 - [ ] Добавить тесты для внутренних и вредоносно сформированных путей (включая backslash и protocol-relative формы).
 - [ ] Запустить typecheck, полный test suite, production build и ручной браузерный smoke test.
 - [ ] Сравнить bundle и проверить отсутствие неожиданных изменений.
-- [ ] Отдельно записать, какие advisory закрыты обновлением, а какие не применимы из-за архитектуры.
+- [x] Отдельно записать, какие advisory закрыты обновлением, а какие не применимы из-за архитектуры.
 - [x] Не объединять FC-18 с визуальным редизайном.
 
 **Решение по FC-18:** обновление обязательно планируется, потому что установленная версия попадает в диапазон GHSA-wrjc-x8rr-h8h6. Но конкретный upgrade выполняется только после проверки совместимости и навигационных входов. Не утверждать, что приложение уже эксплуатируется.
@@ -1543,3 +1543,23 @@ HEAD до:
 - Полный regression suite: 140 tests, 140 pass, 0 fail.
 - Синтаксис google-apps-script/Code.gs и PBKDF2_RUNTIME_DIAGNOSTICS.gs: success.
 - Закрыты ещё два пункта FC-17: dependency security gate и фиксация версий Node/npm и CI. Контрольный прогресс: 120/267 = 44.9%.
+
+## SEC-06 — безопасность ссылок в планируемых покупках
+
+- [x] Проследить путь пользовательского URL от поля ввода через API и Google Sheets до HTML-ссылки.
+- [x] Ограничить отображение ссылок абсолютными HTTP(S) адресами; небезопасные старые значения скрывать без изменения исходных строк.
+- [x] Добавить серверную проверку схемы HTTP(S), длины до 2048 символов, пробелов/управляющих символов и обратной косой черты при insert/update.
+- [x] Добавить unit/regression tests для разрешённых HTTP/HTTPS и отклонения javascript:, data:, protocol-relative, ftp, credentials, пробелов, backslash и чрезмерной длины.
+- [ ] Подтвердить полный GitHub CI для этого исправления; не считать локальные sandbox-тесты заменой CI.
+
+### Дополнение к аудиту React Router и SEC-06 — 2026-11-10
+
+- В итоговом lockfile установлены react-router-dom 7.18.5 и его dependency react-router 7.18.5; React/React DOM остаются 18.3.1.
+- В приложении используется только Declarative Mode: BrowserRouter, Routes, Route, Navigate, NavLink, Link и useNavigate. Все маршруты/цели переходов статические: navItems[].to содержит константы, Link использует фиксированные пути, Navigate и navigate направляют на '/'. redirect, useLocation/useSearchParams, createBrowserRouter, RouterProvider, loaders/actions, SSR, hydrateRoot и RSC не обнаружены.
+- GHSA-wrjc-x8rr-h8h6 (open redirect через backslash) исправлен в React Router 7.18.0; установлен 7.18.5. GHSA-jjmj-jmhj-qwj2 исправлен в v7 начиная с 7.13.0; установленная версия новее. GHSA-qwww-vcr4-c8h2 исправлен в 7.18.2 и касается unstable RSC APIs; текущая версия 7.18.5, RSC APIs отсутствуют.
+- GHSA-337j-9hxr-rhxg и GHSA-h8fp-f39c-q6mh касаются SSR hydration/RSC; в приложении нет SSR/hydration/RSC. GHSA-chx6-hx7r-mcp5 и GHSA-8x6r-g9mw-2r78 касаются Framework Mode manifest endpoints; Framework Mode не используется. GHSA-49rj-9fvp-4h2h и GHSA-84g9-w2xq-vcv6 касаются Framework Mode; он не используется. GHSA-2j2x-hqr9-3h42 касается redirect() и protocol-relative paths; приложение использует Declarative Mode и redirect() не вызывает.
+- Важно: найден отдельный риск вне React Router. Поле планируемой покупки использовало пользовательское значение p.url напрямую в href обычного <a>. Backend не проверял схему URL. В изолированном тесте React 18.3.1 SSR сохранил href="javascript:alert(1)" и выдал предупреждение, что блокировка таких URL появится в будущей версии. Поэтому URL нельзя считать безопасным только из-за type="url" или React.
+- Исправление SEC-06: новый helper safeHttpUrl разрешает только валидные абсолютные http/https ссылки до 2048 символов, без credentials/control chars/backslash; небезопасные старые значения не отображаются. Форма отклоняет небезопасный ввод. Code.gs повторно проверяет URL на сервере при записи, чтобы нельзя было обойти frontend.
+- Данные Google Sheets не изменялись и не мигрировались; ранее сохранённые URL не переписываются. Новые/изменяемые записи с небезопасным URL отклоняются; старые небезопасные ссылки скрываются до ручного исправления конкретной записи.
+- В изолированном Vercel Sandbox: npm test — 143/143 pass; TypeScript + Vite 6.4.6 production build — success (2435 modules); node --check Code.gs — success; git diff --check — success. Полный GitHub CI для этого коммита ожидает запуска.
+- React Router advisories: https://github.com/remix-run/react-router/security/advisories/GHSA-wrjc-x8rr-h8h6 ; https://github.com/remix-run/react-router/security/advisories/GHSA-jjmj-jmhj-qwj2 ; https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2 ; https://github.com/remix-run/react-router/security/advisories/GHSA-337j-9hxr-rhxg ; https://github.com/remix-run/react-router/security/advisories/GHSA-h8fp-f39c-q6mh ; https://github.com/remix-run/react-router/security/advisories/GHSA-chx6-hx7r-mcp5 ; https://github.com/remix-run/react-router/security/advisories/GHSA-49rj-9fvp-4h2h ; https://github.com/remix-run/react-router/security/advisories/GHSA-8x6r-g9mw-2r78 ; https://github.com/remix-run/react-router/security/advisories/GHSA-84g9-w2xq-vcv6 ; https://github.com/remix-run/react-router/security/advisories/GHSA-2j2x-hqr9-3h42
