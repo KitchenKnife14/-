@@ -2138,14 +2138,22 @@ test('Telegram balance excludes planned operations and transfers from realized t
   });
   assert.equal(linked.error, null, linked.error?.message);
 
+  const RealDate = h.context.Date;
+  h.context.Date = class extends RealDate {
+    constructor(...args) { super(...(args.length ? args : ['2026-10-31T21:30:00.000Z'])); }
+  };
   const originalFormatDate = h.context.Utilities.formatDate;
   h.context.Utilities.formatDate = (date, timezone, pattern) => {
-    const iso = new Date(date).toISOString();
-    if (pattern === 'yyyy-MM') return iso.slice(0, 7);
-    if (pattern === 'yyyy-MM-dd') return iso.slice(0, 10);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date(date));
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    if (pattern === 'yyyy-MM') return values.year + '-' + values.month;
+    if (pattern === 'yyyy-MM-dd') return values.year + '-' + values.month + '-' + values.day;
     return originalFormatDate(date, timezone, pattern);
   };
-  const operationDate = h.context.Utilities.formatDate(new Date(), 'Europe/Moscow', 'yyyy-MM-dd');
+  const operationDate = h.context.Utilities.formatDate(new h.context.Date(), 'Europe/Moscow', 'yyyy-MM-dd');
+  assert.equal(operationDate, '2026-11-01', 'test date is Oct 31 UTC but Nov 1 in Moscow');
   const addAccount = name => h.call({
     action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
     values: { family_id: family.id, name, kind: 'bank', starting_balance_kopecks: 0 },
