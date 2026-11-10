@@ -1186,3 +1186,13 @@ HEAD до:
 - Это не означает, что надо немедленно менять число итераций: OWASP отдельно требует подбирать work factor по реальной производительности, чтобы хеширование обычно занимало менее секунды и не создавало DoS-риск. Для GAS нужен замер именно в тестовом Apps Script runtime, не в Node VM.
 - Источник: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/Password_Storage_Cheat_Sheet.md
 - Код, хеши, пароли и Production не менялись. SEC-01 остаётся открытым до проверки формата legacy-хешей, бенчмарка на тестовом GAS и плана совместимого повышения work factor.
+
+
+### SEC-03 — матрица изоляции семей для прямого API (работа № 27)
+
+- Повторно проверена централизованная защита canAccessRow_(): для обычных семейных таблиц доступ определяется принадлежностью family_id к активной семье пользователя; goal_contributions проверяется через родительскую цель; notifications дополнительно ограничены конкретным user_id; служебные Telegram-таблицы закрыты для generic API.
+- Найден пробел в regression coverage: прежний общий тест прямого API проверял select/update/delete только для transactions. Отдельные тесты уже покрывали уведомления, goal_contributions, foreign references, profiles/family membership и конфликт ID, но не давали единой матрицы для всех таблиц с family_id.
+- Добавлен параметризованный regression test для categories, accounts, transactions, recurring_payments, budgets, goals, planned_purchases, monthly_plans. Для каждой таблицы проверяются отсутствие чтения чужой строки и невозможность изменить/удалить её через прямой API; владелец после попыток по-прежнему видит исходную строку.
+- Это проверка серверного query path в Node VM harness, не тест реального GAS/Google Sheets runtime. Конкурентные запросы и поведение при сбоях записи остаются отдельными задачами.
+- Изменение только в тестах рабочей ветки ispravleniya; Code.gs, Production, основная таблица и Telegram webhook не менялись. Полный CI ожидается после коммита.
+- Контрольный чек-лист до запуска CI: 88/265 (33,2%); новые пункты не закрываются до успешного CI.
