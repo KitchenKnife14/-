@@ -9,6 +9,8 @@ function makeHarness() {
   const properties = new Map();
   let uuidCounter = 0;
   let lockAcquires = 0, lockReleases = 0;
+  let setValuesCalls = 0, failSetValuesAt = null;
+  let deleteRowsCalls = 0, failDeleteRowsAt = null;
   class Range {
     constructor(sheet, row, col, rows, cols) { Object.assign(this, { sheet, row, col, rows, cols }); }
     getValues() {
@@ -17,6 +19,8 @@ function makeHarness() {
       );
     }
     setValues(values) {
+      setValuesCalls++;
+      if (failSetValuesAt === setValuesCalls) { failSetValuesAt = null; throw new Error('Injected setValues failure'); }
       values.forEach((line, ri) => line.forEach((value, ci) => {
         const r = this.row - 1 + ri, c = this.col - 1 + ci;
         while (this.sheet.cells.length <= r) this.sheet.cells.push([]);
@@ -52,7 +56,11 @@ function makeHarness() {
     getMaxRows() { return this.maxRows; }
     insertRowsAfter(after, howMany) { this.maxRows += howMany; return this; }
     deleteRow(row) { this.cells.splice(row - 1, 1); this.maxRows -= 1; return this; }
-    deleteRows(row, howMany) { this.cells.splice(row - 1, howMany); this.maxRows -= howMany; return this; }
+    deleteRows(row, howMany) {
+      deleteRowsCalls++;
+      if (failDeleteRowsAt === deleteRowsCalls) { failDeleteRowsAt = null; throw new Error('Injected deleteRows failure'); }
+      this.cells.splice(row - 1, howMany); this.maxRows -= howMany; return this;
+    }
     setFrozenRows() {}
     hideSheet() {}
   }
@@ -97,7 +105,13 @@ function makeHarness() {
     assert.equal(response.error, null, response.error?.message);
     return response.data;
   };
-  return { context, call, signup, lockStats: () => ({ acquires: lockAcquires, releases: lockReleases }), resetLockStats: () => { lockAcquires = 0; lockReleases = 0; } };
+  return {
+    context, call, signup,
+    lockStats: () => ({ acquires: lockAcquires, releases: lockReleases }),
+    resetLockStats: () => { lockAcquires = 0; lockReleases = 0; },
+    failSetValuesAfter: offset => { failSetValuesAt = setValuesCalls + offset; },
+    failDeleteRowsAfter: offset => { failDeleteRowsAt = deleteRowsCalls + offset; }
+  };
 }
 
 test('signup and signin return the token and user in the API data envelope', () => {
@@ -1436,6 +1450,39 @@ test('schema migration appends transaction participant column without changing p
   assert.equal(sheet.getRange(1, oldHeaders.length + 1, 1, 1).getValues()[0][0], 'responsible_user_id');
   assert.deepEqual(sheet.getRange(2, 1, 1, oldHeaders.length).getValues()[0], preservedRow);
   assert.equal(sheet.getRange(2, oldHeaders.length + 1, 1, 1).getValues()[0][0], '');
+});
+
+test('partial non-contiguous update publishes a revision after the first range commits', () => {
+  const h = makeHarness();
+  const user = h.signup('partial-update-revision@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Частичное обновление' }).data;
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: [1, 2, 3].map(n => ({
+      family_id: family.id, type: 'expense', amount_kopecks: 1000 + n,
+      operation_date: '2026-11-10', description: 'initial-' + n
+    }))
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const ids = inserted.data.map(row => row.id);
+  const revision = () => h.call({
+    action: 'rpc', token: user.token, name: 'get_table_revision',
+    params: { p_table: 'transactions', p_family_id: family.id }
+  });
+  const before = revision();
+  h.failSetValuesAfter(2);
+  const update = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'in', values: [ids[0], ids[2]] }],
+    values: { description: 'updated' }
+  });
+  assert.ok(update.error);
+  assert.match(update.error.message, /Injected setValues failure/);
+  const after = revision();
+  assert.notEqual(after.data, before.data);
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(rows.find(row => row.id === ids[0]).description, 'updated');
+  assert.equal(rows.find(row => row.id === ids[2]).description, 'initial-3');
 });
 
 test('table revisions are isolated by family and reject cross-family reads', () => {
