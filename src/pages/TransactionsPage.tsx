@@ -126,18 +126,18 @@ export default function TransactionsPage() {
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input className="input pl-9" placeholder="Поиск по описанию или категории" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input aria-label="Поиск операций" className="input pl-9" placeholder="Поиск по описанию или категории" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="input w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}>
+        <select aria-label="Фильтр по типу операции" className="input w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}>
           <option value="all">Все типы</option>
           <option value="income">Доходы</option>
           <option value="expense">Расходы</option>
           <option value="transfer">Переводы</option>
         </select>
-        <select className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select aria-label="Фильтр по категории операции" className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <select aria-label="Фильтр по автору записи" className="input w-auto min-w-[145px]" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)}><option value="">Все авторы</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
         <select aria-label="Фильтр по ответственному участнику" className="input w-auto min-w-[165px]" value={responsibleFilter} onChange={(e) => setResponsibleFilter(e.target.value)}><option value="">Все ответственные</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
-        <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}><option value="all">Все статусы</option><option value="actual">Фактические</option><option value="planned">Плановые</option></select>
+        <select aria-label="Фильтр по статусу операции" className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}><option value="all">Все статусы</option><option value="actual">Фактические</option><option value="planned">Плановые</option></select>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <label className="text-xs text-slate-500">С даты<input className="input mt-1" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
