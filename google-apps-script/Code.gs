@@ -438,10 +438,10 @@ function assertKopecks_(value,label,options){
   const opts=options||{};
   if(opts.optional&&value===undefined)return;
   if(opts.positive){
-    if(typeof value!=='number'||!Number.isSafeInteger(value)||value<=0)throw new Error(label+': требуется положительное целое число копеек');
+    if(typeof value!=='number'||!Number.isSafeInteger(value)||value<=0)throw new Error('Значение «'+label+'» должно быть положительным целым числом копеек');
     return;
   }
-  if(typeof value!=='number'||!Number.isSafeInteger(value))throw new Error(label+': требуется безопасное целое число копеек');
+  if(typeof value!=='number'||!Number.isSafeInteger(value))throw new Error('Значение «'+label+'» должно быть безопасным целым числом копеек');
 }
 function validateRelations_(table,row,user){
   const familyId=String(row.family_id||'');
