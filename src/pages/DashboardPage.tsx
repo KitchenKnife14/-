@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { calculateRealizedTotals } from '../lib/realizedTotals'
 import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDateShort, monthRange, monthLabel, currentMoscowDate } from '../lib/dates'
@@ -71,9 +72,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family?.id])
 
-  const realized = txs.filter((t) => !t.planned)
-  const income = realized.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
-  const expense = realized.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
+  const { income, expense } = calculateRealizedTotals(txs)
   const planned = txs.filter((t) => t.planned)
   const plannedExpense = planned.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
 
