@@ -1891,3 +1891,49 @@ test('transaction inserts are idempotent for the same ID and exact payload', () 
   const all = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' });
   assert.equal(all.data.length, 2);
 });
+
+
+test('Telegram retry after a transaction write but before update cache does not duplicate the operation', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-crash-window@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор webhook' }).data;
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'crash-window-secret-0123456789abcdef');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: 'crash-window-secret-0123456789abcdef',
+    update: { update_id: 7401, message: { chat: { id: 740, type: 'private' }, from: { id: 740 }, text: '/link ' + generated.data.code } },
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  const props = h.context.PropertiesService.getScriptProperties();
+  const originalSetProperty = props.setProperty;
+  let failCacheWrite = true;
+  props.setProperty = (key, value) => {
+    if (key === 'telegram:update:7402' && failCacheWrite) {
+      failCacheWrite = false;
+      throw new Error('simulated crash before update cache');
+    }
+    return originalSetProperty(key, value);
+  };
+  const update = {
+    update_id: 7402,
+    message: {
+      date: 1794312000,
+      chat: { id: 740, type: 'private' },
+      from: { id: 740 },
+      text: 'Проезд 45 рублей',
+    },
+  };
+  const firstAttempt = h.call({ action: 'telegramWebhook', telegramSecret: 'crash-window-secret-0123456789abcdef', update });
+  assert.match(firstAttempt.error?.message || '', /simulated crash before update cache/);
+  props.setProperty = originalSetProperty;
+
+  const retry = h.call({ action: 'telegramWebhook', telegramSecret: 'crash-window-secret-0123456789abcdef', update });
+  assert.equal(retry.error, null, retry.error?.message);
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].id, 'telegram_7402');
+  assert.equal(transactions[0].amount_kopecks, 4500);
+  assert.equal(transactions[0].operation_time, '12:00');
+});
