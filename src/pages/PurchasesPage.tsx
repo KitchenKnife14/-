@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
 import type { PlannedPurchase, Category, Goal, Account } from '../lib/types'
-import { formatRubles } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Trash2, ShoppingCart, Check, ExternalLink } from 'lucide-react'
@@ -177,8 +177,8 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
     e.preventDefault()
     if (!familyId || !userId) return
     setError(null)
-    const estK = Math.round(parseFloat(estimated.replace(',', '.')) * 100)
-    if (!estK || estK <= 0) { setError('Введите стоимость больше нуля'); return }
+    const estK = parseRublesToKopecks(estimated)
+    if (estK === null || estK <= 0) { setError('Введите корректную стоимость больше нуля с точностью до копейки'); return }
     setSaving(true)
     try {
       const payload = {
