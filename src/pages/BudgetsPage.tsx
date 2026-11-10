@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
 import type { Budget, Category, Transaction } from '../lib/types'
-import { formatRubles } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react'
@@ -150,8 +150,8 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, e
     if (!familyId) return
     setError(null)
     if (!categoryId) { setError('Выберите категорию'); return }
-    const limK = Math.round(parseFloat(limit.replace(',', '.')) * 100)
-    if (!limK || limK <= 0) { setError('Введите лимит больше нуля'); return }
+    const limK = parseRublesToKopecks(limit)
+    if (limK === null || limK <= 0) { setError('Введите корректный лимит больше нуля с точностью до копейки'); return }
     setSaving(true)
     try {
       const payload = { family_id: familyId, category_id: categoryId, month_date: monthDate, limit_kopecks: limK, warn_75: true, warn_90: true, warn_100: true }
