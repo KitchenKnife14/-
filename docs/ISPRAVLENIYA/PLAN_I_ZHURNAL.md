@@ -1866,3 +1866,6 @@ HEAD до:
 - Контрольный прогресс плана остаётся 153/272 (56.3%): этап закрывает дополнительный дефект и regression coverage, но не заменяет реальную проверку на iPhone и в браузере с отличным от Москвы часовым поясом. Никакие production ресурсы не затронуты.
 
 - При повторной проверке новой группы FRONT-01 до CI выявлено различие исходных React imports: NotificationsPage не использует `useMemo`. Импорт скорректирован без добавления ненужного hook; статический тест принимает оба допустимых варианта.
+
+- CI для коммита `877906ed64e0bfb86ae6d07360079f9004707763` завершился `completed / success`: [run 42907123776](https://github.com/KitchenKnife14/-/actions/runs/42907123776). TypeScript/production build, полный набор из 164 regression tests (164 passed, 0 failed), Apps Script syntax, runtime diagnostics syntax, manifest validation и `npm audit` (0 vulnerabilities) прошли. Предыдущий run `42907033433` выявил отсутствующий `useCallback` import в NotificationsPage; импорт исправлен, повторный CI зелёный.
+- Контрольный прогресс плана остаётся 153/272 (56.3%): автоматические проверки FRONT-01 пройдены, но ручная проверка смены периода/фильтров на реальном приложении ещё не выполнялась.
