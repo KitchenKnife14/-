@@ -704,6 +704,10 @@ function query_(req,user){
       existing.push(r);return {idempotent:false,row:r};
     });
     const newRows=created.filter(item=>!item.idempotent).map(item=>item.row);
+    if(table==='goal_contributions'&&newRows.length){
+      const goalIds=newRows.map(row=>row.goal_id);
+      assertGoalContributionTotalsSafe_(goalIds,newRows,[]);
+    }
     if(newRows.length)appendRows_(table,newRows);
     if(table==='goal_contributions'&&newRows.length)syncGoalTotals_(newRows.map(r=>r.goal_id));
     return req.returning?created.map(item=>strip_(item.row)):null;
@@ -735,6 +739,11 @@ function query_(req,user){
         else {const patch=req.values||{};if(table==='goals'&&Object.prototype.hasOwnProperty.call(patch,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(table==='notifications'&&Object.prototype.hasOwnProperty.call(patch,'user_id')&&String(patch.user_id)!==String(r.user_id))throw new Error('Нельзя менять получателя уведомления');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(table==='goal_contributions')affectedGoalIds.add(String(next.goal_id));if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(TABLES[table].includes('created_at')&&Object.prototype.hasOwnProperty.call(patch,'created_at')&&String(patch.created_at)!==String(r.created_at))throw new Error('Нельзя менять дату создания записи');validateRelations_(table,next,user,r);if(table==='budgets')assertUniqueBudget_(all,next,r.id);if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}next.__row=r.__row;changed.push(next);}
       }
     });
+    if(table==='goal_contributions'&&changed.length){
+      const goalIds=changed.flatMap(row=>[row.goal_id]);
+      const replacements=mode==='delete'?[]:changed;
+      assertGoalContributionTotalsSafe_(goalIds,replacements,changed.map(row=>row.id));
+    }
     if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
     if(table==='recurring_payments'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(payment=>String(payment.id)));
@@ -811,6 +820,10 @@ function query_(req,user){
         if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
       }
     });
+    if(table==='goal_contributions'&&(updatedRows.length||insertedRows.length)){
+      const goalIds=[...affectedGoalIds];
+      assertGoalContributionTotalsSafe_(goalIds,[...updatedRows,...insertedRows],updatedRows.map(row=>row.id));
+    }
     updateRows_(table,updatedRows);
     appendRows_(table,insertedRows);
     if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
@@ -829,12 +842,29 @@ function seedCategories_(familyId){
  const t=now_(),fid=String(familyId),have=rows_('categories').filter(c=>String(c.family_id)===fid),created=[];
  DEFAULT_CATEGORIES.forEach((p,i)=>{let parent=have.find(c=>!c.parent_id&&c.name===p.name&&c.kind===p.kind);if(!parent){parent={id:id_(),family_id:familyId,parent_id:null,name:p.name,kind:p.kind,icon:p.icon,color:p.color,archived:false,sort_order:i,created_at:t};created.push(parent);have.push(parent)}(p.children||[]).forEach((c,k)=>{if(have.some(x=>String(x.parent_id)===String(parent.id)&&x.name===c.name))return;const row={id:id_(),family_id:familyId,parent_id:parent.id,name:c.name,kind:p.kind,icon:c.icon,color:c.color,archived:false,sort_order:k,created_at:t};created.push(row);have.push(row)})});appendRows_('categories',created);
 }
+function assertGoalContributionTotalsSafe_(goalIds,replacements,removedIds){
+  const ids=new Set((goalIds||[]).map(String));
+  if(!ids.size)return;
+  const removed=new Set((removedIds||[]).map(String));
+  const totals=new Map([...ids].map(id=>[id,0]));
+  const current=rows_('goal_contributions').filter(row=>ids.has(String(row.goal_id))&&!removed.has(String(row.id)));
+  [...current,...(replacements||[])].forEach(row=>{
+    const goalId=String(row.goal_id),amount=row.amount_kopecks;
+    if(!ids.has(goalId))return;
+    if(typeof amount!=='number'||!Number.isSafeInteger(amount)||amount<=0)
+      throw new Error('Сумма пополнения должна быть положительным целым числом копеек');
+    const next=totals.get(goalId)+amount;
+    if(!Number.isSafeInteger(next))
+      throw new Error('Сумма пополнений цели превышает безопасный диапазон целых копеек');
+    totals.set(goalId,next);
+  });
+}
 function syncGoalTotals_(goalIds){
   const ids=[...new Set((goalIds||[]).filter(Boolean).map(String))];
   if(!ids.length)return;
   const contributions=rows_('goal_contributions'), goals=rows_('goals');
   const totals=new Map(ids.map(id=>[id,0]));
-  contributions.forEach(c=>{const key=String(c.goal_id);if(totals.has(key))totals.set(key,totals.get(key)+Number(c.amount_kopecks||0));});
+  contributions.forEach(c=>{const key=String(c.goal_id);if(totals.has(key)){const next=totals.get(key)+Number(c.amount_kopecks||0);if(!Number.isSafeInteger(next))throw new Error('Сумма пополнений цели превышает безопасный диапазон целых копеек');totals.set(key,next);}});
   const changed=[];
   goals.forEach(g=>{const key=String(g.id);if(totals.has(key)){const next=Number(totals.get(key));if(Number(g.saved_kopecks||0)!==next){g.saved_kopecks=next;changed.push(g);}}});
   if(changed.length)updateRows_('goals',changed);
