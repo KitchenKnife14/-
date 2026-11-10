@@ -1076,6 +1076,7 @@ function telegramWebhook_(req){
     if(!link)throw new Error('Сначала привяжите аккаунт в приложении и отправьте /link КОД.');
     const member=rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
     if(!member)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
+    if(/(?:^|\s)(?:перевод|перевести|перевёл|перевел|перевела|перекинул|перекинула)(?=\s|$)/i.test(text))throw new Error('Переводы через Telegram пока не поддерживаются. Создайте перевод в приложении, указав оба счёта.');
     const amountMatch=text.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?:\s*(?:₽|руб(?:лей|ля|ль|\.?)?|р\.?))?(?=\s|$)/i);
     if(!amountMatch)throw new Error('Не нашёл сумму. Пример: Проезд 45 рублей.');
     const numericTokens=text.match(/\d+(?:[.,]\d{1,2})?/g)||[];
@@ -1084,8 +1085,9 @@ function telegramWebhook_(req){
     const amountKopecks=Number(parts[0])*100+Number(((parts[1]||'')+'00').slice(0,2));
     if(!Number.isSafeInteger(amountKopecks)||amountKopecks<=0||amountKopecks>1000000000000)throw new Error('Проверьте сумму операции.');
     let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)\s+/i,' ').replace(/\s+/g,' ').trim();
-    if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
     const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило)(?=\s|$)/i.test(text);
+    if(!description&&isIncome)description='Доход';
+    if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
     const kind=isIncome?'income':'expense';
     const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
     const aliases=[
