@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
-import { formatRubles } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
@@ -176,8 +176,8 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
     e.preventDefault()
     if (!familyId) return
     setError(null)
-    const targetK = Math.round(parseFloat(target.replace(',', '.')) * 100)
-    if (!targetK || targetK <= 0) { setError('Введите сумму цели больше нуля'); return }
+    const targetK = parseRublesToKopecks(target)
+    if (targetK === null || targetK <= 0) { setError('Введите корректную сумму цели больше нуля с точностью до копейки'); return }
     setSaving(true)
     try {
       const payload = { name: name.trim(), description: description.trim(), target_kopecks: targetK, target_date: targetDate || null, priority: parseInt(priority) }
