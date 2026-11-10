@@ -1644,15 +1644,24 @@ test('transaction and related financial records reject categories of the wrong k
   const expenseCategory = categories.find(c => c.kind === 'expense' && c.parent_id);
   assert.ok(incomeCategory);
   assert.ok(expenseCategory);
+  const accountA = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Счёт A', kind: 'bank', starting_balance_kopecks: 0 },
+  }).data[0];
+  const accountB = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Счёт B', kind: 'cash', starting_balance_kopecks: 0 },
+  }).data[0];
 
   for (const [type, categoryId] of [
     ['expense', incomeCategory.id],
     ['income', expenseCategory.id],
     ['transfer', expenseCategory.id],
   ]) {
+    const values = { family_id: family.id, type, amount_kopecks: 1000, category_id: categoryId, operation_date: '2026-11-10' };
+    if (type === 'transfer') { values.account_id = accountA.id; values.to_account_id = accountB.id; }
     const rejected = h.call({
-      action: 'query', token: user.token, table: 'transactions', mode: 'insert',
-      values: { family_id: family.id, type, amount_kopecks: 1000, category_id: categoryId, operation_date: '2026-11-10' },
+      action: 'query', token: user.token, table: 'transactions', mode: 'insert', values,
     });
     assert.match(rejected.error?.message || '', /Тип категории не соответствует типу операции/);
   }
