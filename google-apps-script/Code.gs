@@ -567,6 +567,16 @@ function validateRelations_(table,row,user,previous){
   }
   if(table==='transactions'){
     check('category_id','categories','Категория');check('account_id','accounts','Счёт списания');check('to_account_id','accounts','Счёт зачисления');check('parent_recurring_id','recurring_payments','Регулярный платёж');
+    const accountChanged=!previous||String(previous.account_id||'')!==String(row.account_id||'');
+    if(accountChanged&&row.account_id){
+      const account=rows_('accounts').find(x=>String(x.id)===String(row.account_id));
+      if(account&&account.archived)throw new Error('Нельзя назначить архивный счёт новой операции');
+    }
+    const destinationChanged=!previous||String(previous.to_account_id||'')!==String(row.to_account_id||'');
+    if(destinationChanged&&row.to_account_id){
+      const account=rows_('accounts').find(x=>String(x.id)===String(row.to_account_id));
+      if(account&&account.archived)throw new Error('Нельзя назначить архивный счёт зачисления новому переводу');
+    }
     const categoryChanged=!previous||String(previous.category_id||'')!==String(row.category_id||'')||String(previous.type)!==String(row.type);
     if(categoryChanged&&row.category_id){
       const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
@@ -577,6 +587,11 @@ function validateRelations_(table,row,user,previous){
   }
   if(table==='recurring_payments'){
     check('category_id','categories','Категория');check('account_id','accounts','Счёт');
+    const accountChanged=!previous||String(previous.account_id||'')!==String(row.account_id||'');
+    if(accountChanged&&row.account_id){
+      const account=rows_('accounts').find(x=>String(x.id)===String(row.account_id));
+      if(account&&account.archived)throw new Error('Нельзя назначить архивный счёт новому регулярному платежу');
+    }
     const categoryChanged=!previous||String(previous.category_id||'')!==String(row.category_id||'')||String(previous.type)!==String(row.type);
     if(categoryChanged&&row.category_id){
       const category=rows_('categories').find(x=>String(x.id)===String(row.category_id));
