@@ -89,7 +89,17 @@ export default function AccountsPage() {
   }
 
   const visible = accounts.filter(a => showArchived || !a.archived)
-  const total = visible.filter(a => !a.archived).reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0)
+  const balanceState = balances as Map<string, number> & { invalidAccountIds?: Set<string> }
+  const invalidAccountIds = balanceState.invalidAccountIds ?? new Set<string>()
+  const activeAccounts = visible.filter(a => !a.archived)
+  let total: number | null = 0
+  for (const account of activeAccounts) {
+    if (invalidAccountIds.has(account.id)) { total = null; break }
+    const next = (total ?? 0) + (balances.get(account.id) ?? 0)
+    if (!Number.isSafeInteger(next)) { total = null; break }
+    total = next
+  }
+  const invalidVisibleCount = visible.filter(account => invalidAccountIds.has(account.id)).length
 
   return (
     <div className="space-y-4">
@@ -99,8 +109,10 @@ export default function AccountsPage() {
       </div>
       <div className="card">
         <div className="text-sm text-slate-500">Общий остаток активных счетов</div>
-        <div className="text-2xl font-semibold text-slate-900 mt-1">{formatRubles(total)}</div>
+        <div className="text-2xl font-semibold text-slate-900 mt-1">{total === null ? 'Не рассчитан' : formatRubles(total)}</div>
       </div>
+      {invalidVisibleCount > 0 && <div role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">Не удалось достоверно рассчитать остаток для {invalidVisibleCount} счетов. Проверьте начальные остатки и операции. Значения не округлялись, данные в таблице не изменялись.</div>}
+      {total === null && invalidVisibleCount === 0 && <div role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">Сумма остатков превышает безопасный диапазон расчёта. Проверьте остатки счетов.</div>}
       <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Показывать архивные счета</label>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : visible.length === 0 ? (
@@ -108,8 +120,8 @@ export default function AccountsPage() {
       ) : <div className="space-y-2">{visible.map(account => (
         <div key={account.id} className="card flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center"><Wallet size={19} className="text-slate-500" /></div>
-          <div className="flex-1 min-w-0"><div className="font-medium text-slate-900 truncate">{account.name}{account.archived && <span className="ml-2 text-xs text-slate-400">архив</span>}</div><div className="text-xs text-slate-500">{account.kind === 'cash' ? 'Наличные' : account.kind === 'bank' ? 'Банковский счёт' : account.kind === 'savings' ? 'Накопительный' : 'Другой'} · Начальный остаток: {formatRubles(account.starting_balance_kopecks)}</div></div>
-          <div className="text-right"><div className="font-semibold text-slate-900">{formatRubles(balances.get(account.id) ?? 0)}</div><div className="text-xs text-slate-400">Текущий остаток</div></div>
+          <div className="flex-1 min-w-0"><div className="font-medium text-slate-900 truncate">{account.name}{account.archived && <span className="ml-2 text-xs text-slate-400">архив</span>}</div><div className="text-xs text-slate-500">{account.kind === 'cash' ? 'Наличные' : account.kind === 'bank' ? 'Банковский счёт' : account.kind === 'savings' ? 'Накопительный' : 'Другой'} · Начальный остаток: {typeof account.starting_balance_kopecks === 'number' && Number.isSafeInteger(account.starting_balance_kopecks) ? formatRubles(account.starting_balance_kopecks) : 'Некорректная сумма'}</div></div>
+          <div className="text-right"><div className="font-semibold text-slate-900">{invalidAccountIds.has(account.id) ? 'Не рассчитан' : formatRubles(balances.get(account.id) ?? 0)}</div><div className="text-xs text-slate-400">Текущий остаток</div></div>
           <button onClick={() => openEdit(account)} className="btn-ghost px-2" aria-label="Редактировать счёт"><Pencil size={16} /></button>
           <button onClick={() => toggleArchived(account)} className="btn-ghost px-2" aria-label={account.archived ? 'Восстановить счёт' : 'Архивировать счёт'}><Archive size={16} /></button>
         </div>
