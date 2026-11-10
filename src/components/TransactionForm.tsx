@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
@@ -32,6 +32,12 @@ export interface TransactionDraft {
   created_by?: string | null
 }
 
+function createTransactionRequestId(): string {
+  const bytes = new Uint8Array(16)
+  window.crypto.getRandomValues(bytes)
+  return 'tx_' + Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')
+}
+
 export default function TransactionForm({ open, onClose, onSaved, categories, accounts, userId, editing, initialType = 'expense' }: Props) {
   const { family, members, memberProfiles } = useAuth()
   const [type, setType] = useState<TxType>(initialType)
@@ -45,8 +51,10 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
   const [planned, setPlanned] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pendingInsertRef = useRef<{ fingerprint: string; id: string } | null>(null)
 
   useEffect(() => {
+    pendingInsertRef.current = null
     if (editing) {
       setType(editing.type)
       setAmount((editing.amount_kopecks / 100).toString())
@@ -110,8 +118,17 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         const { error: err } = await googleSheets.from('transactions').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await googleSheets.from('transactions').insert({ ...payload, created_by: userId })
+        const fingerprint = JSON.stringify(payload)
+        if (!pendingInsertRef.current || pendingInsertRef.current.fingerprint !== fingerprint) {
+          pendingInsertRef.current = { fingerprint, id: createTransactionRequestId() }
+        }
+        const { error: err } = await googleSheets.from('transactions').insert({
+          ...payload,
+          id: pendingInsertRef.current.id,
+          created_by: userId,
+        })
         if (err) throw err
+        pendingInsertRef.current = null
       }
       onSaved()
       onClose()
