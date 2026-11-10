@@ -488,6 +488,9 @@ function validateRelations_(table,row,user){
     if(row.parent_id){
       const parent=rows_('categories').find(x=>String(x.id)===String(row.parent_id));
       if(parent&&String(parent.kind)!==String(row.kind))throw new Error('Тип подкатегории должен совпадать с типом родительской категории');
+    }else if(row.id){
+      const mismatchedChild=rows_('categories').some(x=>String(x.parent_id)===String(row.id)&&String(x.kind)!==String(row.kind));
+      if(mismatchedChild)throw new Error('Нельзя менять тип категории, пока у неё есть подкатегории другого типа');
     }
   }
   if(table==='transactions'){
