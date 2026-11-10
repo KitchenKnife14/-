@@ -5,9 +5,10 @@ import { ensureSupplementalCategories } from '../lib/categories'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, formatDateShort, formatDateLong, monthRange, monthLabel, todayISO, currentMoscowDate } from '../lib/dates'
+import { advanceRecurringDate } from '../lib/recurringDates'
 import { ChevronLeft, ChevronRight, Calendar as CalIcon } from 'lucide-react'
 import { ru } from 'date-fns/locale'
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addDays, parseISO } from 'date-fns'
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, parseISO } from 'date-fns'
 
 type View = 'month' | 'week' | 'day' | 'list'
 type TxFilter = 'all' | 'income' | 'expense' | 'transfer'
@@ -78,20 +79,13 @@ export default function CalendarPage() {
       const start = parseISO(range.start)
       const end = parseISO(range.end)
       const advance = (date: Date): Date | null => {
-        if (r.frequency === 'daily') return addDays(date, 1)
-        if (r.frequency === 'weekly') return addDays(date, 7)
-        if (r.frequency === 'monthly') {
-          const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1)
-          const lastDay = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate()
-          return new Date(nextMonth.getFullYear(), nextMonth.getMonth(), Math.min(date.getDate(), lastDay))
-        }
-        if (r.frequency === 'yearly') {
-          const year = date.getFullYear() + 1
-          const lastDay = new Date(year, date.getMonth() + 1, 0).getDate()
-          return new Date(year, date.getMonth(), Math.min(date.getDate(), lastDay))
-        }
-        if (r.frequency === 'custom') return addDays(date, r.custom_interval_days ?? 30)
-        return null
+        const nextIso = advanceRecurringDate(
+          format(date, 'yyyy-MM-dd'),
+          r.frequency,
+          r.custom_interval_days,
+          r.start_date,
+        )
+        return nextIso ? parseISO(nextIso) : null
       }
       let d = parseISO(r.next_due_date)
       let guard = 0
