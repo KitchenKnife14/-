@@ -73,6 +73,7 @@ export default function DashboardPage() {
   }, [family?.id])
 
   const { income, expense } = calculateRealizedTotals(txs)
+  const realized = txs.filter((t) => !t.planned)
   const planned = txs.filter((t) => t.planned)
   const plannedExpense = planned.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
 
