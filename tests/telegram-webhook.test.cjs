@@ -170,3 +170,43 @@ test('webhook returns 502 when Telegram rejects sendMessage', async () => {
   await handler(request(), res);
   assert.equal(res.statusCode, 502);
 });
+
+
+
+test('webhook retries an uncertain send at-least-once with the same update and reply', async () => {
+  const sentMessages = [];
+  const backendUpdates = [];
+  let telegramAttempts = 0;
+  const handler = setup(async (url, options) => {
+    if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
+      backendUpdates.push(JSON.parse(options.body).update.update_id);
+      return {
+        ok: true,
+        text: async () => JSON.stringify({
+          data: { chat_id: 123, text: 'Записал расход: 45,00 ₽ — Проезд' },
+        }),
+      };
+    }
+
+    telegramAttempts++;
+    const message = JSON.parse(options.body);
+    // Model Telegram accepting the message while the HTTP response is lost.
+    sentMessages.push(message);
+    if (telegramAttempts === 1) throw new Error('Connection lost after remote acceptance');
+    return { ok: true, json: async () => ({ ok: true }) };
+  });
+
+  const firstResponse = response();
+  await handler(request(), firstResponse);
+  assert.equal(firstResponse.statusCode, 502);
+
+  const retryResponse = response();
+  await handler(request(), retryResponse);
+  assert.equal(retryResponse.statusCode, 200);
+
+  assert.deepEqual(backendUpdates, [1, 1]);
+  assert.equal(telegramAttempts, 2);
+  assert.equal(sentMessages.length, 2);
+  assert.equal(sentMessages[0].text, sentMessages[1].text);
+  assert.equal(sentMessages[0].chat_id, sentMessages[1].chat_id);
+});
