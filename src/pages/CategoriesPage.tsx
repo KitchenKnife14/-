@@ -79,7 +79,7 @@ export default function CategoriesPage() {
       </div>
 
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
-      <div className="flex flex-wrap gap-2"><input className="input flex-1 min-w-[180px]" placeholder="Найти категорию или подкатегорию" value={search} onChange={(e) => setSearch(e.target.value)} /><select className="input w-auto" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}><option value="all">Все типы</option><option value="expense">Расходы</option><option value="income">Доходы</option><option value="transfer">Переводы</option></select>{(search || kindFilter !== 'all') && <button onClick={() => { setSearch(''); setKindFilter('all') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}</div>
+      <div className="flex flex-wrap gap-2"><input aria-label="Поиск по категориям" className="input flex-1 min-w-[180px]" placeholder="Найти категорию или подкатегорию" value={search} onChange={(e) => setSearch(e.target.value)} /><select aria-label="Фильтр по типу категории" className="input w-auto" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}><option value="all">Все типы</option><option value="expense">Расходы</option><option value="income">Доходы</option><option value="transfer">Переводы</option></select>{(search || kindFilter !== 'all') && <button onClick={() => { setSearch(''); setKindFilter('all') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}</div>
 
       {loading ? (
         <div className="text-sm text-slate-400">Загрузка…</div>
