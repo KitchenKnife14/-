@@ -2323,3 +2323,50 @@ test('get_my_context exposes profiles only for members of the current user famil
   assert.equal(profileIds.includes(outsider.user.id), false);
   assert.equal(context.data.family.id, family.id);
 });
+
+
+test('Telegram parses fractional ruble amounts exactly and rejects unsupported precision', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-fractional-money@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Дробные суммы Telegram' });
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'fractional-money-secret-0123456789abcdef');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: 'fractional-money-secret-0123456789abcdef',
+    update: { update_id: 7801, message: { chat: { id: 780, type: 'private' }, from: { id: 780 }, text: '/link ' + generated.data.code } },
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  for (const [update_id, message, expected] of [
+    [7802, 'Проезд 45,1 рублей', 4510],
+    [7803, 'Кофе 45.10 рублей', 4510],
+    [7804, 'Покупка 0,01 ₽', 1],
+  ]) {
+    const result = h.call({
+      action: 'telegramWebhook', telegramSecret: 'fractional-money-secret-0123456789abcdef',
+      update: { update_id, message: { chat: { id: 780, type: 'private' }, from: { id: 780 }, text: message } },
+    });
+    assert.equal(result.error, null, result.error?.message);
+    assert.match(result.data.text, /Записал расход:/);
+    const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+    assert.equal(txs.find(row => row.id === 'telegram_' + update_id)?.amount_kopecks, expected);
+  }
+
+  for (const [update_id, message] of [
+    [7805, 'Покупка 45,123 рублей'],
+    [7806, 'Покупка 45.123 рублей'],
+    [7807, 'Покупка 0 рублей'],
+    [7808, 'Покупка -45 рублей'],
+  ]) {
+    const result = h.call({
+      action: 'telegramWebhook', telegramSecret: 'fractional-money-secret-0123456789abcdef',
+      update: { update_id, message: { chat: { id: 780, type: 'private' }, from: { id: 780 }, text: message } },
+    });
+    assert.ok(result.error, message);
+  }
+
+  const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(txs.length, 3);
+  assert.deepEqual(txs.map(row => row.amount_kopecks).sort((a,b) => a-b), [1, 4510, 4510]);
+});
