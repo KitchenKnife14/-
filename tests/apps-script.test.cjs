@@ -1485,6 +1485,39 @@ test('partial non-contiguous update publishes a revision after the first range c
   assert.equal(rows.find(row => row.id === ids[2]).description, 'initial-3');
 });
 
+test('partial non-contiguous delete publishes a revision after the first range commits', () => {
+  const h = makeHarness();
+  const user = h.signup('partial-delete-revision@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Частичное удаление' }).data;
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: [1, 2, 3].map(n => ({
+      family_id: family.id, type: 'expense', amount_kopecks: 2000 + n,
+      operation_date: '2026-11-10', description: 'delete-' + n
+    }))
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const ids = inserted.data.map(row => row.id);
+  const revision = () => h.call({
+    action: 'rpc', token: user.token, name: 'get_table_revision',
+    params: { p_table: 'transactions', p_family_id: family.id }
+  });
+  const before = revision();
+  h.failDeleteRowsAfter(2);
+  const deleted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'in', values: [ids[0], ids[2]] }]
+  });
+  assert.ok(deleted.error);
+  assert.match(deleted.error.message, /Injected deleteRows failure/);
+  const after = revision();
+  assert.notEqual(after.data, before.data);
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.ok(rows.some(row => row.id === ids[0]));
+  assert.ok(rows.some(row => row.id === ids[1]));
+  assert.ok(!rows.some(row => row.id === ids[2]));
+});
+
 test('table revisions are isolated by family and reject cross-family reads', () => {
   const h = makeHarness();
   const userA = h.signup('revision-family-a@example.com');
