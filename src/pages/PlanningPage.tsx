@@ -176,9 +176,9 @@ function PlanForm({ open, onClose, onSaved, categories, familyId, monthDate }: {
             <button key={t} type="button" onClick={() => { setType(t); setCategoryId('') }} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{t === 'income' ? 'Доход' : t === 'expense' ? 'Расход' : 'Накопления'}</button>
           ))}
         </div>
-        <div><label className="label">Категория</label><select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{visibleCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
-        <div><label className="label">Плановая сумма, ₽</label><input className="input" type="number" step="0.01" min="0" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus /></div>
-        <div><label className="label">Заметка</label><input className="input" value={note} onChange={(e) => setNote(e.target.value)} /></div>
+        <div><label className="label" htmlFor="monthly-plan-category">Категория</label><select id="monthly-plan-category" className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{visibleCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div>
+        <div><label className="label" htmlFor="monthly-plan-amount">Плановая сумма, ₽</label><input id="monthly-plan-amount" className="input" type="number" step="0.01" min="0" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus /></div>
+        <div><label className="label" htmlFor="monthly-plan-note">Заметка</label><input id="monthly-plan-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} /></div>
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
         <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="btn-secondary flex-1">Отмена</button><button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Сохранение…' : 'Сохранить'}</button></div>
       </form>
