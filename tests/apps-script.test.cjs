@@ -8,7 +8,7 @@ function makeHarness() {
   const sheets = new Map();
   const properties = new Map();
   let uuidCounter = 0;
-  let lockAcquires = 0, lockReleases = 0;
+  let lockAcquires = 0, lockReleases = 0, failNextLockWait = false;
   let setValuesCalls = 0, failSetValuesAt = null;
   let deleteRowsCalls = 0, failDeleteRowsAt = null;
   class Range {
@@ -78,7 +78,11 @@ function makeHarness() {
       MimeType: { JSON: 'application/json' },
       createTextOutput: text => ({ text, setMimeType() { return this; }, getContent() { return this.text; } })
     },
-    LockService: { getScriptLock: () => ({ waitLock() { lockAcquires++; }, releaseLock() { lockReleases++; }, hasLock: () => false }) },
+    LockService: { getScriptLock: () => ({
+      waitLock() { lockAcquires++; if (failNextLockWait) { failNextLockWait = false; throw new Error('Injected lock timeout'); } },
+      releaseLock() { lockReleases++; },
+      hasLock: () => false
+    }) },
     PropertiesService: { getScriptProperties: () => ({
       getProperty: key => properties.get(key) ?? null,
       setProperty: (key, value) => { properties.set(key, value); return this; },
@@ -109,6 +113,7 @@ function makeHarness() {
     context, call, signup,
     lockStats: () => ({ acquires: lockAcquires, releases: lockReleases }),
     resetLockStats: () => { lockAcquires = 0; lockReleases = 0; },
+    failNextLockWait: () => { failNextLockWait = true; },
     failSetValuesAfter: offset => { failSetValuesAt = setValuesCalls + offset; },
     failDeleteRowsAfter: offset => { failDeleteRowsAt = deleteRowsCalls + offset; }
   };
@@ -1452,6 +1457,21 @@ test('schema migration appends transaction participant column without changing p
   assert.equal(sheet.getRange(2, oldHeaders.length + 1, 1, 1).getValues()[0][0], '');
 });
 
+test('doPost reports lock timeout without attempting to release an unacquired lock', () => {
+  const h = makeHarness();
+  const user = h.signup('lock-timeout@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Ожидание блокировки' }).data;
+  h.resetLockStats();
+  h.failNextLockWait();
+  const response = h.call({
+    action: 'rpc', token: user.token, name: 'get_table_revision',
+    params: { p_table: 'transactions', p_family_id: family.id }
+  });
+  assert.ok(response.error);
+  assert.match(response.error.message, /Injected lock timeout/);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 0 });
+});
+
 test('partial non-contiguous update publishes a revision after the first range commits', () => {
   const h = makeHarness();
   const user = h.signup('partial-update-revision@example.com');
@@ -1470,6 +1490,7 @@ test('partial non-contiguous update publishes a revision after the first range c
     params: { p_table: 'transactions', p_family_id: family.id }
   });
   const before = revision();
+  h.resetLockStats();
   h.failSetValuesAfter(2);
   const update = h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'update',
@@ -1478,6 +1499,7 @@ test('partial non-contiguous update publishes a revision after the first range c
   });
   assert.ok(update.error);
   assert.match(update.error.message, /Injected setValues failure/);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
   const after = revision();
   assert.notEqual(after.data, before.data);
   const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
