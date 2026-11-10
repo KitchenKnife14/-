@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
 import type { RecurringPayment, Category, Account, FamilyMember, Profile } from '../lib/types'
-import { formatRubles } from '../lib/money'
+import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, Check, Pause, Play, Trash2, Repeat } from 'lucide-react'
@@ -155,8 +155,8 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, members, 
     e.preventDefault()
     if (!familyId || !userId) return
     setError(null)
-    const amt = Math.round(parseFloat(amount.replace(',', '.')) * 100)
-    if (!Number.isSafeInteger(amt) || amt <= 0) { setError('Введите корректную сумму больше нуля'); return }
+    const amt = parseRublesToKopecks(amount)
+    if (amt === null || amt <= 0) { setError('Введите корректную сумму больше нуля с точностью до копейки'); return }
     if (frequency === 'custom' && (!Number.isSafeInteger(Number(customDays)) || Number(customDays) < 1)) { setError('Интервал должен быть целым числом дней от 1'); return }
     if (endDate && endDate < startDate) { setError('Дата окончания не может быть раньше даты начала'); return }
     setSaving(true)
