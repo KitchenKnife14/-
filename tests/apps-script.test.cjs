@@ -2071,6 +2071,11 @@ test('archived categories cannot be assigned to new records but remain valid on 
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Покупка', category_id: category.id, estimated_kopecks: 10000, status: 'planned' },
   }).data[0];
+  const archived = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true },
+  });
+  assert.equal(archived.error, null, archived.error?.message);
   for (const [table, id, values] of [
     ['transactions', created.transaction.id, { description: 'Обновлено' }],
     ['recurring_payments', created.recurring.id, { description: 'Обновлено' }],
@@ -2084,11 +2089,6 @@ test('archived categories cannot be assigned to new records but remain valid on 
     });
     assert.equal(updated.error, null, table + ' existing archived reference: ' + updated.error?.message);
   }
-  const archived = h.call({
-    action: 'query', token: user.token, table: 'categories', mode: 'update',
-    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true },
-  });
-  assert.equal(archived.error, null, archived.error?.message);
   const rejected = [
     ['transactions', { family_id: family.id, type: 'expense', amount_kopecks: 2000, operation_date: '2026-11-11', category_id: category.id }],
     ['recurring_payments', { family_id: family.id, type: 'expense', amount_kopecks: 2000, category_id: category.id, description: 'Новый', start_date: '2026-11-11', next_due_date: '2026-11-11', frequency: 'monthly', active: true }],
