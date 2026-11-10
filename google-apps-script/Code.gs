@@ -382,7 +382,7 @@ function signup_(req){
   pruneSessions_();
   const email=String(req.email||'').trim().toLowerCase(), password=String(req.password||''), name=String(req.name||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Введите корректный email');
-  if(password.length<8) throw new Error('Пароль должен содержать минимум 8 символов');
+  if(password.length<15) throw new Error('Пароль должен содержать минимум 15 символов');
   if(authRows_().some(u=>u.email===email)) throw new Error('Аккаунт с таким email уже существует');
   const id=id_(), salt=Utilities.getUuid();
   SHEET_WRITES++; timedSheetWrite_(()=>authSheet_().appendRow([id,email,salt,makePasswordHash_(password,salt),name||email.split('@')[0],now_()].map(safeCell_)));
