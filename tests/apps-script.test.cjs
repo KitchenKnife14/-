@@ -1698,6 +1698,18 @@ test('category hierarchy, recurring payments, budgets, monthly plans and planned
   const expenseChild = categories.find(c => c.kind === 'expense' && c.parent_id === expenseRoot.id);
   assert.ok(incomeChild && expenseChild);
 
+  const unknownCategoryKind = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert',
+    values: { family_id: family.id, name: 'Категория с неизвестным типом', kind: 'other' },
+  });
+  assert.match(unknownCategoryKind.error?.message || '', /Неизвестный тип категории/);
+
+  const unknownRecurringType = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert',
+    values: { family_id: family.id, type: 'other', amount_kopecks: 1000, description: 'Платёж', start_date: '2026-11-10', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
+  });
+  assert.match(unknownRecurringType.error?.message || '', /Неизвестный тип регулярного платежа/);
+
   const wrongChild = h.call({
     action: 'query', token: user.token, table: 'categories', mode: 'insert',
     values: { family_id: family.id, parent_id: incomeRoot.id, name: 'Неверная подкатегория', kind: 'expense' },
