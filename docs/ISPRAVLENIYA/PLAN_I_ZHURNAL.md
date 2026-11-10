@@ -1439,3 +1439,13 @@ HEAD до:
 - Если Telegram Bot API уже принял `sendMessage`, но ответ потерялся/timeout сработал после приёма, повтор webhook отправит тот же текст ещё раз. Дублирующая финансовая запись не создаётся, но дублирующее текстовое подтверждение возможно.
 - Exactly-once отправка сообщения через Bot API текущим контрактом не гарантируется. Отметка «отправлено» до сетевого вызова даст at-most-once с риском потерять подтверждение; отметка после вызова сохраняет at-least-once с риском дублирования. Автоматически менять эту семантику нельзя.
 - В этой работе тайм-ауты не добавлялись: сначала требуется подтвердить фактический Vercel maxDuration/runtime и выбрать семантику повторной отправки. Иначе слишком короткий timeout может увеличивать число retry и дублировать подтверждения. Открытые runtime тесты остаются в WEBHOOK-01.
+
+### Журнал — 2026-11-10: WEBHOOK-01, подтверждение CI и Vercel Preview (работа № 49, продолжение)
+
+- Новый тест неопределённого результата sendMessage прошёл в GitHub Actions: commit 6e801348323cbde8d993b7b294f0546a5bc8f30d, run [42861055966](https://github.com/KitchenKnife14/-/actions/runs/42861055966). Успешны TypeScript/production build, все регрессионные тесты и Apps Script syntax check.
+- Vercel Preview deployment этого же commit в основном проекте '-' имеет состояние READY. Проверен deployment dpl_5PCeeHQfDz4zAUXwEb4p6DxdsDsb; alias относится к ветке ispravleniya. Production alias не переключался.
+- Команда Vercel — Hobby. Текущий API-ответ о проекте не показал явное значение Fluid Compute / function max duration. Официальная документация Vercel указывает 300 секунд default/max для Hobby при включённом Fluid Compute; без явного подтверждения настройки конкретного проекта это значение не считается измеренным/проверенным для нашего webhook.
+- Официальная документация Telegram подтверждает повторную доставку при не-2xx ответе и отсутствие гарантии exactly-once. Поэтому выбранная семантика остаётся at-least-once: при неопределённом исходе sendMessage допускается повторный текстовый ответ; финансовая операция защищается стабильным telegram_<update_id>.
+- Источники: https://vercel.com/docs/functions/configuring-functions/duration ; https://core.telegram.org/bots/api
+- Тайм-ауты в handler пока не добавлялись: нужно сначала получить фактическую настройку Fluid Compute и измерить длительность полного запроса Apps Script, включая ожидание ScriptLock. Нельзя считать лимит платформы тайм-аутом сетевого вызова.
+- Production, основной Apps Script deployment, Telegram webhook, Production env vars и основная Google Sheet не изменялись.
