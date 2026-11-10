@@ -1,3 +1,4 @@
+import { parseApiResponse } from './apiResponse'
 type Filter = { column: string; op: string; value?: unknown; values?: unknown[] }
 export type GoogleSession = { access_token: string; token_type: 'bearer'; expires_at: number; user: { id: string; email: string } }
 const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL as string | undefined
@@ -12,7 +13,7 @@ async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
   try{
     const response=await fetch(API_URL,{method:'POST',redirect:'follow',signal:controller.signal,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,token:readSession()?.access_token})})
     const text=await response.text()
-    try{result=JSON.parse(text)}catch{throw new Error('Сервер вернул неожиданный ответ. Проверьте, что Apps Script опубликован с доступом «Все»')}
+    result=parseApiResponse<T>(text,response.status,response.ok)
   }catch(e){
     if(e instanceof DOMException&&e.name==='AbortError')throw new Error('Сервер не ответил вовремя. Попробуйте ещё раз')
     if(e instanceof TypeError)throw new Error('Не удалось связаться с сервером. Проверьте интернет и адрес Apps Script')
