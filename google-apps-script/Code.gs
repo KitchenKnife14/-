@@ -279,7 +279,7 @@ function authSheet_(){
   if(header.join('|')!==expected.join('|'))throw new Error('Не совпадает структура служебного листа _auth; автоматическое изменение небезопасно');
   return sh;
 }
-function authRows_(){SHEET_READS++;const sh=authSheet_(),v=timedSheetRead_(()=>sh.getDataRange().getValues());return v.slice(1).filter(r=>r[0]).map((r,i)=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row:i+2}));}
+function authRows_(){SHEET_READS++;const sh=authSheet_(),v=timedSheetRead_(()=>sh.getDataRange().getValues());return v.slice(1).map((r,i)=>({r,row:i+2})).filter(x=>x.r[0]).map(({r,row})=>({id:String(r[0]),email:String(r[1]).toLowerCase(),salt:String(r[2]),hash:String(r[3]),name:String(r[4]),created_at:String(r[5]),row}));}
 function hash_(password,salt){let digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+password,Utilities.Charset.UTF_8);for(let i=0;i<10000;i++)digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,digest);return Utilities.base64Encode(digest);}
 /* ===== Проверка пароля: PBKDF2-HMAC-SHA256 на чистом JavaScript =====
    Прежний цикл из 10 000 вызовов Utilities.computeDigest занимал ~5 секунд (каждый вызов — обращение к сервису Google).

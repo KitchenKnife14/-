@@ -1386,6 +1386,24 @@ test('legacy integer kopecks stored as text are normalized to numbers when read'
   assert.equal(read.data[0].amount_kopecks, 4510);
   assert.equal(typeof read.data[0].amount_kopecks, 'number');
 });
+test('authRows preserves physical sheet row numbers across blank rows before legacy hash migration', () => {
+  const h = makeHarness();
+  h.signup('first-auth-row@example.com');
+  const second = h.signup('second-auth-row@example.com');
+  const sheet = h.context.authSheet_();
+  const secondRow = sheet.getRange(3, 1, 1, 6).getValues()[0];
+  const legacy = h.context.hash_('correct-horse-battery', String(secondRow[2]));
+  sheet.getRange(3, 4, 1, 1).setValue(legacy);
+  sheet.getRange(2, 1, 1, 6).clearContent();
+
+  const rows = h.context.authRows_();
+  assert.equal(rows.find(row => row.id === second.user.id).row, 3);
+  const signedIn = h.call({ action: 'signin', email: 'second-auth-row@example.com', password: 'correct-horse-battery' });
+  assert.equal(signedIn.error, null, signedIn.error?.message);
+  assert.match(String(sheet.getRange(3, 4, 1, 1).getValues()[0][0]), /^p2\\$/);
+  assert.equal(sheet.getRange(2, 4, 1, 1).getValues()[0][0], '');
+});
+
 test('PBKDF2-HMAC-SHA256 matches Node crypto for Unicode and SHA-256 block boundaries', () => {
   const h = makeHarness();
   const vectors = [
