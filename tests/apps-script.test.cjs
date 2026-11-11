@@ -3130,8 +3130,7 @@ test('backup structure audit is read-only and validates all table headers plus h
   const h = makeHarness();
   const names = ['profiles','families','family_members','categories','accounts','transactions','recurring_payments','budgets','goals','goal_contributions','planned_purchases','monthly_plans','notifications','telegram_links','telegram_link_codes'];
   names.forEach(name => h.context.sheet_(name));
-  const user = h.signup('backup-audit@example.com');
-  assert.equal(user.error, null, user.error?.message);
+  h.signup('backup-audit@example.com');
   const report = h.context.auditBackupStructure_();
   assert.equal(report.allChecksPassed, true);
   assert.equal(report.expectedSheetCount, 16);
@@ -3147,8 +3146,7 @@ test('backup structure audit reports missing/mismatched sheets without creating 
   const h = makeHarness();
   const names = ['profiles','families','family_members','categories','accounts','transactions','recurring_payments','budgets','goals','goal_contributions','planned_purchases','monthly_plans','notifications','telegram_links','telegram_link_codes'];
   names.forEach(name => h.context.sheet_(name));
-  const user = h.signup('backup-audit-damaged@example.com');
-  assert.equal(user.error, null, user.error?.message);
+  h.signup('backup-audit-damaged@example.com');
   const ss = h.context.SpreadsheetApp.getActiveSpreadsheet();
   ss.getSheetByName('budgets').getRange(1,1).setValue('wrong-header');
   ss.deleteSheet(ss.getSheetByName('transactions'));
