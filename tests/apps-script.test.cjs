@@ -353,7 +353,7 @@ test('recurring payment confirmation can retry after a partial write without dup
     return originalUpdate(name, rows);
   };
   const args = { action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
-    p_recurring_id: recurring.id, p_expected_due_date: '2026-10-28', p_operation_date: '2026-10-28'
+    p_recurring_id: recurring.id, p_expected_due_date: '2026-10-28', p_operation_date: '2026-10-28', p_expected_recurring: recurring
   }};
   const failed = h.call(args);
   assert.match(failed.error.message, /simulated write failure/);
@@ -382,7 +382,7 @@ test('recurring payment confirmation replay returns success after the full commi
   assert.equal(created.error, null, created.error?.message);
   const recurring = created.data[0];
   const args = { action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
-    p_recurring_id: recurring.id, p_expected_due_date: '2026-10-31', p_operation_date: '2026-11-01'
+    p_recurring_id: recurring.id, p_expected_due_date: '2026-10-31', p_operation_date: '2026-11-01', p_expected_recurring: recurring
   }};
   const first = h.call(args);
   assert.equal(first.error, null, first.error?.message);
