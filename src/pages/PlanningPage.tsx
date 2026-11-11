@@ -93,7 +93,7 @@ export default function PlanningPage() {
     await load()
   }
 
-  const removePlan = async (p: MonthlyPlan) => { const { error: err } = await googleSheets.from('monthly_plans').delete().eq('id', p.id); if (err) setError(err.message); load() }
+  const removePlan = async (p: MonthlyPlan) => { const { error: err } = await googleSheets.from('monthly_plans').delete().eq('id', p.id).expect(p as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
 
   return (
     <div className="space-y-4">
