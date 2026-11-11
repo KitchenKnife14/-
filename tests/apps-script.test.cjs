@@ -1488,7 +1488,7 @@ test('password hash benchmark uses only dummy data and compares current and OWAS
     calls.push({ password, salt, iterations });
     return 'a'.repeat(64);
   };
-  const results = h.context.benchmarkPasswordHash_();
+  const results = h.context.benchmarkPasswordHash();
   assert.deepEqual(calls.map(call => call.iterations), [30000, 600000]);
   assert.ok(calls.every(call => call.password === 'local-only-pbkdf2-benchmark'));
   assert.ok(calls.every(call => call.salt === 'non-secret-fixed-benchmark-salt'));
