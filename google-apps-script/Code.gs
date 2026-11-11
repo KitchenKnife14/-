@@ -1174,6 +1174,8 @@ function nextDate_(iso,freq,days,anchorIso){
 }
 
 
+const TELEGRAM_UPDATE_TTL_MS = 24 * 60 * 60 * 1000;
+const TELEGRAM_UPDATE_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /* ===== Telegram webhook: вход только через доверенный Vercel endpoint ===== */
 function telegramCodeHash_(code){
   const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(code).trim().toUpperCase(),Utilities.Charset.UTF_8);
@@ -1184,8 +1186,9 @@ function telegramWebhook_(req){
   const expected=props.getProperty('TELEGRAM_BACKEND_SECRET');
   if(!expected||expected.length<32||!safeEqual_(String(req.telegramSecret||''),expected))throw new Error('Webhook authentication failed');
   const update=req.update||{}, updateId=String(update.update_id||'');
-  const lastPrune=Number(props.getProperty('telegram:last_prune')||0);
-  if(Date.now()-lastPrune>21600000){
+  const savedPrune=Number(props.getProperty('telegram:last_prune')||0);
+  const lastPrune=Number.isFinite(savedPrune)?savedPrune:0;
+  if(Date.now()-lastPrune>TELEGRAM_UPDATE_PRUNE_INTERVAL_MS){
     const all=props.getProperties();
     Object.keys(all).forEach(key=>{if(!key.startsWith('telegram:update:'))return;try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=Date.now())props.deleteProperty(key);}catch(_){props.deleteProperty(key);}});
     props.setProperty('telegram:last_prune',String(Date.now()));
@@ -1327,7 +1330,7 @@ function telegramWebhook_(req){
   if(updateKey){
     // The update cache is an optimization, not the only idempotency guard:
     // transaction IDs, link replay checks and unlink deletion make side effects safe on retries.
-    try{props.setProperty(updateKey,JSON.stringify({expires:Date.now()+86400000,reply}));}catch(_){}
+    try{props.setProperty(updateKey,JSON.stringify({expires:Date.now()+TELEGRAM_UPDATE_TTL_MS,reply}));}catch(_){}
   }
   return reply;
 }

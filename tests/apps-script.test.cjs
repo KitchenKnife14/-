@@ -3094,3 +3094,31 @@ test('Telegram expense retry after update cache failure reuses the stable transa
   assert.equal(transactions[0].id, 'telegram_7402');
   assert.equal(transactions[0].amount_kopecks, 4500);
 });
+
+
+test('Telegram replay cache has a documented 24-hour TTL and prunes expired entries after a malformed prune marker', () => {
+  const h = makeHarness();
+  const props = h.context.PropertiesService.getScriptProperties();
+  const secret = 'telegram-retention-secret-0123456789abcdef';
+  props.setProperty('TELEGRAM_BACKEND_SECRET', secret);
+  assert.equal(h.context.TELEGRAM_UPDATE_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.equal(h.context.TELEGRAM_UPDATE_PRUNE_INTERVAL_MS, 6 * 60 * 60 * 1000);
+
+  props.setProperty('telegram:last_prune', 'not-a-timestamp');
+  props.setProperty('telegram:update:expired', JSON.stringify({ expires: Date.now() - 1000, reply: { skip: true } }));
+  props.setProperty('telegram:update:live', JSON.stringify({ expires: Date.now() + 60_000, reply: { skip: true } }));
+  const cleanup = h.call({ action: 'telegramWebhook', telegramSecret: secret, update: { update_id: 7501 } });
+  assert.equal(cleanup.error, null, cleanup.error?.message);
+  assert.equal(props.getProperty('telegram:update:expired'), null);
+  assert.ok(props.getProperty('telegram:update:live'));
+
+  const now = Date.now();
+  const help = h.call({
+    action: 'telegramWebhook', telegramSecret: secret,
+    update: { update_id: 7502, message: { chat: { id: 750 }, from: { id: 750 }, text: '/help' } }
+  });
+  assert.equal(help.error, null, help.error?.message);
+  const saved = JSON.parse(props.getProperty('telegram:update:7502'));
+  assert.ok(saved.expires >= now + h.context.TELEGRAM_UPDATE_TTL_MS - 1000);
+  assert.ok(saved.expires <= Date.now() + h.context.TELEGRAM_UPDATE_TTL_MS + 1000);
+});
