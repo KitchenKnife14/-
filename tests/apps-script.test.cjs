@@ -2651,6 +2651,22 @@ test('selected non-transaction inserts are idempotent for the same ID and exact 
   const repeatedPurchase = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true, values: purchase });
   assert.equal(repeatedPurchase.error, null, repeatedPurchase.error?.message);
   assert.equal(h.context.rows_('planned_purchases').filter(row => row.id === purchase.id).length, 1);
+
+  const recurring = { id: 'idem-recurring-001', family_id: family.id, type: 'expense', amount_kopecks: 9000, category_id: category.id, account_id: null, description: 'Интернет', start_date: '2026-11-11', end_date: null, frequency: 'monthly', custom_interval_days: null, next_due_date: '2026-11-11', remind: true, active: true, responsible_user_id: owner.user.id };
+  const firstRecurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true, values: recurring });
+  assert.equal(firstRecurring.error, null, firstRecurring.error?.message);
+  const repeatedRecurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true, values: recurring });
+  assert.equal(repeatedRecurring.error, null, repeatedRecurring.error?.message);
+  assert.equal(h.context.rows_('recurring_payments').filter(row => row.id === recurring.id).length, 1);
+
+  const budget = { id: 'idem-budget-001', family_id: family.id, category_id: category.id, month_date: '2026-11-01', limit_kopecks: 250000, warn_75: true, warn_90: true, warn_100: true };
+  const firstBudget = h.call({ action: 'query', token: owner.token, table: 'budgets', mode: 'insert', returning: true, values: budget });
+  assert.equal(firstBudget.error, null, firstBudget.error?.message);
+  const repeatedBudget = h.call({ action: 'query', token: owner.token, table: 'budgets', mode: 'insert', returning: true, values: budget });
+  assert.equal(repeatedBudget.error, null, repeatedBudget.error?.message);
+  assert.equal(h.context.rows_('budgets').filter(row => row.id === budget.id).length, 1);
+  const duplicateBudgetWithNewId = h.call({ action: 'query', token: owner.token, table: 'budgets', mode: 'insert', values: { ...budget, id: 'idem-budget-002' } });
+  assert.match(duplicateBudgetWithNewId.error.message, /уже задан бюджет/);
 });
 
 test('transaction inserts are idempotent for the same ID and exact payload', () => {
