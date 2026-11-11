@@ -878,7 +878,7 @@ function query_(req,user){
       assertGoalContributionTotalsSafe_(goalIds,newRows,[]);
     }
     if(newRows.length)appendRows_(table,newRows);
-    if(table==='goal_contributions'&&newRows.length)syncGoalTotals_(newRows.map(r=>r.goal_id));
+    if(table==='goal_contributions'&&created.length)syncGoalTotals_(created.map(item=>item.row.goal_id));
     return req.returning?created.map(item=>strip_(item.row)):null;
   }
   if(mode==='update'||mode==='delete'){
@@ -995,7 +995,16 @@ function query_(req,user){
     }
     updateRows_(table,updatedRows);
     appendRows_(table,insertedRows);
-    if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
+    if(table==='goal_contributions'){
+      // A retried delete may find no contribution row because the previous request
+      // deleted it before failing to update the denormalized goal balance.
+      // Reconcile all goals in the caller's family so the retry repairs that partial commit.
+      if(mode==='delete'){
+        const familyIds=new Set(allowedFamilyIds_(user));
+        rows_('goals').forEach(goal=>{if(familyIds.has(String(goal.family_id)))affectedGoalIds.add(String(goal.id));});
+      }
+      syncGoalTotals_([...affectedGoalIds]);
+    }
     return null;
   }
   throw new Error('Неизвестный режим запроса');
