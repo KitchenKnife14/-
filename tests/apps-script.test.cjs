@@ -3171,3 +3171,13 @@ test('password hash benchmark is editor-only and uses dummy data without reading
   assert.match(body, /PW_ITERATIONS,600000/);
   assert.doesNotMatch(body, /authRows_|PropertiesService|appendRows_|setProperty/);
 })
+
+
+test('isolated Apps Script PBKDF2 runtime diagnostic measures 30000 and 600000 iterations', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs'), 'utf8')
+  assert.match(source, /samples\(30000, 5\)/)
+  assert.match(source, /samples\(600000, 3\)/)
+  assert.match(source, /synthetic-runtime-benchmark-password/)
+  assert.match(source, /synthetic-runtime-benchmark-salt/)
+  assert.doesNotMatch(source, /authRows_|PropertiesService|SpreadsheetApp|appendRow|setValue|deleteRow/)
+})
