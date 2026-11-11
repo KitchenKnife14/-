@@ -1773,6 +1773,44 @@ test('Telegram one-time linking records transactions through the existing family
   assert.equal(h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data.length, 1);
 });
 
+test('failed Telegram link-code replacement keeps the previous unexpired code usable', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-code-replacement@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Сохранение старого кода' });
+  const secret = 'telegram-code-replacement-secret-0123456789';
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', secret);
+
+  const first = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(first.error, null, first.error?.message);
+  const oldHash = h.context.telegramCodeHash_(first.data.code);
+  const originalAppend = h.context.appendRows_;
+  let failNextCodeWrite = true;
+  h.context.appendRows_ = function(table, rows) {
+    if (table === 'telegram_link_codes' && failNextCodeWrite) {
+      failNextCodeWrite = false;
+      throw new Error('simulated link-code append failure');
+    }
+    return originalAppend(table, rows);
+  };
+
+  const replacement = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.match(replacement.error?.message || '', /simulated link-code append failure/);
+  const oldRow = h.context.rows_('telegram_link_codes').find(row => row.code_hash === oldHash);
+  assert.ok(oldRow, 'previous code must remain stored when replacement append fails');
+  assert.equal(oldRow.used_at, '');
+
+  const linked = h.call({
+    action: 'telegramWebhook',
+    telegramSecret: secret,
+    update: { update_id: 7110, message: {
+      chat: { id: 711, type: 'private' }, from: { id: 711 }, text: '/link ' + first.data.code
+    }}
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+  assert.match(linked.data.text, /успешно привязан/);
+  assert.equal(h.context.rows_('telegram_links').filter(row => row.user_id === user.id).length, 1);
+});
+
 test('Telegram webhook rejects an invalid backend secret and prevents reuse of a link code', () => {
   const h = makeHarness();
   const user = h.signup('telegram-code-owner@example.com');
