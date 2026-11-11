@@ -75,14 +75,14 @@ test('mobile navigation has an explicit active state for routes placed in More',
 })
 
 
-test('onboarding verifies persisted family membership before leaving the setup screen', () => {
-  const verify = onboarding.indexOf("googleSheets.rpc('get_my_context', {})")
-  const refresh = onboarding.indexOf('await refresh()', verify)
+test('onboarding refreshes the authoritative auth context after a successful family RPC', () => {
+  const create = onboarding.indexOf("googleSheets.rpc('create_family'")
+  const join = onboarding.indexOf("googleSheets.rpc('join_family_by_invite'")
+  const refresh = onboarding.indexOf('await refresh()')
   const navigate = onboarding.indexOf("navigate('/')", refresh)
-  assert.ok(verify >= 0 && refresh > verify && navigate > refresh, 'verify backend membership, refresh auth context, then navigate')
-  assert.match(onboarding, /if \(contextError\) throw contextError/)
-  assert.match(onboarding, /verifiedContext as \{ family\?: unknown \} \| null/)
-  assert.match(onboarding, /Семейное пространство не подтвердилось/)
+  assert.ok(create >= 0 && join >= 0 && refresh > create && refresh > join && navigate > refresh)
+  assert.doesNotMatch(onboarding, /googleSheets\.rpc\('get_my_context'/)
+  assert.match(app, /if \(session && error\)/)
 })
 
 

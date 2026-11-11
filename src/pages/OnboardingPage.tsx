@@ -35,11 +35,8 @@ export default function OnboardingPage() {
         })
         if (joinErr) throw joinErr
       }
-      const { data: verifiedContext, error: contextError } = await googleSheets.rpc('get_my_context', {})
-      if (contextError) throw contextError
-      if (!(verifiedContext as { family?: unknown } | null)?.family) {
-        throw new Error('Семейное пространство не подтвердилось. Проверьте подключение и повторите попытку.')
-      }
+      // The family RPC confirms the write. Refresh loads the authoritative context;
+      // App.tsx shows its retry screen if get_my_context fails, avoiding a duplicate create on retry.
       await refresh()
       navigate('/')
     } catch (e) {
