@@ -3198,6 +3198,15 @@ test('isolated Apps Script PBKDF2 runtime diagnostic measures 30000 and 600000 i
 })
 
 
+test('write requests revalidate headers on a new execution despite a warm persistent cache', () => {
+  const h = makeHarness();
+  const sheet = seedTable(h, 'transactions');
+  h.context.sheet_('transactions');
+  sheet.getRange(1, 1, 1, 1).setValue('tampered_header');
+  vm.runInContext('READ_ONLY_REQUEST = false; SHEET_SCHEMA_VALIDATED = {}', h.context);
+  assert.throws(() => h.context.sheet_('transactions'), /Не совпадает структура листа transactions/);
+});
+
 test('read-only requests revalidate headers even when the script cache is warm', () => {
   const h = makeHarness();
   const sheet = seedTable(h, 'transactions');

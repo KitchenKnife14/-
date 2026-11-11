@@ -36,6 +36,8 @@ let ROWS_CACHE = {};
 let TZ_CACHE = null;
 // Read-candidate requests must never provision or repair spreadsheet structure.
 let READ_ONLY_REQUEST = false;
+// Header validation is cached only inside one execution, never across requests.
+let SHEET_SCHEMA_VALIDATED = {};
 // Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
 // а строки, начинающиеся с "=", в формулы).
 const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash','responsible_user_id'];
@@ -71,7 +73,7 @@ function doPost(e) {
   const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
   const lock = LockService.getScriptLock();
   try {
-    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; READ_ONLY_REQUEST = false; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
+    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; READ_ONLY_REQUEST = false; SHEET_SCHEMA_VALIDATED = {}; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     READ_ONLY_REQUEST = requestLockMode_(req) === 'read-candidate';
     if (!req.action) throw new Error('Не указано действие');
@@ -118,14 +120,6 @@ function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSpreadsheet(); if(!s) throw new Error('Скрипт должен быть привязан к таблице бюджета'); return SS_CACHE=s; }
-function invalidateHeaderCache_(name){
-  try{
-    const cache=CacheService.getScriptCache();
-    const names=name?[name]:Object.keys(TABLES);
-    names.forEach(table=>cache.remove('hdr'+API_VERSION+':'+table));
-  }catch(_){}
-}
-
 function sheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
@@ -133,9 +127,9 @@ function sheet_(name) {
     if (READ_ONLY_REQUEST) throw new Error('Лист '+name+' отсутствует; чтение остановлено без автоматического создания структуры');
     sh=ss.insertSheet(name); SHEET_WRITES++; timedSheetWrite_(()=>sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]])); sh.setFrozenRows(1); formatSheet_(sh,name);
   }
-  // Заголовки проверяем не на каждый запрос: успешная проверка запоминается на 6 часов (ключ содержит версию API).
-  const hdrKey='hdr'+API_VERSION+':'+name; let cache=null; try{cache=CacheService.getScriptCache();}catch(_){}
-  if (cache && !READ_ONLY_REQUEST && cache.get(hdrKey)==='1') return sh;
+  // Validate once per execution for both reads and writes. A persistent cache can hide
+  // manual schema changes for hours and allow writes against shifted columns.
+  if (SHEET_SCHEMA_VALIDATED[name]) return sh;
   SHEET_READS++;
   const header=timedSheetRead_(()=>sh.getRange(1,1,1,TABLES[name].length).getValues())[0];
   let used=header.length;
@@ -151,7 +145,7 @@ function sheet_(name) {
     timedSheetWrite_(()=>sh.getRange(1,current.length+1,1,missing.length).setValues([missing]));
     SHEET_WRITES++;
   }
-  if (cache) { try{cache.put(hdrKey,'1',21600);}catch(_){} }
+  SHEET_SCHEMA_VALIDATED[name] = true;
   return sh;
 }
 function rows_(name) {
@@ -1397,7 +1391,6 @@ function auditBackupStructure(){
 
 function setupSheets(){
   // Explicit maintenance always revalidates headers, even when a previous schema cache exists.
-  invalidateHeaderCache_();
   Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));
   const a=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AUTH_SHEET); if(a)formatAuth_(a);
   const tz=SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
