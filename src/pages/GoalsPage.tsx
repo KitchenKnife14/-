@@ -186,7 +186,16 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
         const { error: err } = await googleSheets.from('goals').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
+        const { data: authData } = await googleSheets.auth.getUser()
+        const userId = authData.user?.id
+        if (!userId) throw new Error('Сессия завершена. Войдите снова.')
+        const storage = window.localStorage
+        const requestPayload = { family_id: familyId, ...payload, create_purchase: createPurchase }
+        const pendingKey = pendingMutationStorageKey('goals', familyId, userId, 'create-with-purchase')
+        const fingerprint = await fingerprintTransactionPayload(requestPayload)
+        const requestId = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
         const { error: err } = await googleSheets.rpc('create_goal_with_purchase', {
+          p_request_id: requestId,
           p_family_id: familyId,
           p_name: payload.name,
           p_description: payload.description,
@@ -196,6 +205,7 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
           p_create_purchase: createPurchase,
         })
         if (err) throw err
+        clearPendingMutation(storage, pendingKey, requestId)
       }
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
