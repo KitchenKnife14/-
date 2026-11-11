@@ -157,7 +157,7 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, userId, mont
     try {
       const payload = { family_id: familyId, category_id: categoryId, month_date: monthDate, limit_kopecks: limK, warn_75: true, warn_90: true, warn_100: true }
       if (editing) {
-        const { error: err } = await googleSheets.from('budgets').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('budgets').update(payload).eq('id', editing.id).expect(editing as unknown as Record<string, unknown>)
         if (err) throw err
       } else {
         if (!userId) throw new Error('Сессия завершена. Войдите снова.')
