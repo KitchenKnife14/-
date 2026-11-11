@@ -204,7 +204,7 @@ test('signup and signin return the token and user in the API data envelope', () 
   assert.equal(signin.data.data, undefined);
 });
 
-test('expired sessions are rejected and removed from Script Properties', () => {
+test('expired sessions are rejected without mutating Script Properties during authentication', () => {
   const h = makeHarness();
   const user = h.signup('expired-session@example.com');
   const key = 'session:' + user.token;
@@ -214,10 +214,10 @@ test('expired sessions are rejected and removed from Script Properties', () => {
   }));
   const response = h.call({ action: 'getSession', token: user.token });
   assert.match(response.error?.message || '', /Сессия завершена/);
-  assert.equal(h.context.PropertiesService.getScriptProperties().getProperty(key), null);
+  assert.ok(h.context.PropertiesService.getScriptProperties().getProperty(key));
 });
 
-test('malformed session records fail closed and are deleted on use', () => {
+test('malformed session records fail closed without mutating Script Properties on use', () => {
   const h = makeHarness();
   const user = h.signup('malformed-session@example.com');
   const props = h.context.PropertiesService.getScriptProperties();
@@ -228,7 +228,7 @@ test('malformed session records fail closed and are deleted on use', () => {
     props.setProperty(key, value);
     const response = h.call({ action: 'getSession', token: user.token });
     assert.match(response.error?.message || '', /Сессия завершена/);
-    assert.equal(props.getProperty(key), null);
+    assert.equal(props.getProperty(key), value);
   }
 });
 

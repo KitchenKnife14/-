@@ -475,10 +475,11 @@ function requireUser_(token){
   const p=PropertiesService.getScriptProperties(), raw=p.getProperty('session:'+token);
   if(!raw) throw new Error('Сессия завершена, войдите снова');
   let s;
+  // Authentication checks are read-only: expired/corrupt records are pruned by signup/signin
+  // maintenance, not as a side effect of ordinary read requests.
   try { s=JSON.parse(raw); }
-  catch (_) { p.deleteProperty('session:'+token); throw new Error('Сессия завершена, войдите снова'); }
+  catch (_) { throw new Error('Сессия завершена, войдите снова'); }
   if(!s||typeof s!=='object'||Array.isArray(s)||typeof s.userId!=='string'||!s.userId||typeof s.expires!=='number'||!Number.isFinite(s.expires)||s.expires<=Date.now()){
-    p.deleteProperty('session:'+token);
     throw new Error('Сессия завершена, войдите снова');
   }
   const u=authRows_().find(x=>x.id===s.userId); if(!u)throw new Error('Пользователь не найден');
