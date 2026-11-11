@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { googleSheets, type GoogleSession } from '../lib/googleSheets'
 import type { Profile, Family, FamilyMember } from '../lib/types'
 
@@ -33,7 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = async (s: GoogleSession | null) => {
+  const loadSequence = useRef(0)
+
+  const load = async (s: GoogleSession | null, sequence = ++loadSequence.current) => {
+    if (sequence !== loadSequence.current) return
     if (!s) {
       setSession(null)
       setProfile(null)
@@ -41,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMembers([])
       setMemberProfiles([])
       setLoading(false)
+      setError(null)
       return
     }
     setSession(s)
@@ -49,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null)
     setFamily(null)
     setMembers([])
+    setMemberProfiles([])
     try {
       const { data, error } = await googleSheets.rpc('get_my_context', {})
       if (error) throw new Error(error.message)
@@ -59,25 +64,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMemberProfiles(c.member_profiles ?? (c.profile ? [c.profile] : []))
       setFamily(c.family ?? null)
     } catch (e) {
+      if (sequence !== loadSequence.current) return
       setMemberProfiles([])
       setError(e instanceof Error ? e.message : 'Ошибка загрузки профиля')
     } finally {
-      setLoading(false)
+      if (sequence === loadSequence.current) setLoading(false)
     }
   }
 
   useEffect(() => {
-    googleSheets.auth.getSession().then(({ data }) => load(data.session ?? null))
-    const { data: sub } = googleSheets.auth.onAuthStateChange((_event, s) => {
-      (async () => load(s))()
+    const initialSequence = ++loadSequence.current
+    const { data: sub } = googleSheets.auth.onAuthStateChange((_event, session) => {
+      void load(session)
     })
-    return () => sub.subscription.unsubscribe()
+    googleSheets.auth.getSession()
+      .then(({ data }) => {
+        if (initialSequence === loadSequence.current) void load(data.session ?? null, initialSequence)
+      })
+      .catch((e: unknown) => {
+        if (initialSequence !== loadSequence.current) return
+        setError(e instanceof Error ? e.message : 'Не удалось получить сессию')
+        setLoading(false)
+      })
+    return () => {
+      loadSequence.current++
+      sub.subscription.unsubscribe()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const refresh = async () => {
-    const { data } = await googleSheets.auth.getSession()
-    await load(data.session ?? null)
+    const sequence = ++loadSequence.current
+    setLoading(true)
+    setError(null)
+    try {
+      const { data } = await googleSheets.auth.getSession()
+      if (sequence !== loadSequence.current) return
+      await load(data.session ?? null, sequence)
+    } catch (e) {
+      if (sequence !== loadSequence.current) return
+      setError(e instanceof Error ? e.message : 'Не удалось обновить сессию')
+      setLoading(false)
+    }
   }
 
   return (
