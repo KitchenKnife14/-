@@ -8,7 +8,7 @@ import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePending
 import { Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import Modal from '../components/Modal'
 
-type AccountDraft = Pick<Account, 'id' | 'name' | 'kind' | 'starting_balance_kopecks'> | null
+type AccountDraft = Account | null
 
 export default function AccountsPage() {
   const { family } = useAuth()
@@ -58,7 +58,7 @@ export default function AccountsPage() {
     setEditing(null); setName(''); setKind('bank'); setStartingBalance('0'); setError(null); setModalOpen(true)
   }
   const openEdit = (account: Account) => {
-    setEditing({ id: account.id, name: account.name, kind: account.kind, starting_balance_kopecks: account.starting_balance_kopecks })
+    setEditing(account)
     setName(account.name); setKind(account.kind); setStartingBalance((account.starting_balance_kopecks / 100).toString()); setError(null); setModalOpen(true)
   }
 
@@ -74,7 +74,7 @@ export default function AccountsPage() {
       const payload = { family_id: family.id, name: normalizedName, kind, starting_balance_kopecks: balance }
       let result
       if (editing) {
-        result = await googleSheets.from('accounts').update(payload).eq('id', editing.id)
+        result = await googleSheets.from('accounts').update(payload).eq('id', editing.id).expect(editing as unknown as Record<string, unknown>)
       } else {
         const { data: authData } = await googleSheets.auth.getUser()
         const userId = authData.user?.id
@@ -95,7 +95,7 @@ export default function AccountsPage() {
   }
 
   const toggleArchived = async (account: Account) => {
-    const { error: err } = await googleSheets.from('accounts').update({ archived: !account.archived }).eq('id', account.id)
+    const { error: err } = await googleSheets.from('accounts').update({ archived: !account.archived }).eq('id', account.id).expect(account as unknown as Record<string, unknown>)
     if (err) setError(err.message)
     else await load()
   }
