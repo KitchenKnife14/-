@@ -1827,6 +1827,27 @@ test('doPost reports lock timeout without attempting to release an unacquired lo
   assert.deepEqual(h.lockStats(), { acquires: 1, releases: 0 });
 });
 
+test('revision marker failures are counted without turning a committed data write into an API error', () => {
+  const h = makeHarness();
+  const user = h.signup('revision-write-failure@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Сбой маркера ревизии' }).data;
+  const props = h.context.PropertiesService.getScriptProperties();
+  const originalSetProperty = props.setProperty.bind(props);
+  props.setProperty = (key, value) => {
+    if (key.startsWith('table_revision:v2:transactions:')) throw new Error('simulated revision marker failure');
+    return originalSetProperty(key, value);
+  };
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 4500, operation_date: '2026-11-11' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.equal(vm.runInContext('REVISION_WRITE_FAILURES', h.context), 1);
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].amount_kopecks, 4500);
+});
+
 test('partial non-contiguous update publishes a revision after the first range commits', () => {
   const h = makeHarness();
   const user = h.signup('partial-update-revision@example.com');
