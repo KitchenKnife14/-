@@ -51,7 +51,7 @@ test('every navigation destination has a matching authenticated route', () => {
     assert.ok(routePaths.has(destination), `missing route for navigation destination: ${destination}`)
   }
   assert.match(layout, /await googleSheets\.auth\.signOut\(\)/)
-  assert.match(layout, /navigate\('\/'\)/)
+  assert.match(layout, /navigate\('\\/', \{ replace: true \}\)/)
 })
 
 
