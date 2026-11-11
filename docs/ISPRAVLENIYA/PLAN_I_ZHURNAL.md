@@ -2602,3 +2602,10 @@ HEAD до:
 
 - Финальный CI после фикса частичного создания цели и порядка отвязки Telegram завершился success на HEAD `e830136102e848dc04a725c4e11a6dcbac51bcbe`: **214/214 тестов, 0 failures**; TypeScript/production build, dependency audit, Apps Script syntax, runtime diagnostics syntax, isolated idempotency syntax и manifest validation — success. Run: https://github.com/KitchenKnife14/-/actions/runs/43094990354
 - Подтверждено: при ошибке вставки покупки до записи повтор корректно завершает создание цели и покупки; при сбое удаления Telegram link row неиспользованные коды уже отозваны, активная привязка остаётся до безопасного повтора отвязки.
+
+
+#### Проверка восстановления присоединения второго участника (2026-11-11)
+
+- В `joinFamily` membership сохраняется до изменения профиля. Это правильный порядок: профиль не меняется, если вставка membership не прошла; если после успешной вставки membership обновление профиля падает, повторный join обнаруживает существующее членство и завершает обновление профиля без второй membership-записи.
+- Добавлен regression test на сбой `updateRows_('profiles')` после сохранения membership и повтор того же join-запроса. Проверяются одна membership-запись и корректное имя профиля после retry.
+- Commit теста: `1db81edc0900d3ec947a1786db136de930dfaf0f`. Требуется CI на новом HEAD.
