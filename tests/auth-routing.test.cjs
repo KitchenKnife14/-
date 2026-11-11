@@ -84,3 +84,13 @@ test('onboarding verifies persisted family membership before leaving the setup s
   assert.match(onboarding, /verifiedContext as \{ family\?: unknown \} \| null/)
   assert.match(onboarding, /Семейное пространство не подтвердилось/)
 })
+
+
+test('session adapter degrades safely when browser storage is unavailable', () => {
+  const adapter = fs.readFileSync(path.join(__dirname, '../src/lib/googleSheets.ts'), 'utf8')
+  assert.match(adapter, /let volatileSession: GoogleSession \| null = null/)
+  assert.match(adapter, /catch \{\n    return volatileSession/)
+  assert.match(adapter, /volatileSession = session/)
+  assert.match(adapter, /try \{ localStorage\.setItem\(SESSION_KEY, JSON\.stringify\(session\)\) \} catch \{\}/)
+  assert.match(adapter, /volatileSession = null\n    try \{ localStorage\.removeItem\(SESSION_KEY\) \} catch \{\}/)
+})

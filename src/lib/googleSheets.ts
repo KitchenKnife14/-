@@ -3,8 +3,52 @@ type Filter = { column: string; op: string; value?: unknown; values?: unknown[] 
 export type GoogleSession = { access_token: string; token_type: 'bearer'; expires_at: number; user: { id: string; email: string } }
 const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL as string | undefined
 const SESSION_KEY = 'budget_google_session_v1'
-function readSession(): GoogleSession | null { try { const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null') as GoogleSession|null; if(s&&s.expires_at*1000>Date.now())return s;localStorage.removeItem(SESSION_KEY);if(s)queueMicrotask(()=>notify('SIGNED_OUT',null));return null } catch{return null} }
-function saveSession(data:{token:string;user:{id:string;email:string}}|null){if(!data){localStorage.removeItem(SESSION_KEY);return null}const s:GoogleSession={access_token:data.token,token_type:'bearer',expires_at:Math.floor(Date.now()/1000)+1209600,user:{id:data.user.id,email:data.user.email}};localStorage.setItem(SESSION_KEY,JSON.stringify(s));return s}
+let volatileSession: GoogleSession | null = null
+
+function readSession(): GoogleSession | null {
+  let stored: string | null
+  try {
+    stored = localStorage.getItem(SESSION_KEY)
+  } catch {
+    return volatileSession && volatileSession.expires_at * 1000 > Date.now() ? volatileSession : null
+  }
+  if (!stored) {
+    if (volatileSession && volatileSession.expires_at * 1000 > Date.now()) return volatileSession
+    volatileSession = null
+    return null
+  }
+  try {
+    const session = JSON.parse(stored) as GoogleSession | null
+    if (session && session.expires_at * 1000 > Date.now()) {
+      volatileSession = session
+      return session
+    }
+    try { localStorage.removeItem(SESSION_KEY) } catch {}
+    volatileSession = null
+    if (session) queueMicrotask(() => notify('SIGNED_OUT', null))
+    return null
+  } catch {
+    try { localStorage.removeItem(SESSION_KEY) } catch {}
+    return volatileSession && volatileSession.expires_at * 1000 > Date.now() ? volatileSession : null
+  }
+}
+
+function saveSession(data: { token: string; user: { id: string; email: string } } | null) {
+  if (!data) {
+    volatileSession = null
+    try { localStorage.removeItem(SESSION_KEY) } catch {}
+    return null
+  }
+  const session: GoogleSession = {
+    access_token: data.token,
+    token_type: 'bearer',
+    expires_at: Math.floor(Date.now() / 1000) + 1209600,
+    user: { id: data.user.id, email: data.user.email },
+  }
+  volatileSession = session
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)) } catch {}
+  return session
+}
 const AUTH_ERRORS=['Сессия завершена','Требуется вход','Пользователь не найден']
 async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
   if(!API_URL)throw new Error('Не настроен VITE_GOOGLE_APPS_SCRIPT_URL')
