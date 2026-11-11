@@ -2290,3 +2290,13 @@ HEAD до:
 
 
 - CI по работе №85 завершился успешно: run 43028770605, commit 87060eedaa8e5188b717a9993d07819f9c021ba9 — success. Regression tests: 197/197, 0 failures; TypeScript/production build, Apps Script syntax, runtime diagnostics, отдельный idempotency runner syntax, manifest validation — success; npm audit — 0 vulnerabilities. Это подтверждает backend/frontend изменения и тесты в CI, но не реальный сетевой повтор в Apps Script deployment.
+
+
+### Дополнительная проверка read-path — защита служебного листа _auth (2026-11-11)
+
+- При продолжении инвентаризации read-candidate путей обнаружено, что `requireUser_()` вызывает `authRows_()`, а `authRows_()` обращается к `authSheet_()`. Если служебный лист `_auth` отсутствует, `authSheet_()` раньше автоматически создавал лист, записывал заголовки, скрывал лист и форматировал диапазон — даже во время запроса, классифицированного как чтение.
+- Исправлено в рабочей ветке: при `READ_ONLY_REQUEST` отсутствие `_auth` теперь приводит к fail-closed ошибке до создания листа или записи. Обычные write/maintenance пути сохраняют прежнее поведение создания листа.
+- Добавлен regression test через реальный `doPost()`: запрос `getSession` с тестовой сессией при отсутствующем `_auth` должен завершиться ошибкой, не создавать лист и оставить `SHEET_WRITES = 0`.
+- Коммиты: Code.gs `4673ff80e5783ef60b062a15eb70e7cee24ccb03`; тест `99208662cde964693954a86d34ef76b9d857cbab`.
+- Это устраняет один подтверждённый побочный эффект чтения, но не означает, что все read-path проверены или что общий ScriptLock можно снимать. Нужен зелёный CI и продолжение инвентаризации всех read-candidate/RPC путей.
+- Прогресс чек-листа остаётся 161/272 (59,2%), 1/12 макроэтапов. Production, main, основная Google-таблица и Apps Script deployment не затронуты.
