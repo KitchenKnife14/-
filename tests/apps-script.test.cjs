@@ -423,6 +423,49 @@ test('optimistic update rejects stale snapshots and preserves the newer row', ()
   assert.equal(saved.data[0].amount_kopecks, 15000);
 });
 
+test('delete rejects a stale row snapshot and reports an already removed row', () => {
+  const h = makeHarness();
+  const owner = h.signup('stale-delete-owner@example.com');
+  const partner = h.signup('stale-delete-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Удаление устаревшей записи' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+  const created = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, operation_date: '2026-11-11', description: 'Исходная покупка' }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const snapshot = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: created.data[0].id }]
+  }).data[0];
+  const changed = h.call({
+    action: 'query', token: partner.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: snapshot.id }],
+    values: { description: 'Изменено вторым участником' }
+  });
+  assert.equal(changed.error, null, changed.error?.message);
+
+  const staleDelete = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: snapshot.id }], expected: snapshot
+  });
+  assert.match(staleDelete.error?.message || '', /изменена другим участником/i);
+  let saved = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data[0];
+  assert.equal(saved.description, 'Изменено вторым участником');
+
+  const removed = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: saved.id }], expected: saved
+  });
+  assert.equal(removed.error, null, removed.error?.message);
+  const repeatedDelete = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: saved.id }], expected: saved
+  });
+  assert.match(repeatedDelete.error?.message || '', /уже удалена/i);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data.length, 0);
+});
+
 test('monthly plan upsert rejects stale snapshots and concurrent inserts', () => {
   const h = makeHarness();
   const owner = h.signup('monthly-plan-stale-owner@example.com');
