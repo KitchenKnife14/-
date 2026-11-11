@@ -35,6 +35,11 @@ export default function OnboardingPage() {
         })
         if (joinErr) throw joinErr
       }
+      const { data: verifiedContext, error: contextError } = await googleSheets.rpc('get_my_context', {})
+      if (contextError) throw contextError
+      if (!(verifiedContext as { family?: unknown } | null)?.family) {
+        throw new Error('Семейное пространство не подтвердилось. Проверьте подключение и повторите попытку.')
+      }
       await refresh()
       navigate('/')
     } catch (e) {

@@ -6,6 +6,7 @@ const path = require('node:path')
 const source = fs.readFileSync(path.join(__dirname, '../src/context/AuthContext.tsx'), 'utf8')
 const app = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8')
 const layout = fs.readFileSync(path.join(__dirname, '../src/components/Layout.tsx'), 'utf8')
+const onboarding = fs.readFileSync(path.join(__dirname, '../src/pages/OnboardingPage.tsx'), 'utf8')
 const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '../vercel.json'), 'utf8'))
 
 test('auth context ignores stale async session loads before writing state', () => {
@@ -71,4 +72,15 @@ test('mobile navigation exposes four primary routes and all remaining routes in 
 test('mobile navigation has an explicit active state for routes placed in More', () => {
   assert.match(layout, /const moreActive = mobileMoreItems\.some/)
   assert.match(layout, /moreOpen \|\| moreActive \? 'text-primary-800'/)
+})
+
+
+test('onboarding verifies persisted family membership before leaving the setup screen', () => {
+  const verify = onboarding.indexOf("googleSheets.rpc('get_my_context', {})")
+  const refresh = onboarding.indexOf('await refresh()', verify)
+  const navigate = onboarding.indexOf("navigate('/')", refresh)
+  assert.ok(verify >= 0 && refresh > verify && navigate > refresh, 'verify backend membership, refresh auth context, then navigate')
+  assert.match(onboarding, /if \(contextError\) throw contextError/)
+  assert.match(onboarding, /verifiedContext as \{ family\?: unknown \} \| null/)
+  assert.match(onboarding, /Семейное пространство не подтвердилось/)
 })
