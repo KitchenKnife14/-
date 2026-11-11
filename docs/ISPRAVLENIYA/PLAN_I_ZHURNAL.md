@@ -2201,3 +2201,6 @@ HEAD до:
 
 
 - CI `43016484125` на `284db5a` обнаружил два несоответствия новых тестов: строгий allowlist диагностических полей не включал новое числовое поле `revisionWriteFailures`; mock Script Properties был подменён только на одном возвращённом объекте, тогда как harness выдаёт другой объект при следующем `getScriptProperties()`. Исправлено: allowlist обновлён, а тест закрепляет единый mock-объект на уровне сервиса. Производственный код по этим двум ошибкам не менялся. Новый CI обязателен.
+
+
+- Повторный CI после корректировки тестов диагностики завершился успешно: run `43016678075`, commit `41173660d0bc0bc774ed1f679a0f17ae3e2b5663`; 191/191 regression tests, 0 failures; TypeScript/production build, Apps Script syntax, runtime diagnostics syntax, manifest и npm audit — success (0 vulnerabilities). Ошибочный запуск `43016484125` сохранён в истории как тестовая ошибка; исправления проверены новым зелёным запуском.
