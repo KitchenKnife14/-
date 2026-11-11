@@ -913,7 +913,22 @@ function query_(req,user){
       const replacements=mode==='delete'?[]:changed;
       assertGoalContributionTotalsSafe_(goalIds,replacements,changed.map(row=>row.id));
     }
-    if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
+    if(mode==='delete'&&table==='goals'&&changed.length){
+      // Delete dependants before the goal row. If any child write fails, the
+      // parent remains available so the same request can safely resume the cascade.
+      const deletedIds=new Set(changed.map(goal=>String(goal.id)));
+      const contributions=rows_('goal_contributions').filter(row=>deletedIds.has(String(row.goal_id)));
+      if(contributions.length)deleteRows_('goal_contributions',contributions);
+      const purchases=rows_('planned_purchases'),purchasesChanged=[];
+      purchases.forEach(purchase=>{
+        if(purchase.goal_id&&deletedIds.has(String(purchase.goal_id))&&canAccessRow_('planned_purchases',purchase,user)){
+          purchase.goal_id='';
+          purchasesChanged.push(purchase);
+        }
+      });
+      if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
+    }
+    if(mode==='delete'){if(table!=='goals')deleteRows_(table,changed);}else updateRows_(table,changed);
     if(mode==='delete'&&(table==='recurring_payments'||table==='transactions')){
       // A delete may commit before its dependent-row update fails. On retry the
       // parent row is already gone, so recover links from the explicit ID filter.
@@ -943,13 +958,6 @@ function query_(req,user){
         });
         if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
       }
-    }
-    if(table==='goals'&&mode==='delete'&&changed.length){
-      const deletedIds=new Set(changed.map(g=>String(g.id)));
-      deleteRows_('goal_contributions',rows_('goal_contributions').filter(c=>deletedIds.has(String(c.goal_id))));
-      const purchases=rows_('planned_purchases'),purchasesChanged=[];
-      purchases.forEach(p=>{if(p.goal_id&&deletedIds.has(String(p.goal_id))){p.goal_id='';purchasesChanged.push(p);}});
-      if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
     }
     if(table==='goal_contributions'){
       // A retried delete may find no contribution row because the previous request
