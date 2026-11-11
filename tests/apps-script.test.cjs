@@ -420,6 +420,30 @@ test('optimistic update rejects stale snapshots and preserves the newer row', ()
   assert.equal(saved.data[0].amount_kopecks, 15000);
 });
 
+test('monthly plan upsert rejects stale snapshots and concurrent inserts', () => {
+  const h = makeHarness();
+  const owner = h.signup('monthly-plan-stale-owner@example.com');
+  const partner = h.signup('monthly-plan-stale-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Конфликт месячного плана' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+  const key = { family_id: family.id, month_date: '2026-11-01', category_id: null, type: 'expense' };
+  const created = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'upsert', returning: true, onConflict: 'family_id,month_date,category_id,type', values: { ...key, planned_kopecks: 10000, note: 'Исходный план' } });
+  assert.equal(created.error, null, created.error?.message);
+  const snapshot = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'select', filters: [{ column: 'family_id', op: 'eq', value: family.id }, { column: 'month_date', op: 'eq', value: key.month_date }, { column: 'type', op: 'eq', value: key.type }, { column: 'category_id', op: 'is', value: null }] }).data[0];
+  const newer = h.call({ action: 'query', token: partner.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'family_id,month_date,category_id,type', values: { ...key, planned_kopecks: 15000, note: 'Изменение второго участника' } });
+  assert.equal(newer.error, null, newer.error?.message);
+  const stale = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'family_id,month_date,category_id,type', expectedRows: [snapshot], values: { ...key, planned_kopecks: 20000, note: 'Устаревший план' } });
+  assert.match(stale.error?.message || '', /изменён другим участником/i);
+  const saved = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'select', filters: [{ column: 'family_id', op: 'eq', value: family.id }] }).data[0];
+  assert.equal(saved.planned_kopecks, 15000);
+  assert.equal(saved.note, 'Изменение второго участника');
+  const key2 = { ...key, month_date: '2026-12-01' };
+  const partnerInsert = h.call({ action: 'query', token: partner.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'family_id,month_date,category_id,type', values: { ...key2, planned_kopecks: 5000 } });
+  assert.equal(partnerInsert.error, null, partnerInsert.error?.message);
+  const racedInsert = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'family_id,month_date,category_id,type', expectedRows: [null], values: { ...key2, planned_kopecks: 7000 } });
+  assert.match(racedInsert.error?.message || '', /создана другим участником/i);
+});
+
 test('goal balances stay synchronized with contribution history', () => {
   const h = makeHarness();
   const user = h.signup('goals@example.com');
