@@ -767,7 +767,7 @@ function readTransactionRangeRows_(filters,user){
 const IDEMPOTENT_INSERT_FIELDS = {
   accounts:['family_id','name','kind','owner_user_id','starting_balance_kopecks','archived'],
   goal_contributions:['goal_id','amount_kopecks','contribution_date','note'],
-  planned_purchases:['family_id','name','category_id','estimated_kopecks','priority','desired_month','desired_date','url','comment','status','goal_id'],
+  planned_purchases:['family_id','name','category_id','estimated_kopecks','priority','desired_month','desired_date','url','comment','status','responsible_user_id','goal_id','linked_transaction_id'],
   recurring_payments:['family_id','type','amount_kopecks','category_id','account_id','description','start_date','end_date','frequency','custom_interval_days','next_due_date','remind','active','responsible_user_id'],
   budgets:['family_id','category_id','month_date','limit_kopecks','warn_75','warn_90','warn_100']
 };
@@ -781,6 +781,7 @@ function sameIdempotentInsert_(table,stored,candidate,user){
   }
   return fields.every(field=>String(stored[field]??'')===String(candidate[field]??''));
 }
+function sameTransactionInsert_(stored,candidate,user){
   if(String(stored.created_by||'')!==String(user.id))return false;
   const fields=['family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','responsible_user_id','planned','parent_recurring_id'];
   return fields.every(field=>String(stored[field]??'')===String(candidate[field]??''));
