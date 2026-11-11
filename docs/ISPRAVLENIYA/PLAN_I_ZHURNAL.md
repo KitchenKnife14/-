@@ -2005,3 +2005,5 @@ HEAD до:
 - Во время регистрации/входа пользователь мог переключить режим формы или менять значения полей, пока предыдущий запрос ещё выполнялся. Это не меняло уже отправленный payload, но создавало визуальное расхождение между отображаемой формой и активным запросом.
 - Переключатели режимов и поля AuthPage/OnboardingPage теперь disabled на время submit; добавлены корректные `autoComplete` для email/username, current/new password и имени. Кнопки режимов получили явный `type="button"`.
 - Добавлен regression test на autocomplete и блокировку элементов на время запроса. Только frontend/test/docs в ветке `ispravleniya`; Production, Apps Script, основная таблица и Telegram не изменялись. Прогресс не менять до CI.
+
+- CI для работы №66: коммит `50805f8330a1112c8e04edd2d1036dc61ff680f4` завершился `completed / success`: [run 42986353968](https://github.com/KitchenKnife14/-/actions/runs/42986353968). TypeScript/production build, 181 regression test (181 passed, 0 failed), Apps Script syntax, runtime diagnostics, manifest validation и `npm audit` (0 vulnerabilities) прошли. Прогресс остаётся 160/272 (58.8%): это UX-надёжность форм, а не новый пункт чек-листа.
