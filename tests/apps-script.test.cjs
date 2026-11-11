@@ -394,6 +394,32 @@ test('recurring payment confirmation replay returns success after the full commi
   assert.equal(after.next_due_date, '2026-11-30');
 });
 
+test('optimistic update rejects stale snapshots and preserves the newer row', () => {
+  const h = makeHarness();
+  const user = h.signup('stale-update@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка устаревшей формы' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 15000, operation_date: '2026-11-11', description: 'Исходное описание' }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const staleSnapshot = { ...created.data[0] };
+  const newer = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: created.data[0].id }], values: { description: 'Изменено вторым участником' }
+  });
+  assert.equal(newer.error, null, newer.error?.message);
+  const staleWrite = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: created.data[0].id }], expected: staleSnapshot,
+    values: { amount_kopecks: 20000 }
+  });
+  assert.match(staleWrite.error?.message || '', /изменена другим участником/i);
+  const saved = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] });
+  assert.equal(saved.data[0].description, 'Изменено вторым участником');
+  assert.equal(saved.data[0].amount_kopecks, 15000);
+});
+
 test('goal balances stay synchronized with contribution history', () => {
   const h = makeHarness();
   const user = h.signup('goals@example.com');
