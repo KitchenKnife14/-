@@ -1152,8 +1152,9 @@ function rpc_(req,user){
     if(existing)throw new Error('К Telegram уже привязан аккаунт. Сначала отвяжите его.');
     const code=code_().slice(0,12), expires=new Date(Date.now()+15*60*1000).toISOString();
     const old=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id&&!x.used_at);
-    if(old.length)deleteRows_('telegram_link_codes',old);
+    // Persist the replacement before invalidating old codes. If append fails, the previous code remains usable.
     appendRows_('telegram_link_codes',[{id:id_(),user_id:user.id,family_id:familyId,code_hash:telegramCodeHash_(code),expires_at:expires,used_at:'',created_at:now_()}]);
+    if(old.length)deleteRows_('telegram_link_codes',old);
     return {code,expires_at:expires};
   }
   if(name==='get_telegram_link_status'){
