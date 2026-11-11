@@ -260,20 +260,27 @@ test('joinFamily validates membership before changing profile and remains idempo
   const h = makeHarness();
   const owner = h.signup('join-owner@example.com');
   const partner = h.signup('join-partner@example.com');
+  const third = h.signup('join-third@example.com');
   const outsider = h.signup('join-outsider@example.com');
   const family = h.call({ action: 'createFamily', token: owner.token, name: 'Основная семья' }).data;
   const otherFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Другая семья' }).data;
 
-  const joined = h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code, display_name: 'Участник' });
+  const joined = h.call({ action: 'joinFamily', token: partner.token, invite_code: ` ${family.invite_code.toLowerCase()} `, display_name: 'Участник' });
   assert.equal(joined.error, null, joined.error?.message);
   const repeated = h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code, display_name: 'Новое имя' });
   assert.equal(repeated.error, null, repeated.error?.message);
   assert.equal(h.context.rows_('family_members').filter(row => row.user_id === partner.user.id).length, 1);
   assert.equal(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, 'Новое имя');
 
+  const thirdBefore = h.context.rows_('profiles').find(row => row.id === third.user.id).display_name;
+  const fullFamilyRejected = h.call({ action: 'joinFamily', token: third.token, invite_code: family.invite_code, display_name: 'Не менять имя третьего участника' });
+  assert.match(fullFamilyRejected.error.message, /В семье уже два участника/);
+  assert.equal(h.context.rows_('profiles').find(row => row.id === third.user.id).display_name, thirdBefore);
+  assert.equal(h.context.rows_('family_members').filter(row => row.user_id === third.user.id).length, 0);
+
   const before = h.context.rows_('profiles').find(row => row.id === outsider.user.id).display_name;
   const rejected = h.call({ action: 'joinFamily', token: outsider.token, invite_code: family.invite_code, display_name: 'Не менять профиль' });
-  assert.match(rejected.error.message, /два участника|другой семье/);
+  assert.match(rejected.error.message, /Вы уже состоите в другой семье/);
   assert.equal(h.context.rows_('profiles').find(row => row.id === outsider.user.id).display_name, before);
   assert.equal(h.context.rows_('family_members').filter(row => row.user_id === outsider.user.id).length, 1);
   assert.ok(otherFamily.id);
