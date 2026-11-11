@@ -3120,6 +3120,6 @@ test('Telegram replay cache has a documented 24-hour TTL and prunes expired entr
   });
   assert.equal(help.error, null, help.error?.message);
   const saved = JSON.parse(props.getProperty('telegram:update:7502'));
-  assert.ok(saved.expires >= now + h.context.TELEGRAM_UPDATE_TTL_MS - 1000);
-  assert.ok(saved.expires <= Date.now() + h.context.TELEGRAM_UPDATE_TTL_MS + 1000);
+  assert.ok(saved.expires >= now + 24 * 60 * 60 * 1000 - 1000);
+  assert.ok(saved.expires <= Date.now() + 24 * 60 * 60 * 1000 + 1000);
 });
