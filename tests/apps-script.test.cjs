@@ -3225,5 +3225,5 @@ test('read-candidate requests fail closed on incomplete headers without repairin
   assert.throws(() => h.context.sheet_('transactions'), /требует обслуживания.*без автоматического изменения заголовков/);
   assert.deepEqual(sheet.getRange(1, 1, 1, oldHeaders.length).getValues()[0], oldHeaders);
   assert.equal(sheet.getDataRange().getValues()[0].length, oldHeaders.length);
-  assert.equal(h.context.SHEET_WRITES, 0);
+  assert.equal(vm.runInContext('SHEET_WRITES', h.context), 0);
 });
