@@ -3358,6 +3358,20 @@ test('read-candidate requests fail closed instead of creating a missing sheet', 
   assert.equal(vm.runInContext('SHEET_WRITES', h.context), 0);
 });
 
+test('read-candidate authentication fails closed instead of creating a missing _auth sheet', () => {
+  const h = makeHarness();
+  const token = 'read-without-auth-sheet';
+  h.context.PropertiesService.getScriptProperties().setProperty('session:' + token, JSON.stringify({
+    userId: 'missing-auth-user',
+    expires: Date.now() + 60_000
+  }));
+
+  const response = h.call({ action: 'getSession', token });
+  assert.match(response.error?.message || '', /_auth отсутствует.*без автоматического создания структуры/);
+  assert.equal(h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('_auth'), null);
+  assert.equal(vm.runInContext('SHEET_WRITES', h.context), 0);
+});
+
 test('read-candidate requests fail closed on incomplete headers without repairing them', () => {
   const h = makeHarness();
   const ss = h.context.SpreadsheetApp.getActiveSpreadsheet();
