@@ -2641,7 +2641,8 @@ test('Telegram retry after a transaction write but before update cache does not 
     },
   };
   const firstAttempt = h.call({ action: 'telegramWebhook', telegramSecret: 'crash-window-secret-0123456789abcdef', update });
-  assert.match(firstAttempt.error?.message || '', /simulated crash before update cache/);
+  assert.equal(firstAttempt.error, null, firstAttempt.error?.message);
+  assert.match(firstAttempt.data.text, /Записал расход/);
   props.setProperty = originalSetProperty;
   h.context.PropertiesService.getScriptProperties = originalGetScriptProperties;
 
