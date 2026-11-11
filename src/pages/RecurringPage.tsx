@@ -56,6 +56,7 @@ export default function RecurringPage() {
         p_recurring_id: confirming.id,
         p_expected_due_date: confirming.next_due_date,
         p_operation_date: todayISO(),
+        p_expected_recurring: confirming,
       })
       if (confirmError) throw confirmError
       setConfirming(null)
