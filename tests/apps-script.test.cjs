@@ -3018,3 +3018,36 @@ test('Telegram parses fractional ruble amounts exactly and rejects unsupported p
   assert.equal(txs.length, 3);
   assert.deepEqual(txs.map(row => row.amount_kopecks).sort((a,b) => a-b), [1, 4510, 4510]);
 });
+
+
+test('Telegram link retry is idempotent if update cache write fails after the link is saved', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-link-retry@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Повтор привязки' });
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret-0123456789abcdef01234567');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const update = { update_id: 7301, message: {
+    chat: { id: 730, type: 'private' }, from: { id: 730 }, text: '/link ' + generated.data.code
+  }};
+  const originalSetProperty = props.setProperty.bind(props);
+  let failCacheWrite = true;
+  props.setProperty = (key, value) => {
+    if (key === 'telegram:update:7301' && failCacheWrite) {
+      failCacheWrite = false;
+      throw new Error('simulated update cache write failure');
+    }
+    return originalSetProperty(key, value);
+  };
+
+  const first = h.call({ action: 'telegramWebhook', telegramSecret: 'test-backend-secret-0123456789abcdef01234567', update });
+  assert.match(first.error.message, /simulated update cache write failure/);
+  assert.equal(h.context.rows_('telegram_links').filter(row => row.telegram_user_id === '730').length, 1);
+  assert.ok(h.context.rows_('telegram_link_codes').find(row => row.code_hash === h.context.telegramCodeHash_(generated.data.code)).used_at);
+
+  const retry = h.call({ action: 'telegramWebhook', telegramSecret: 'test-backend-secret-0123456789abcdef01234567', update });
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.match(retry.data.text, /успешно привязан/);
+  assert.equal(h.context.rows_('telegram_links').filter(row => row.telegram_user_id === '730').length, 1);
+});

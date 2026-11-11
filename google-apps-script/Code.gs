@@ -1208,23 +1208,34 @@ function telegramWebhook_(req){
     reply={chat_id:chatId,text:'Команды:\n/link КОД — привязать аккаунт приложения\n/balance — сводка за текущий месяц\n/unlink — отвязать Telegram\n/help — помощь\n\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
   }else if(linkCommand){
     const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
-    const candidate=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash&&!x.used_at&&String(x.expires_at)>now);
-    if(!candidate)throw new Error('Код не найден, уже использован или истёк. Создайте новый код в приложении.');
-    const membership=rows_('family_members').find(x=>String(x.user_id)===String(candidate.user_id)&&String(x.family_id)===String(candidate.family_id));
-    if(!membership)throw new Error('Пользователь больше не состоит в этой семье.');
-    const links=rows_('telegram_links');
-    const byTelegram=links.find(x=>String(x.telegram_user_id)===telegramUserId);
-    const byUser=links.find(x=>String(x.user_id)===String(candidate.user_id));
-    if(byTelegram&&String(byTelegram.user_id)!==String(candidate.user_id))throw new Error('Этот Telegram уже привязан к другому аккаунту.');
-    if(byUser&&String(byUser.telegram_user_id)!==telegramUserId)throw new Error('К аккаунту приложения уже привязан другой Telegram. Сначала отвяжите его в приложении.');
-    if(byTelegram){
-      byTelegram.telegram_chat_id=chatId;
-      updateRows_('telegram_links',[byTelegram]);
+    const codeRow=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash);
+    const existingTelegramLink=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    const alreadyCompleted=!!(codeRow&&codeRow.used_at&&existingTelegramLink&&
+      String(existingTelegramLink.user_id)===String(codeRow.user_id)&&
+      String(existingTelegramLink.family_id)===String(codeRow.family_id));
+    if(alreadyCompleted){
+      // Telegram may retry after link + used_at persisted but before update_id cache was written.
+      // The same code and same Telegram/account link are a completed replay.
+      reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
     }else{
-      appendRows_('telegram_links',[{id:id_(),telegram_user_id:telegramUserId,telegram_chat_id:chatId,user_id:candidate.user_id,family_id:candidate.family_id,linked_at:now_()}]);
+      const candidate=codeRow&&!codeRow.used_at&&String(codeRow.expires_at)>now?codeRow:null;
+      if(!candidate)throw new Error('Код не найден, уже использован или истёк. Создайте новый код в приложении.');
+      const membership=rows_('family_members').find(x=>String(x.user_id)===String(candidate.user_id)&&String(x.family_id)===String(candidate.family_id));
+      if(!membership)throw new Error('Пользователь больше не состоит в этой семье.');
+      const links=rows_('telegram_links');
+      const byTelegram=links.find(x=>String(x.telegram_user_id)===telegramUserId);
+      const byUser=links.find(x=>String(x.user_id)===String(candidate.user_id));
+      if(byTelegram&&String(byTelegram.user_id)!==String(candidate.user_id))throw new Error('Этот Telegram уже привязан к другому аккаунту.');
+      if(byUser&&String(byUser.telegram_user_id)!==telegramUserId)throw new Error('К аккаунту приложения уже привязан другой Telegram. Сначала отвяжите его в приложении.');
+      if(byTelegram){
+        byTelegram.telegram_chat_id=chatId;
+        updateRows_('telegram_links',[byTelegram]);
+      }else{
+        appendRows_('telegram_links',[{id:id_(),telegram_user_id:telegramUserId,telegram_chat_id:chatId,user_id:candidate.user_id,family_id:candidate.family_id,linked_at:now_()}]);
+      }
+      candidate.used_at=now_();updateRows_('telegram_link_codes',[candidate]);
+      reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
     }
-    candidate.used_at=now_();updateRows_('telegram_link_codes',[candidate]);
-    reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
   }else if(/^\/unlink(?:@\w+)?$/i.test(text)){
     const links=rows_('telegram_links').filter(x=>String(x.telegram_user_id)===telegramUserId);
     if(links.length)deleteRows_('telegram_links',links);
