@@ -1849,6 +1849,36 @@ test('revision marker failures are counted without turning a committed data writ
   assert.equal(rows[0].amount_kopecks, 4500);
 });
 
+test('revision marker write retries one transient PropertiesService failure', () => {
+  const h = makeHarness();
+  const user = h.signup('revision-write-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор маркера ревизии' }).data;
+  const props = h.context.PropertiesService.getScriptProperties();
+  h.context.PropertiesService.getScriptProperties = () => props;
+  const originalSetProperty = props.setProperty.bind(props);
+  let failures = 1;
+  props.setProperty = (key, value) => {
+    if (key.startsWith('table_revision:v2:transactions:') && failures > 0) {
+      failures--;
+      throw new Error('simulated transient revision marker failure');
+    }
+    return originalSetProperty(key, value);
+  };
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 2300, operation_date: '2026-11-11' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.equal(failures, 0);
+  assert.equal(vm.runInContext('REVISION_WRITE_FAILURES', h.context), 0);
+  const revision = h.call({
+    action: 'rpc', token: user.token, name: 'get_table_revision',
+    params: { p_table: 'transactions', p_family_id: family.id }
+  });
+  assert.equal(revision.error, null, revision.error?.message);
+  assert.notEqual(revision.data, '0');
+});
+
 test('partial non-contiguous update publishes a revision after the first range commits', () => {
   const h = makeHarness();
   const user = h.signup('partial-update-revision@example.com');

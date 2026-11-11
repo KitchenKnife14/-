@@ -213,8 +213,14 @@ function touchTableRevision_(name,data){
     // revision marker could not be stored. Continue other keys and expose a
     // count in the request's aggregate diagnostic log instead of failing silently.
     keys.forEach(key=>{
-      try{props.setProperty(key,revision);}
-      catch(_){REVISION_WRITE_FAILURES++;}
+      let stored=false;
+      // PropertiesService failures can be transient. Retry once without changing
+      // the already-committed data-write result or introducing mutation replay.
+      for(let attempt=0;attempt<2&&!stored;attempt++){
+        try{props.setProperty(key,revision);stored=true;}
+        catch(_){}
+      }
+      if(!stored)REVISION_WRITE_FAILURES++;
     });
   }catch(_){REVISION_WRITE_FAILURES++;}
 }
