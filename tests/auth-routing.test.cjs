@@ -53,3 +53,20 @@ test('every navigation destination has a matching authenticated route', () => {
   assert.match(layout, /await googleSheets\.auth\.signOut\(\)/)
   assert.match(layout, /navigate\('\/'\)/)
 })
+
+
+test('mobile navigation exposes four primary routes and all remaining routes in More menu', () => {
+  assert.match(layout, /const mobilePrimary = \['\/', '\/transactions', '\/accounts', '\/budgets'\]/)
+  assert.match(layout, /const mobileMoreItems = navItems\.filter\(item => !mobilePrimary\.includes\(item\.to\)\)/)
+  assert.match(layout, /aria-label="Нижняя навигация"/)
+  assert.match(layout, /aria-label="Дополнительная навигация"/)
+  assert.match(layout, /aria-expanded=\{moreOpen\}/)
+  assert.match(layout, /pb-\[env\(safe-area-inset-bottom\)\]/)
+  assert.match(layout, /pb-28/)
+  assert.doesNotMatch(layout, /overflow-x-auto px-4 pb-3/)
+})
+
+test('mobile navigation has an explicit active state for routes placed in More', () => {
+  assert.match(layout, /const moreActive = mobileMoreItems\.some/)
+  assert.match(layout, /moreOpen \|\| moreActive \? 'text-primary-800'/)
+})

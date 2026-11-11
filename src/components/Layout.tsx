@@ -1,5 +1,6 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users, Wallet, MessageCircle } from 'lucide-react'
+import { useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users, Wallet, MessageCircle, MoreHorizontal, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 
@@ -20,22 +21,23 @@ const navItems = [
   { to: '/telegram', label: 'Telegram', icon: MessageCircle, end: false },
 ]
 
-function Navigation({ mobile = false }: { mobile?: boolean }) {
+const mobilePrimary = ['/', '/transactions', '/accounts', '/budgets']
+const mobileMoreItems = navItems.filter(item => !mobilePrimary.includes(item.to))
+
+function Navigation() {
   return (
-    <nav aria-label="Основная навигация" className={mobile
-      ? 'flex gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
-      : 'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1'}>
+    <nav aria-label="Основная навигация" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
       {navItems.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
           end={item.end}
           className={({ isActive }) =>
-            `group flex shrink-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+            `group flex w-full shrink-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive
                 ? 'border-primary-100 bg-primary-50 text-primary-800'
                 : 'border-transparent text-muted hover:bg-canvas hover:text-ink'
-            } ${mobile ? 'whitespace-nowrap' : 'w-full'}`}
+            }`}
         >
           <item.icon size={18} strokeWidth={1.8} className="shrink-0" />
           <span>{item.label}</span>
@@ -48,9 +50,20 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
 export default function Layout() {
   const { profile, family } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const moreActive = mobileMoreItems.some(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
+
   const signOut = async () => {
-    await googleSheets.auth.signOut()
-    navigate('/')
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await googleSheets.auth.signOut()
+    } finally {
+      navigate('/', { replace: true })
+      setSigningOut(false)
+    }
   }
 
   return (
@@ -85,7 +98,7 @@ export default function Layout() {
             <div className="truncate text-sm font-medium text-ink">{profile?.display_name || 'Пользователь'}</div>
             <div className="truncate text-xs text-muted">Участник семьи</div>
           </div>
-          <button onClick={signOut} className="rounded-xl p-2 text-muted transition-colors hover:bg-canvas hover:text-ink" aria-label="Выйти" title="Выйти">
+          <button onClick={signOut} disabled={signingOut} className="rounded-xl p-2 text-muted transition-colors hover:bg-canvas hover:text-ink disabled:opacity-50" aria-label="Выйти" title="Выйти">
             <LogOut size={17} />
           </button>
         </div>
@@ -101,17 +114,70 @@ export default function Layout() {
                 <div className="truncate text-[11px] text-muted">{family?.name || 'Для двоих'}</div>
               </div>
             </div>
-            <button onClick={signOut} className="rounded-xl p-2 text-muted hover:bg-canvas hover:text-ink" aria-label="Выйти">
+            <button onClick={signOut} disabled={signingOut} className="rounded-xl p-2 text-muted hover:bg-canvas hover:text-ink disabled:opacity-50" aria-label="Выйти">
               <LogOut size={18} />
             </button>
           </div>
         </header>
-        <div className="border-b border-line bg-surface md:hidden">
-          <Navigation mobile />
-        </div>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6 sm:py-7 lg:px-9 lg:py-9">
+
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-28 sm:px-6 sm:py-7 sm:pb-28 lg:px-9 lg:py-9 md:pb-9">
           <Outlet />
         </main>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
+        {moreOpen && (
+          <>
+            <button type="button" aria-label="Закрыть меню" className="fixed inset-0 z-[-1] bg-black/20" onClick={() => setMoreOpen(false)} />
+            <nav aria-label="Дополнительная навигация" className="absolute bottom-full left-3 right-3 mb-2 grid max-h-[65vh] grid-cols-2 gap-1 overflow-y-auto rounded-2xl border border-line bg-surface p-2 shadow-xl">
+              {mobileMoreItems.map(item => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMoreOpen(false)}
+                  className={({ isActive }) => `flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
+                    isActive ? 'bg-primary-50 font-semibold text-primary-800' : 'text-muted hover:bg-canvas'
+                  }`}
+                >
+                  <item.icon size={17} className="shrink-0" />
+                  <span className="min-w-0">{item.label}</span>
+                </NavLink>
+              ))}
+            </nav>
+          </>
+        )}
+        <nav aria-label="Нижняя навигация" className="grid grid-cols-5">
+          {navItems.filter(item => mobilePrimary.includes(item.to)).map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              onClick={() => setMoreOpen(false)}
+              className={({ isActive }) => `flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium transition-colors ${
+                isActive ? 'text-primary-800' : 'text-muted'
+              }`}
+            >
+              {({ isActive }) => (
+                <>
+                  <item.icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
+                  <span>{item.label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(open => !open)}
+            aria-expanded={moreOpen}
+            aria-label={moreOpen ? 'Закрыть дополнительные разделы' : 'Открыть дополнительные разделы'}
+            className={`flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium transition-colors ${
+              moreOpen || moreActive ? 'text-primary-800' : 'text-muted'
+            }`}
+          >
+            {moreOpen ? <X size={20} /> : <MoreHorizontal size={20} />}
+            <span>Ещё</span>
+          </button>
+        </nav>
       </div>
     </div>
   )
