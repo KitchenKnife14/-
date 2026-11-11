@@ -2158,3 +2158,6 @@ HEAD до:
 - Добавлена `invalidateHeaderCache_()`; `setupSheets()` теперь очищает markers для всех таблиц перед явной maintenance-проверкой/миграцией. Версия ключа по-прежнему включает API_VERSION.
 - Это исправляет поведение кэша и тестовые контракты, но не включает параллельное чтение: ScriptLock остаётся общим. Реальные тесты Apps Script и latency benchmark ещё не выполнялись.
 - Прогресс без изменений: 161/272 (59,2%). Production, основная таблица и deployment не затронуты.
+
+
+- После исправления vm assertions и фикстур CI `43003739212` завершился успешно на commit `7404513742b815409d758db9de549b1337ee2db9`: 189/189 regression tests, 0 failures; TypeScript/production build, Apps Script syntax, runtime diagnostics syntax, manifest validation и npm audit (0 vulnerabilities) — success. Предыдущие неуспешные запуски не скрываются из истории; их причины исправлены последующими тестовыми коммитами.
