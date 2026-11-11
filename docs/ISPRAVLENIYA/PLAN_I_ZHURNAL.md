@@ -2380,3 +2380,13 @@ HEAD до:
 - Все изменения только в `ispravleniya`; Production, `main`, Vercel env vars, основной GAS deployment и основная Google-таблица не менялись.
 
 
+
+
+### Разбор падения GitHub Actions и исправление достоверности cascade-тестов (2026-11-11)
+
+- Для HEAD 42af9e40674f90ca8597fe3ffe46fbbfc1be9d46 получен GitHub Actions run 43038324161. TypeScript/production build и dependency audit прошли; шаг All regression tests завершился failure, поэтому последующие syntax/manifest checks были пропущены. Параллельные статусы Vercel отдельно завершились build-rate-limit.
+- В логе Node test runner три теста падали: retrying transaction delete repairs a failed planned-purchase unlink; retrying recurring-payment delete repairs failed transaction detachment; goal deletion keeps the parent available when unlinking a purchase fails.
+- Общая причина — тесты читали объекты через ROWS_CACHE после инъецированного отказа updateRows_. Бизнес-логика успевала изменить объект в памяти до записи в Sheet; mock-кэш сохранял эту мутацию, хотя setValues не выполнялся. В реальном следующем HTTP-запросе doPost сбрасывает ROWS_CACHE, поэтому проверка обязана перечитать сохранённое состояние.
+- В tests/apps-script.test.cjs добавлен clearRowsCache() для harness и вызовы после частичного сбоя в трёх тестах. Теперь проверки должны читать данные повторно из mock Sheet, а не из изменённых объектов предыдущего запроса. Исправление касается тестового стенда, не production-кода и не алгоритмов баланса.
+- Повторный CI ещё не выполнен; считать эти тесты исправленными можно только после следующего запуска. Чек-лист не увеличивается до зелёного повторного прогона. Текущий пересчёт перед этой записью: 167/272 (61,4%), 105 открытых; макроэтапы 1/12.
+- Тестовый URL получен: пользователь подтвердил, что это тестовый сайт с исходным Code.gs как в основном проекте, а исправления из ispravleniya туда ещё не переносились. GET endpoint ответил API_VERSION=11. Привязка к отдельной Google Sheet независимо не подтверждена; до этого мутационные runtime-тесты запрещены.

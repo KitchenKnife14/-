@@ -118,7 +118,8 @@ function makeHarness() {
     resetLockStats: () => { lockAcquires = 0; lockReleases = 0; },
     failNextLockWait: () => { failNextLockWait = true; },
     failSetValuesAfter: offset => { failSetValuesAt = setValuesCalls + offset; },
-    failDeleteRowsAfter: offset => { failDeleteRowsAt = deleteRowsCalls + offset; }
+    failDeleteRowsAfter: offset => { failDeleteRowsAt = deleteRowsCalls + offset; },
+    clearRowsCache: () => vm.runInContext('ROWS_CACHE = {}', context)
   };
 }
 
@@ -484,6 +485,7 @@ test('retrying transaction delete repairs a failed planned-purchase unlink', () 
   const first = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'delete',
     filters: [{ column: 'id', op: 'eq', value: transactionId }] });
   assert.match(first.error?.message || '', /simulated purchase unlink failure/);
+  h.clearRowsCache(); // Inspect persisted Sheet state, not objects mutated in the failed request cache.
   assert.equal(h.context.rows_('transactions').some(row => row.id === transactionId), false);
   assert.equal(h.context.rows_('planned_purchases').find(row => row.id === purchase.id).status, 'bought');
 
@@ -519,6 +521,7 @@ test('retrying recurring-payment delete repairs failed transaction detachment', 
   const first = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'delete',
     filters: [{ column: 'id', op: 'eq', value: recurring.id }] });
   assert.match(first.error?.message || '', /simulated recurring detach failure/);
+  h.clearRowsCache(); // Inspect persisted Sheet state, not objects mutated in the failed request cache.
   assert.equal(h.context.rows_('recurring_payments').some(row => row.id === recurring.id), false);
   assert.equal(h.context.rows_('transactions').find(row => row.id === transactionId).parent_recurring_id, recurring.id);
 
@@ -675,6 +678,7 @@ test('goal deletion keeps the parent available when unlinking a purchase fails',
     filters: [{ column: 'id', op: 'eq', value: goal.id }] };
   const first = h.call(args);
   assert.match(first.error?.message || '', /simulated goal purchase unlink failure/);
+  h.clearRowsCache(); // Inspect persisted Sheet state, not objects mutated in the failed request cache.
   assert.equal(h.context.rows_('goals').some(row => row.id === goal.id), true);
   assert.equal(h.context.rows_('goal_contributions').some(row => row.goal_id === goal.id), false);
   assert.equal(h.context.rows_('planned_purchases').find(row => row.id === purchase.id).goal_id, goal.id);
