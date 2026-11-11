@@ -2249,3 +2249,6 @@ HEAD до:
 - Добавлены unit-тесты изоляции и поведения при потерянном ответе.
 - Ограничение: это клиентская защита в рамках одного браузерного профиля; при недоступном localStorage/crypto форма покажет ошибку и не должна выполнять insert без ID.
 - Проверка TypeScript/build/тестов ещё не завершена; до CI нельзя считать работу №83 закрытой.
+
+
+**Проверка CI после работы №83:** run `43024948654`, commit `a3bf2d6702b7e57b20302aa9884ceb92606b3677` — успешно. TypeScript и production build — success; regression tests — **195/195, 0 failures**; Apps Script syntax, runtime diagnostics syntax и manifest validation — success; npm audit завершился успешно. Это подтверждает сборку и unit/regression suite, но не реальный сетевой сценарий с потерянным HTTP-ответом и не браузерный multi-tab сценарий.
