@@ -336,6 +336,35 @@ test('joinFamily does not change the profile when the membership write fails', (
   assert.equal(h.context.rows_('family_members').filter(row => row.user_id === partner.user.id).length, 0);
 });
 
+test('joinFamily retry completes profile update after membership was already saved', () => {
+  const h = makeHarness();
+  const owner = h.signup('join-profile-owner@example.com');
+  const partner = h.signup('join-profile-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Повтор присоединения' }).data;
+  const originalUpdate = h.context.updateRows_;
+  let failOnce = true;
+  h.context.updateRows_ = function(table, rows) {
+    if (table === 'profiles' && failOnce) {
+      failOnce = false;
+      throw new Error('simulated profile update failure');
+    }
+    return originalUpdate(table, rows);
+  };
+  const args = {
+    action: 'joinFamily', token: partner.token, invite_code: family.invite_code,
+    display_name: 'Участник семьи'
+  };
+  const first = h.call(args);
+  assert.match(first.error?.message || '', /simulated profile update failure/);
+  assert.equal(h.context.rows_('family_members').filter(row => row.user_id === partner.user.id).length, 1);
+  assert.notEqual(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, 'Участник семьи');
+
+  const retry = h.call(args);
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(h.context.rows_('family_members').filter(row => row.user_id === partner.user.id).length, 1);
+  assert.equal(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, 'Участник семьи');
+});
+
 test('recurring payment confirmation can retry after a partial write without duplicating the transaction', () => {
   const h = makeHarness();
   const user = h.signup('owner@example.com');
