@@ -2215,3 +2215,6 @@ HEAD до:
 - Это снижает вероятность пропуска realtime-инвалидации при кратковременном отказе Script Properties, но не устраняет риск длительного/постоянного отказа хранилища. Polling по-прежнему 15 секунд; frontend cache TTL — 2 секунды.
 - Следующий этап: проверить все реальные insert/upsert UI flows на устойчивость к timeout после commit. Подтверждённые уязвимые insert paths: accounts, goal_contributions, planned_purchases, recurring_payments, budgets; monthly_plans использует upsert по составному конфликтному ключу. Автоматические повторы для них пока запрещены до внедрения безопасной идемпотентности.
 - Прогресс без изменений: 161/272 (59,2%), 1/12 макроэтапов. Это hardening + regression test, не закрытие отдельного пункта чек-листа. Production, main, основная Google-таблица и Apps Script deployment не затронуты.
+
+
+- Проверка работы №81 завершена: CI run 43018470910 на commit ed5871195fe6298ca97343220ee6bc549b74401b — success. Все 192/192 regression tests прошли; TypeScript и production build — success; Apps Script syntax, PBKDF2 runtime diagnostics syntax и manifest validation — success; npm audit — 0 vulnerabilities. Текущий head ветки на момент фиксации отчёта совпадает с проверенным commit.
