@@ -3135,8 +3135,8 @@ test('backup structure audit is read-only and validates all table headers plus h
   assert.equal(report.allChecksPassed, true);
   assert.equal(report.expectedSheetCount, 16);
   assert.equal(report.presentSheetCount, 16);
-  assert.deepEqual(report.missingSheets, []);
-  assert.deepEqual(report.headerMismatches, []);
+  assert.equal(report.missingSheets.length, 0);
+  assert.equal(report.headerMismatches.length, 0);
   assert.equal(report.authHidden, true);
   assert.equal(report.timezoneOk, true);
   assert.ok(report.sheets.find(sheet => sheet.name === 'transactions').dataRows >= 0);
