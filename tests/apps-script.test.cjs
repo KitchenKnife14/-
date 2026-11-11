@@ -206,6 +206,21 @@ test('expired sessions are rejected and removed from Script Properties', () => {
   assert.equal(h.context.PropertiesService.getScriptProperties().getProperty(key), null);
 });
 
+test('malformed session records fail closed and are deleted on use', () => {
+  const h = makeHarness();
+  const user = h.signup('malformed-session@example.com');
+  const props = h.context.PropertiesService.getScriptProperties();
+  const key = 'session:' + user.token;
+  const malformed = ['{not-json', 'null', JSON.stringify({ expires: Date.now() + 60_000 })];
+
+  for (const value of malformed) {
+    props.setProperty(key, value);
+    const response = h.call({ action: 'getSession', token: user.token });
+    assert.match(response.error?.message || '', /Сессия завершена/);
+    assert.equal(props.getProperty(key), null);
+  }
+});
+
 test('signout revokes the session token immediately', () => {
   const h = makeHarness();
   const user = h.signup('signout-session@example.com');

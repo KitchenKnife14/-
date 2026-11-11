@@ -458,7 +458,13 @@ function requireUser_(token){
   if(!token) throw new Error('Требуется вход');
   const p=PropertiesService.getScriptProperties(), raw=p.getProperty('session:'+token);
   if(!raw) throw new Error('Сессия завершена, войдите снова');
-  const s=JSON.parse(raw); if(s.expires<Date.now()){p.deleteProperty('session:'+token);throw new Error('Сессия завершена, войдите снова');}
+  let s;
+  try { s=JSON.parse(raw); }
+  catch (_) { p.deleteProperty('session:'+token); throw new Error('Сессия завершена, войдите снова'); }
+  if(!s||typeof s!=='object'||Array.isArray(s)||typeof s.userId!=='string'||!s.userId||typeof s.expires!=='number'||!Number.isFinite(s.expires)||s.expires<=Date.now()){
+    p.deleteProperty('session:'+token);
+    throw new Error('Сессия завершена, войдите снова');
+  }
   const u=authRows_().find(x=>x.id===s.userId); if(!u)throw new Error('Пользователь не найден');
   return {id:u.id,email:u.email,name:u.name};
 }
