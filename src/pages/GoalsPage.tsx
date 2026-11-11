@@ -44,7 +44,7 @@ export default function GoalsPage() {
     return () => { googleSheets.removeChannel(ch) }
   }, [family?.id])
 
-  const remove = async (g: Goal) => { const { error: err } = await googleSheets.from('goals').delete().eq('id', g.id); if (err) setError(err.message); load() }
+  const remove = async (g: Goal) => { const { error: err } = await googleSheets.from('goals').delete().eq('id', g.id).expect(g as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
   const toggleStatus = async (g: Goal) => {
     const newStatus = g.status === 'active' ? 'paused' : g.status === 'paused' ? 'active' : g.status
     if (newStatus === g.status) return
