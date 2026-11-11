@@ -56,10 +56,10 @@ export default function OnboardingPage() {
         </div>
 
         <div className="flex gap-1 mb-5 p-1 bg-slate-100 rounded-xl">
-          <button onClick={() => setMode('create')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mode === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+          <button type="button" disabled={loading} onClick={() => setMode('create')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mode === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
             Создать семью
           </button>
-          <button onClick={() => setMode('join')} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${mode === 'join' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+          <button type="button" disabled={loading} onClick={() => setMode('join')} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${mode === 'join' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
             Присоединиться
           </button>
         </div>
@@ -67,17 +67,17 @@ export default function OnboardingPage() {
         <form onSubmit={submit} className="card space-y-3">
           <div>
             <label className="label" htmlFor="onboarding-user-name">Ваше имя</label>
-            <input id="onboarding-user-name" className="input" value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Как вас зовут" />
+            <input id="onboarding-user-name" className="input" autoComplete="name" disabled={loading} value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Как вас зовут" />
           </div>
           {mode === 'create' ? (
             <div>
               <label className="label" htmlFor="onboarding-family-name">Название семьи</label>
-              <input id="onboarding-family-name" className="input" value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
+              <input id="onboarding-family-name" className="input" disabled={loading} value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
             </div>
           ) : (
             <div>
               <label className="label" htmlFor="onboarding-invite-code">Код приглашения</label>
-              <input id="onboarding-invite-code" className="input" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="Введите код от партнёра" />
+              <input id="onboarding-invite-code" className="input" disabled={loading} value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="Введите код от партнёра" />
               <p className="text-xs text-slate-400 mt-1">Код выдаётся первым участником после создания семьи.</p>
             </div>
           )}

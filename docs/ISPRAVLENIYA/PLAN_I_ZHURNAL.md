@@ -1998,3 +1998,10 @@ HEAD до:
 - Работа №65 прошла итоговый CI на коммите `64e41398771bca5a2ca18e9c95ffeeaec1d2cd2c`: [run 42986116722](https://github.com/KitchenKnife14/-/actions/runs/42986116722), `success`; 180/180 regression tests, TypeScript/production build, Apps Script syntax/diagnostics, manifest validation и `npm audit` (0 vulnerabilities). В этот run также вошли исправленные fault-injection тесты Telegram TG-04 для повторной доставки /link и расхода после отказа записи replay cache.
 - Onboarding теперь не делает второй `get_my_context` до refresh: успешный family RPC → refresh AuthContext → переход. Ошибка чтения контекста обрабатывается общим экраном восстановления в `App.tsx`, поэтому пользователь не остаётся на onboarding с уже созданной семьёй и не повторяет создание. Regression test проверяет порядок.
 - Прогресс чек-листа остаётся 160/272 (58.8%); дополнительные тесты и edge-case исправления расширяют покрытие существующих пунктов, но не закрывают device/browser manual checks.
+
+
+### Журнал — 2026-11-11: фиксация auth/onboarding форм во время отправки (работа № 66)
+
+- Во время регистрации/входа пользователь мог переключить режим формы или менять значения полей, пока предыдущий запрос ещё выполнялся. Это не меняло уже отправленный payload, но создавало визуальное расхождение между отображаемой формой и активным запросом.
+- Переключатели режимов и поля AuthPage/OnboardingPage теперь disabled на время submit; добавлены корректные `autoComplete` для email/username, current/new password и имени. Кнопки режимов получили явный `type="button"`.
+- Добавлен regression test на autocomplete и блокировку элементов на время запроса. Только frontend/test/docs в ветке `ispravleniya`; Production, Apps Script, основная таблица и Telegram не изменялись. Прогресс не менять до CI.

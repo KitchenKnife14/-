@@ -41,12 +41,16 @@ export default function AuthPage() {
         <div className="card">
           <div className="flex gap-1 mb-5 p-1 bg-slate-100 rounded-xl">
             <button
+              type="button"
+              disabled={loading}
               onClick={() => setMode('signin')}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${mode === 'signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
             >
               Вход
             </button>
             <button
+              type="button"
+              disabled={loading}
               onClick={() => setMode('signup')}
               className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${mode === 'signup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
             >
@@ -58,16 +62,16 @@ export default function AuthPage() {
             {mode === 'signup' && (
               <div>
                 <label className="label" htmlFor={`${fieldId}-name`}>Имя</label>
-                <input id={`${fieldId}-name`} className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Как вас зовут" />
+                <input id={`${fieldId}-name`} className="input" autoComplete="name" disabled={loading} value={name} onChange={(e) => setName(e.target.value)} placeholder="Как вас зовут" />
               </div>
             )}
             <div>
               <label className="label" htmlFor={`${fieldId}-email`}>Email</label>
-              <input id={`${fieldId}-email`} className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <input id={`${fieldId}-email`} className="input" type="email" autoComplete={mode === 'signin' ? 'username' : 'email'} disabled={loading} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
             </div>
             <div>
               <label className="label" htmlFor={`${fieldId}-password`}>Пароль</label>
-              <input id={`${fieldId}-password`} className="input" type="password" required minLength={mode === 'signup' ? 15 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Минимум 15 символов' : 'Введите пароль'} />
+              <input id={`${fieldId}-password`} className="input" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} disabled={loading} required minLength={mode === 'signup' ? 15 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Минимум 15 символов' : 'Введите пароль'} />
             </div>
             {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
             <button type="submit" disabled={loading} className="btn-primary w-full">

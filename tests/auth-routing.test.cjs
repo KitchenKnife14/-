@@ -7,6 +7,7 @@ const source = fs.readFileSync(path.join(__dirname, '../src/context/AuthContext.
 const app = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8')
 const layout = fs.readFileSync(path.join(__dirname, '../src/components/Layout.tsx'), 'utf8')
 const onboarding = fs.readFileSync(path.join(__dirname, '../src/pages/OnboardingPage.tsx'), 'utf8')
+const authPage = fs.readFileSync(path.join(__dirname, '../src/pages/AuthPage.tsx'), 'utf8')
 const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '../vercel.json'), 'utf8'))
 
 test('auth context ignores stale async session loads before writing state', () => {
@@ -102,4 +103,15 @@ test('authenticated context errors show retry instead of sending the user to onb
   assert.ok(errorGate >= 0 && onboardingGate > errorGate, 'context loading errors must be handled before the no-family onboarding route')
   assert.match(app, /Не удалось загрузить семейное пространство/)
   assert.match(app, /onClick=\{\(\) => void refresh\(\)\}/)
+})
+
+
+test('auth and onboarding forms prevent mode/input changes during submission', () => {
+  assert.match(authPage, /autoComplete=\{mode === 'signin' \? 'username' : 'email'\}/)
+  assert.match(authPage, /autoComplete=\{mode === 'signin' \? 'current-password' : 'new-password'\}/)
+  assert.match(authPage, /disabled=\{loading\}/)
+  assert.match(onboarding, /onClick=\{\(\) => setMode\('create'\)\} className=/)
+  assert.match(onboarding, /type="button" disabled=\{loading\}/)
+  assert.match(onboarding, /autoComplete="name" disabled=\{loading\}/)
+  assert.match(onboarding, /id="onboarding-invite-code" className="input" disabled=\{loading\}/)
 })
