@@ -1217,11 +1217,12 @@ function rpc_(req,user){
   if(name==='confirm_recurring_payment'){
     const id=p.p_recurring_id, r=rows_('recurring_payments').find(x=>x.id===id&&canAccessRow_('recurring_payments',x,user));
     if(!r)throw new Error('Регулярный платёж не найден');
-    if(r.next_due_date!==p.p_expected_due_date)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
-    if(r.end_date && r.next_due_date>r.end_date){r.active=false;updateRows_('recurring_payments',[r]);return true;}
-    const txs=rows_('transactions'), transactionId='recurring_'+r.id+'_'+r.next_due_date;
-    // Deterministic ID makes retries safe only when the existing row is the same recurring occurrence.
-    const existingTx=txs.find(t=>String(t.id)===transactionId);
+    const expectedDueDate=String(p.p_expected_due_date||''), operationDate=String(p.p_operation_date||'');
+    const nextExpectedDate=nextDate_(expectedDueDate,r.frequency,r.custom_interval_days,r.start_date);
+    if(!nextExpectedDate)throw new Error('Не удалось вычислить следующую дату регулярного платежа');
+    if(r.end_date && expectedDueDate>r.end_date && r.next_due_date===expectedDueDate){r.active=false;updateRows_('recurring_payments',[r]);return true;}
+    const transactionId='recurring_'+r.id+'_'+expectedDueDate;
+    const existingTx=rows_('transactions').find(t=>String(t.id)===transactionId);
     if(existingTx && (
       String(existingTx.family_id)!==String(r.family_id) ||
       String(existingTx.parent_recurring_id||'')!==String(r.id) ||
@@ -1230,10 +1231,19 @@ function rpc_(req,user){
       String(existingTx.category_id||'')!==String(r.category_id||'') ||
       String(existingTx.account_id||'')!==String(r.account_id||'') ||
       String(existingTx.description||'')!==String(r.description||'') ||
-      String(existingTx.operation_date||'')!==String(p.p_operation_date||'')
+      String(existingTx.operation_date||'')!==operationDate
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
-    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
-    r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
+    // A retry after the whole operation committed must return success for the same occurrence.
+    if(r.next_due_date===nextExpectedDate){
+      if(!existingTx)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
+      if(r.end_date && nextExpectedDate>r.end_date && r.active)throw new Error('Состояние регулярного платежа не соответствует завершённому периоду');
+      return true;
+    }
+    // If the transaction was saved but advancing the schedule failed, finish that second write.
+    if(r.next_due_date!==expectedDueDate)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
+    if(r.end_date && expectedDueDate>r.end_date){r.active=false;updateRows_('recurring_payments',[r]);return true;}
+    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:operationDate,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
+    r.next_due_date=nextExpectedDate;
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     updateRows_('recurring_payments',[r]);return true;
   }
