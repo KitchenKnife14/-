@@ -94,3 +94,12 @@ test('session adapter degrades safely when browser storage is unavailable', () =
   assert.match(adapter, /try \{ localStorage\.setItem\(SESSION_KEY, JSON\.stringify\(session\)\) \} catch \{\}/)
   assert.match(adapter, /volatileSession = null\n    try \{ localStorage\.removeItem\(SESSION_KEY\) \} catch \{\}/)
 })
+
+
+test('authenticated context errors show retry instead of sending the user to onboarding', () => {
+  const errorGate = app.indexOf('if (session && error)')
+  const onboardingGate = app.indexOf('if (!family)')
+  assert.ok(errorGate >= 0 && onboardingGate > errorGate, 'context loading errors must be handled before the no-family onboarding route')
+  assert.match(app, /Не удалось загрузить семейное пространство/)
+  assert.match(app, /onClick=\{\(\) => void refresh\(\)\}/)
+})
