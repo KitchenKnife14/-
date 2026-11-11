@@ -369,6 +369,31 @@ test('recurring payment confirmation can retry after a partial write without dup
 });
 
 
+test('recurring payment confirmation replay returns success after the full commit', () => {
+  const h = makeHarness();
+  const user = h.signup('recurring-full-replay@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор регулярного платежа' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-10-31', next_due_date: '2026-10-31', frequency: 'monthly', active: true }
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const recurring = created.data[0];
+  const args = { action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
+    p_recurring_id: recurring.id, p_expected_due_date: '2026-10-31', p_operation_date: '2026-11-01'
+  }};
+  const first = h.call(args);
+  assert.equal(first.error, null, first.error?.message);
+  const replay = h.call(args);
+  assert.equal(replay.error, null, replay.error?.message);
+  assert.equal(replay.data, true);
+  const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(txs.length, 1);
+  assert.equal(txs[0].id, `recurring_${recurring.id}_2026-10-31`);
+  const after = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
+  assert.equal(after.next_due_date, '2026-11-30');
+});
+
 test('goal balances stay synchronized with contribution history', () => {
   const h = makeHarness();
   const user = h.signup('goals@example.com');
