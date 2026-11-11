@@ -386,6 +386,11 @@ test('recurring payment confirmation replay returns success after the full commi
   }};
   const first = h.call(args);
   assert.equal(first.error, null, first.error?.message);
+  const laterEdit = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: recurring.id }], values: { description: 'Интернет — новый тариф' }
+  });
+  assert.equal(laterEdit.error, null, laterEdit.error?.message);
   const replay = h.call(args);
   assert.equal(replay.error, null, replay.error?.message);
   assert.equal(replay.data, true);
