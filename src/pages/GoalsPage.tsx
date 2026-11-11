@@ -48,10 +48,10 @@ export default function GoalsPage() {
   const toggleStatus = async (g: Goal) => {
     const newStatus = g.status === 'active' ? 'paused' : g.status === 'paused' ? 'active' : g.status
     if (newStatus === g.status) return
-    const { error: err } = await googleSheets.from('goals').update({ status: newStatus }).eq('id', g.id)
+    const { error: err } = await googleSheets.from('goals').update({ status: newStatus }).eq('id', g.id).expect(g as unknown as Record<string, unknown>)
     if (err) setError(err.message); load()
   }
-  const markDone = async (g: Goal) => { const { error: err } = await googleSheets.from('goals').update({ status: 'done' }).eq('id', g.id); if (err) setError(err.message); load() }
+  const markDone = async (g: Goal) => { const { error: err } = await googleSheets.from('goals').update({ status: 'done' }).eq('id', g.id).expect(g as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
 
   const showHistory = async (g: Goal) => {
     setHistoryGoal(g)
@@ -183,7 +183,7 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
     try {
       const payload = { name: name.trim(), description: description.trim(), target_kopecks: targetK, target_date: targetDate || null, priority: parseInt(priority) }
       if (editing) {
-        const { error: err } = await googleSheets.from('goals').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('goals').update(payload).eq('id', editing.id).expect(editing as unknown as Record<string, unknown>)
         if (err) throw err
       } else {
         const { data: authData } = await googleSheets.auth.getUser()
