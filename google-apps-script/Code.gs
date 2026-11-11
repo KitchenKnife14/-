@@ -1208,6 +1208,14 @@ function rpc_(req,user){
       String(tx.parent_recurring_id||'')!==''
     ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
     if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
+    // A matching deterministic transaction means this is a retry after a partial or completed commit.
+    // Only a new confirmation is compared with the purchase snapshot shown in the UI.
+    if(!tx && p.p_expected_purchase!==undefined){
+      const expected=p.p_expected_purchase;
+      if(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id)throw new Error('Некорректный снимок планируемой покупки');
+      const stale=TABLES.planned_purchases.some(column=>Object.prototype.hasOwnProperty.call(expected,column)&&JSON.stringify(expected[column]??null)!==JSON.stringify(purchase[column]??null));
+      if(stale)throw new Error('Планируемая покупка была изменена другим участником. Обновите список и повторите подтверждение.');
+    }
     if(!tx){
       tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,responsible_user_id:purchase.responsible_user_id||purchase.created_by||user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
       appendRows_('transactions',[tx]);
