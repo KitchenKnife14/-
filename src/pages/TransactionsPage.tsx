@@ -107,7 +107,7 @@ export default function TransactionsPage() {
 
   const confirmDelete = async () => {
     if (!deleting) return
-    const { error: err } = await googleSheets.from('transactions').delete().eq('id', deleting.id)
+    const { error: err } = await googleSheets.from('transactions').delete().eq('id', deleting.id).expect(deleting as unknown as Record<string, unknown>)
     if (err) setError(err.message)
     setDeleting(null)
     load()
