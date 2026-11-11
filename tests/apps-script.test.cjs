@@ -404,6 +404,62 @@ test('goal balances stay synchronized with contribution history', () => {
 });
 
 
+test('retrying an idempotent contribution insert repairs a failed goal-balance sync', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-insert-sync-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор пополнения' }).data;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id: 'goal-insert-sync-retry', family_id: family.id, name: 'Резерв', target_kopecks: 100000, saved_kopecks: 0, status: 'active' }
+  }).data[0];
+  const payload = { id: 'contribution-insert-sync-retry', goal_id: goal.id, amount_kopecks: 3000, contribution_date: '2026-11-11', note: 'Тест повтора' };
+
+  // First write persists the contribution; the second write (goal aggregate) fails.
+  h.failSetValuesAfter(2);
+  const failed = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true, values: payload });
+  assert.match(failed.error?.message || '', /Injected setValues failure/);
+  assert.equal(h.context.rows_('goal_contributions').filter(row => row.id === payload.id).length, 1);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 0);
+
+  const retried = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true, values: payload });
+  assert.equal(retried.error, null, retried.error?.message);
+  assert.equal(h.context.rows_('goal_contributions').filter(row => row.id === payload.id).length, 1);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 3000);
+});
+
+test('retrying a contribution delete repairs a failed goal-balance sync after the row is gone', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-delete-sync-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор удаления' }).data;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id: 'goal-delete-sync-retry', family_id: family.id, name: 'Резерв', target_kopecks: 100000, saved_kopecks: 0, status: 'active' }
+  }).data[0];
+  const payload = { id: 'contribution-delete-sync-retry', goal_id: goal.id, amount_kopecks: 4500, contribution_date: '2026-11-11', note: 'Тест удаления' };
+  const inserted = h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true, values: payload });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 4500);
+
+  // The contribution row is deleted; the following goal aggregate write fails.
+  h.failSetValuesAfter(1);
+  const failed = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: payload.id }]
+  });
+  assert.match(failed.error?.message || '', /Injected setValues failure/);
+  assert.equal(h.context.rows_('goal_contributions').some(row => row.id === payload.id), false);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 4500);
+
+  // Retrying the same delete matches no row, so the backend must still reconcile family goals.
+  const retried = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: payload.id }]
+  });
+  assert.equal(retried.error, null, retried.error?.message);
+  assert.equal(h.context.rows_('goal_contributions').some(row => row.id === payload.id), false);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 0);
+});
+
 test('planned purchase URLs accept only absolute HTTP(S) links', () => {
   const h = makeHarness();
   const user = h.signup('purchase-url@example.com');
