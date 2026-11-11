@@ -2287,3 +2287,6 @@ HEAD до:
 - Добавлены backend regression test на повтор категории и запрет изменённого payload, а также frontend source test на подключение pending ID.
 - Изменения ограничены веткой ispravleniya и тестами; существующие категории/строки не мигрируются и не меняются. Production, main, основная таблица и Apps Script deployment не затронуты.
 - Прогресс остаётся 161/272 (59,2%), 1/12 макроэтапов. Новая проверка увеличивает тестовое покрытие, но сама по себе не закрывает пункт чек-листа до успешного CI и интеграционной проверки.
+
+
+- CI по работе №85 завершился успешно: run 43028770605, commit 87060eedaa8e5188b717a9993d07819f9c021ba9 — success. Regression tests: 197/197, 0 failures; TypeScript/production build, Apps Script syntax, runtime diagnostics, отдельный idempotency runner syntax, manifest validation — success; npm audit — 0 vulnerabilities. Это подтверждает backend/frontend изменения и тесты в CI, но не реальный сетевой повтор в Apps Script deployment.
