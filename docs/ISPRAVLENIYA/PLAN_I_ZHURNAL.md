@@ -2018,3 +2018,5 @@ HEAD до:
 - Пункт политики хранения TG-04 закрыт. Проверка конкурентных доставок остаётся открытой; последовательные повторы и crash-window покрыты regression tests. Progress: 161/272 (59.2%).
 
 - Первый CI для retention policy (`42986577481`) завершился failure из-за тестовой техники: top-level `const` в VM lexical environment не доступен как свойство/результат отдельного контекстного вызова в этом harness. Проверка констант переведена на source assertion; реальный TTL дополнительно проверяется по `expires` сохранённой записи, а очистка — по фактическому удалению expired key при malformed prune marker. Backend logic не менялась.
+
+- Повторный CI `42986671881` выявил неполный fixture теста retention: тестовый `/help` update не содержал `message.chat.type='private'`, поэтому обработчик корректно пропускал его и не создавал cache entry. Fixture дополнен обязательным типом private; production-код не менялся.

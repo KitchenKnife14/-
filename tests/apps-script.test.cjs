@@ -3116,7 +3116,7 @@ test('Telegram replay cache has a documented 24-hour TTL and prunes expired entr
   const now = Date.now();
   const help = h.call({
     action: 'telegramWebhook', telegramSecret: secret,
-    update: { update_id: 7502, message: { chat: { id: 750 }, from: { id: 750 }, text: '/help' } }
+    update: { update_id: 7502, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: '/help' } }
   });
   assert.equal(help.error, null, help.error?.message);
   const saved = JSON.parse(props.getProperty('telegram:update:7502'));
