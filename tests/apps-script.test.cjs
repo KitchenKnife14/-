@@ -3131,7 +3131,7 @@ test('backup structure audit is read-only and validates all table headers plus h
   const names = ['profiles','families','family_members','categories','accounts','transactions','recurring_payments','budgets','goals','goal_contributions','planned_purchases','monthly_plans','notifications','telegram_links','telegram_link_codes'];
   names.forEach(name => h.context.sheet_(name));
   h.signup('backup-audit@example.com');
-  const report = h.context.auditBackupStructure_();
+  const report = h.context.auditBackupStructure();
   assert.equal(report.allChecksPassed, true);
   assert.equal(report.expectedSheetCount, 16);
   assert.equal(report.presentSheetCount, 16);
@@ -3151,7 +3151,7 @@ test('backup structure audit reports missing/mismatched sheets without creating 
   ss.getSheetByName('budgets').getRange(1,1).setValue('wrong-header');
   ss.deleteSheet(ss.getSheetByName('transactions'));
   const before = ss.getSheetByName('transactions');
-  const report = h.context.auditBackupStructure_();
+  const report = h.context.auditBackupStructure();
   assert.equal(report.allChecksPassed, false);
   assert.ok(report.missingSheets.includes('transactions'));
   assert.ok(report.headerMismatches.includes('budgets'));

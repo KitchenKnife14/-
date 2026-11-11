@@ -1342,7 +1342,7 @@ function formatSheet_(sh,name){
 function formatAuth_(sh){timedSheetWrite_(()=>sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@'));}
 // Один раз после установки: применяет текстовый формат к столбцам всех листов.
 // Read-only structural check for a backup/restore copy. Does not create, repair or modify sheets.
-function auditBackupStructure_(){
+function auditBackupStructure(){
   const ss=ss_();
   const expected=Object.assign({},TABLES);
   expected[AUTH_SHEET]=['id','email','salt','password_hash','display_name','created_at'];

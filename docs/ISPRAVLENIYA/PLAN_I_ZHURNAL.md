@@ -2037,3 +2037,5 @@ HEAD до:
 - Не закрывает SAFE-01/FC-11/FC-12: реальная копия и восстановление не выполнялись. Production и основная таблица не затрагивались. Прогресс остаётся 161/272 до CI и ручного теста.
 
 - CI `42987623846` выявил несовместимость `deepStrictEqual` между массивами из VM context и массивами Node: структура была пустой и корректной, но prototypes разных realms. Тест заменён на проверку длины массивов; проверяемые backend данные и структура отчёта не менялись.
+
+- CI для работы №68: коммит `85b372f7d6eee08bf5cccbe2f8456cdf20e61a9a` завершился `success`: [run 42987788166](https://github.com/KitchenKnife14/-/actions/runs/42987788166), 184/184 tests, TypeScript/production build, Apps Script syntax/diagnostics, manifest validation и `npm audit` (0 vulnerabilities). Функция переименована в `auditBackupStructure()` для ручного запуска из Apps Script editor; runbook уточнён: выполнять проверку из проекта, bound именно к исходной тестовой таблице/копии/restore-копии. SAFE-01/FC-11/FC-12 не закрываются до фактической копии и восстановления.
