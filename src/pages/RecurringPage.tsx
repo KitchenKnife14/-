@@ -6,6 +6,7 @@ import type { RecurringPayment, Category, Account, FamilyMember, Profile } from 
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
+import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
 import { Plus, Check, Pause, Play, Trash2, Repeat } from 'lucide-react'
 
 const FREQ_LABELS: Record<string, string> = { daily: 'Ежедневно', weekly: 'Еженедельно', monthly: 'Ежемесячно', yearly: 'Ежегодно', custom: 'По интервалу' }
@@ -161,13 +162,19 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, members, 
     if (endDate && endDate < startDate) { setError('Дата окончания не может быть раньше даты начала'); return }
     setSaving(true)
     try {
-      const { error: err } = await googleSheets.from('recurring_payments').insert({
+      const payload = {
         family_id: familyId, type, amount_kopecks: amt, category_id: categoryId || null, account_id: accountId || null, responsible_user_id: responsibleUserId || userId,
         description: description.trim(), start_date: startDate, end_date: endDate || null,
         frequency, custom_interval_days: frequency === 'custom' ? parseInt(customDays) : null,
         next_due_date: startDate, remind: true, active: true, created_by: userId,
-      })
+      }
+      const storage = window.localStorage
+      const pendingKey = pendingMutationStorageKey('recurring_payments', familyId, userId)
+      const fingerprint = await fingerprintTransactionPayload(payload)
+      const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
+      const { error: err } = await googleSheets.from('recurring_payments').insert({ ...payload, id })
       if (err) throw err
+      clearPendingMutation(storage, pendingKey, id)
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
     finally { setSaving(false) }

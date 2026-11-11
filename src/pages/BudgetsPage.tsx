@@ -6,10 +6,11 @@ import type { Budget, Category, Transaction } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
 import Modal from '../components/Modal'
+import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
 import { Plus, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react'
 
 export default function BudgetsPage() {
-  const { family } = useAuth()
+  const { family, session } = useAuth()
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [txs, setTxs] = useState<Transaction[]>([])
@@ -124,13 +125,13 @@ export default function BudgetsPage() {
           })}
         </div>
       )}
-      <BudgetForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} categories={categories} familyId={family?.id ?? null} monthDate={monthDate} editing={editing} />
+      <BudgetForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} categories={categories} familyId={family?.id ?? null} userId={session?.user.id ?? null} monthDate={monthDate} editing={editing} />
     </div>
   )
 }
 
-function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, editing }: {
-  open: boolean; onClose: () => void; onSaved: () => void; categories: Category[]; familyId: string | null; monthDate: string; editing: Budget | null
+function BudgetForm({ open, onClose, onSaved, categories, familyId, userId, monthDate, editing }: {
+  open: boolean; onClose: () => void; onSaved: () => void; categories: Category[]; familyId: string | null; userId: string | null; monthDate: string; editing: Budget | null
 }) {
   const [categoryId, setCategoryId] = useState('')
   const [limit, setLimit] = useState('')
@@ -159,8 +160,14 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, monthDate, e
         const { error: err } = await googleSheets.from('budgets').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await googleSheets.from('budgets').insert(payload)
+        if (!userId) throw new Error('Сессия завершена. Войдите снова.')
+        const storage = window.localStorage
+        const pendingKey = pendingMutationStorageKey('budgets', familyId, userId)
+        const fingerprint = await fingerprintTransactionPayload(payload)
+        const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
+        const { error: err } = await googleSheets.from('budgets').insert({ ...payload, id })
         if (err) throw err
+        clearPendingMutation(storage, pendingKey, id)
       }
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }

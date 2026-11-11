@@ -24,7 +24,7 @@ function readRecord(storage: KeyValueStorage, key: string, now: number): Pending
   try {
     const value = JSON.parse(raw) as Partial<PendingTransactionRecord>
     const valid = value.version === 1
-      && typeof value.id === 'string' && /^tx_[a-f0-9]{32}$/.test(value.id)
+      && typeof value.id === 'string' && /^(?:tx|op)_[a-f0-9]{32}$/.test(value.id)
       && typeof value.fingerprint === 'string' && /^[a-f0-9]{64}$/.test(value.fingerprint)
       && typeof value.createdAt === 'number' && Number.isFinite(value.createdAt)
       && value.createdAt <= now
@@ -80,3 +80,35 @@ export async function fingerprintTransactionPayload(payload: unknown): Promise<s
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('')
 }
+
+
+/** Isolated pending key for one create-form flow, family and user. */
+export function pendingMutationStorageKey(
+  table: string,
+  familyId: string,
+  userId: string,
+  scope = 'create',
+): string {
+  return `budget:pending-mutation:v1:${encodeURIComponent(table)}:${encodeURIComponent(familyId)}:${encodeURIComponent(userId)}:${encodeURIComponent(scope)}`
+}
+
+export function getOrCreatePendingMutationId(
+  storage: KeyValueStorage,
+  key: string,
+  fingerprint: string,
+  createId: () => string,
+  now = Date.now(),
+): string {
+  const current = readRecord(storage, key, now)
+  if (current?.fingerprint === fingerprint) return current.id
+  const record: PendingTransactionRecord = {
+    version: 1,
+    id: createId(),
+    fingerprint,
+    createdAt: now,
+  }
+  storage.setItem(key, JSON.stringify(record))
+  return record.id
+}
+
+export const clearPendingMutation = clearPendingTransaction

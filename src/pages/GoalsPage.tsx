@@ -5,6 +5,7 @@ import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO, monthsUntilDate } from '../lib/dates'
 import Modal from '../components/Modal'
+import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
 
 const STATUS_LABELS: Record<string, string> = { active: 'Активная', paused: 'Пауза', done: 'Достигнута', cancelled: 'Отменена' }
@@ -237,10 +238,17 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
     setSaving(true)
     try {
       const { data: prof } = await googleSheets.auth.getUser()
-      const { error: err } = await googleSheets.from('goal_contributions').insert({
-        goal_id: goal.id, amount_kopecks: amt, contribution_date: date, note: note.trim(), created_by: prof.user?.id ?? null,
-      })
+      const userId = prof.user?.id
+      const familyId = goal.family_id
+      if (!userId || !familyId) throw new Error('Не удалось определить участника или семью')
+      const payload = { goal_id: goal.id, amount_kopecks: amt, contribution_date: date, note: note.trim(), created_by: userId }
+      const storage = window.localStorage
+      const pendingKey = pendingMutationStorageKey('goal_contributions', familyId, userId, goal.id)
+      const fingerprint = await fingerprintTransactionPayload(payload)
+      const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
+      const { error: err } = await googleSheets.from('goal_contributions').insert({ ...payload, id })
       if (err) throw err
+      clearPendingMutation(storage, pendingKey, id)
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
     finally { setSaving(false) }

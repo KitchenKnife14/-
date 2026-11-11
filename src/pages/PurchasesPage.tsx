@@ -7,6 +7,7 @@ import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { safeHttpUrl } from '../lib/safeUrl'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
+import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
 import { Plus, Pencil, Trash2, ShoppingCart, Check, ExternalLink } from 'lucide-react'
 
 const PRIORITY_LABELS: Record<number, string> = { 1: 'Критически необходимое', 2: 'Необходимое', 3: 'Важное', 4: 'Желательное', 5: 'Необязательное' }
@@ -194,8 +195,14 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
         const { error: err } = await googleSheets.from('planned_purchases').update(payload).eq('id', editing.id)
         if (err) throw err
       } else {
-        const { error: err } = await googleSheets.from('planned_purchases').insert({ ...payload, family_id: familyId, created_by: userId })
+        const insertPayload = { ...payload, family_id: familyId, created_by: userId }
+        const storage = window.localStorage
+        const pendingKey = pendingMutationStorageKey('planned_purchases', familyId, userId)
+        const fingerprint = await fingerprintTransactionPayload(insertPayload)
+        const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
+        const { error: err } = await googleSheets.from('planned_purchases').insert({ ...insertPayload, id })
         if (err) throw err
+        clearPendingMutation(storage, pendingKey, id)
       }
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }

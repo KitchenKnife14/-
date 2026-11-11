@@ -4,6 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { calculateAccountBalances } from '../lib/accountBalances.js'
+import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
 import { Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import Modal from '../components/Modal'
 
@@ -71,9 +72,20 @@ export default function AccountsPage() {
     setSaving(true); setError(null)
     try {
       const payload = { family_id: family.id, name: normalizedName, kind, starting_balance_kopecks: balance }
-      const result = editing
-        ? await googleSheets.from('accounts').update(payload).eq('id', editing.id)
-        : await googleSheets.from('accounts').insert(payload)
+      let result
+      if (editing) {
+        result = await googleSheets.from('accounts').update(payload).eq('id', editing.id)
+      } else {
+        const { data: authData } = await googleSheets.auth.getUser()
+        const userId = authData.user?.id
+        if (!userId) throw new Error('Сессия завершена. Войдите снова.')
+        const storage = window.localStorage
+        const pendingKey = pendingMutationStorageKey('accounts', family.id, userId)
+        const fingerprint = await fingerprintTransactionPayload(payload)
+        const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
+        result = await googleSheets.from('accounts').insert({ ...payload, id })
+        if (!result.error) clearPendingMutation(storage, pendingKey, id)
+      }
       if (result.error) throw result.error
       setModalOpen(false)
       await load()

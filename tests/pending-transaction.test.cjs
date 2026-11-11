@@ -92,3 +92,32 @@ test('payload fingerprint is SHA-256 and changes with normalized payload', async
   assert.equal(first, same)
   assert.notEqual(first, changed)
 })
+
+
+test('generic pending mutation IDs are isolated by table, family, user and form scope', async () => {
+  const { pendingMutationStorageKey, getOrCreatePendingMutationId } = await loadPendingModule()
+  const storage = createStorage()
+  let generated = 0
+  const createId = () => `op_${String(++generated).padStart(32, '0')}`
+  const a = pendingMutationStorageKey('accounts', 'family-a', 'user-a')
+  const b = pendingMutationStorageKey('budgets', 'family-a', 'user-a')
+  const c = pendingMutationStorageKey('goal_contributions', 'family-a', 'user-a', 'goal-1')
+  const d = pendingMutationStorageKey('goal_contributions', 'family-a', 'user-a', 'goal-2')
+  const ids = [a,b,c,d].map(key => getOrCreatePendingMutationId(storage,key,'a'.repeat(64),createId,1000))
+  assert.equal(new Set(ids).size, 4)
+})
+
+test('generic pending mutation reuses ID after lost response and clears only after confirmed success', async () => {
+  const { pendingMutationStorageKey, getOrCreatePendingMutationId, clearPendingMutation } = await loadPendingModule()
+  const storage = createStorage()
+  let generated = 0
+  const createId = () => `op_${String(++generated).padStart(32, '0')}`
+  const key = pendingMutationStorageKey('planned_purchases','family-a','user-a')
+  const first = getOrCreatePendingMutationId(storage,key,'c'.repeat(64),createId,1000)
+  const retry = getOrCreatePendingMutationId(storage,key,'c'.repeat(64),createId,2000)
+  assert.equal(first,retry)
+  assert.equal(generated,1)
+  clearPendingMutation(storage,key,first)
+  const nextIntent = getOrCreatePendingMutationId(storage,key,'c'.repeat(64),createId,3000)
+  assert.notEqual(nextIntent,first)
+})
