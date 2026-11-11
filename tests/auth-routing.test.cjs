@@ -5,6 +5,7 @@ const path = require('node:path')
 
 const source = fs.readFileSync(path.join(__dirname, '../src/context/AuthContext.tsx'), 'utf8')
 const app = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8')
+const layout = fs.readFileSync(path.join(__dirname, '../src/components/Layout.tsx'), 'utf8')
 const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '../vercel.json'), 'utf8'))
 
 test('auth context ignores stale async session loads before writing state', () => {
@@ -40,4 +41,15 @@ test('router defines auth, onboarding and unknown-path behavior', () => {
 
 test('Vercel rewrites direct SPA paths to index.html', () => {
   assert.deepEqual(vercel.rewrites, [{ source: '/(.*)', destination: '/index.html' }])
+})
+
+test('every navigation destination has a matching authenticated route', () => {
+  const destinations = [...layout.matchAll(/to: '(\/[^']*)'/g)].map(match => match[1])
+  const routePaths = new Set(['/', ...[...app.matchAll(/<Route path="([^"]+)"/g)].map(match => '/' + match[1])])
+  assert.equal(destinations.length, 14, 'expected all 14 navigation entries')
+  for (const destination of destinations) {
+    assert.ok(routePaths.has(destination), `missing route for navigation destination: ${destination}`)
+  }
+  assert.match(layout, /await googleSheets\.auth\.signOut\(\)/)
+  assert.match(layout, /navigate\('\/'\)/)
 })
