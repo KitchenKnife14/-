@@ -2598,3 +2598,7 @@ HEAD до:
 - Добавлен тест: после создания привязки существует неиспользованный код; искусственно ломается удаление link row. Проверяется, что код уже отозван, привязка остаётся, повтор RPC удаляет её.
 - Коммиты: backend `a77f8a91db62e304757e2f8478d86c7aadb0db73`; тест `dacf71b25785bf64bc9aec65dec1ac4321a4f0e8`; корректировка фикстуры теста `e830136102e848dc04a725c4e11a6dcbac51bcbe`.
 - CI для последних изменений ожидается. Production, основная Google Sheet и основное GAS-развёртывание не менялись.
+
+
+- Финальный CI после фикса частичного создания цели и порядка отвязки Telegram завершился success на HEAD `e830136102e848dc04a725c4e11a6dcbac51bcbe`: **214/214 тестов, 0 failures**; TypeScript/production build, dependency audit, Apps Script syntax, runtime diagnostics syntax, isolated idempotency syntax и manifest validation — success. Run: https://github.com/KitchenKnife14/-/actions/runs/43094990354
+- Подтверждено: при ошибке вставки покупки до записи повтор корректно завершает создание цели и покупки; при сбое удаления Telegram link row неиспользованные коды уже отозваны, активная привязка остаётся до безопасного повтора отвязки.
