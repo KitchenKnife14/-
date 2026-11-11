@@ -70,7 +70,7 @@ export default function PurchasesPage() {
   })
 
   const totalEstimated = filtered.filter((p) => p.status !== 'bought' && p.status !== 'cancelled').reduce((s, p) => s + p.estimated_kopecks, 0)
-  const remove = async (p: PlannedPurchase) => { const { error: err } = await googleSheets.from('planned_purchases').delete().eq('id', p.id); if (err) setError(err.message); load() }
+  const remove = async (p: PlannedPurchase) => { const { error: err } = await googleSheets.from('planned_purchases').delete().eq('id', p.id).expect(p as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
 
   const confirmBuy = async () => {
     if (!buying || !family || !session?.user) return
