@@ -460,6 +460,75 @@ test('retrying a contribution delete repairs a failed goal-balance sync after th
   assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 0);
 });
 
+test('retrying transaction delete repairs a failed planned-purchase unlink', () => {
+  const h = makeHarness();
+  const user = h.signup('transaction-delete-cascade-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор удаления операции' }).data;
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Покупка', estimated_kopecks: 25000, status: 'planned' }
+  }).data[0];
+  const confirmed = h.call({ action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-11' } });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+  const transactionId = confirmed.data.transaction_id;
+  const originalUpdate = h.context.updateRows_;
+  let failOnce = true;
+  h.context.updateRows_ = function(table, rows) {
+    if (table === 'planned_purchases' && failOnce) { failOnce = false; throw new Error('simulated purchase unlink failure'); }
+    return originalUpdate(table, rows);
+  };
+
+  const first = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: transactionId }] });
+  assert.match(first.error?.message || '', /simulated purchase unlink failure/);
+  assert.equal(h.context.rows_('transactions').some(row => row.id === transactionId), false);
+  assert.equal(h.context.rows_('planned_purchases').find(row => row.id === purchase.id).status, 'bought');
+
+  const retry = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: transactionId }] });
+  assert.equal(retry.error, null, retry.error?.message);
+  const restored = h.context.rows_('planned_purchases').find(row => row.id === purchase.id);
+  assert.equal(restored.status, 'planned');
+  assert.equal(restored.linked_transaction_id, '');
+  assert.equal(h.context.rows_('transactions').some(row => row.id === transactionId), false);
+});
+
+test('retrying recurring-payment delete repairs failed transaction detachment', () => {
+  const h = makeHarness();
+  const user = h.signup('recurring-delete-cascade-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор удаления регулярного' }).data;
+  const recurring = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 9900, description: 'Подписка',
+      start_date: '2026-11-01', frequency: 'monthly', next_due_date: '2026-11-11', active: true }
+  }).data[0];
+  const confirmed = h.call({ action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-11' } });
+  assert.equal(confirmed.error, null, confirmed.error?.message);
+  const transactionId = 'recurring_' + recurring.id + '_' + recurring.next_due_date;
+  const originalUpdate = h.context.updateRows_;
+  let failOnce = true;
+  h.context.updateRows_ = function(table, rows) {
+    if (table === 'transactions' && failOnce) { failOnce = false; throw new Error('simulated recurring detach failure'); }
+    return originalUpdate(table, rows);
+  };
+
+  const first = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: recurring.id }] });
+  assert.match(first.error?.message || '', /simulated recurring detach failure/);
+  assert.equal(h.context.rows_('recurring_payments').some(row => row.id === recurring.id), false);
+  assert.equal(h.context.rows_('transactions').find(row => row.id === transactionId).parent_recurring_id, recurring.id);
+
+  const retry = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: recurring.id }] });
+  assert.equal(retry.error, null, retry.error?.message);
+  const transaction = h.context.rows_('transactions').find(row => row.id === transactionId);
+  assert.equal(transaction.parent_recurring_id, '');
+  assert.equal(transaction.amount_kopecks, 9900);
+  assert.equal(h.context.rows_('recurring_payments').some(row => row.id === recurring.id), false);
+});
+
 test('planned purchase URLs accept only absolute HTTP(S) links', () => {
   const h = makeHarness();
   const user = h.signup('purchase-url@example.com');
