@@ -162,7 +162,7 @@ test('Apps Script request logs contain metrics only and never payload secrets or
   });
   assert.equal(inserted.error, null, inserted.error?.message);
   assert.equal(logs.length, 3);
-  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'reads', 'writes', 'readMs', 'writeMs'];
+  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'reads', 'writes', 'readMs', 'writeMs', 'revisionWriteFailures'];
   for (const line of logs) {
     const record = JSON.parse(line);
     assert.deepEqual(Object.keys(record).sort(), allowed.sort());
@@ -1832,6 +1832,7 @@ test('revision marker failures are counted without turning a committed data writ
   const user = h.signup('revision-write-failure@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Сбой маркера ревизии' }).data;
   const props = h.context.PropertiesService.getScriptProperties();
+  h.context.PropertiesService.getScriptProperties = () => props;
   const originalSetProperty = props.setProperty.bind(props);
   props.setProperty = (key, value) => {
     if (key.startsWith('table_revision:v2:transactions:')) throw new Error('simulated revision marker failure');
