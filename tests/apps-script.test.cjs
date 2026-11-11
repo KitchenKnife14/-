@@ -361,6 +361,9 @@ test('recurring payment confirmation can retry after a partial write without dup
   assert.match(changedDateRetry.error?.message || '', /не соответствует регулярному платежу/);
   const retried = h.call(args);
   assert.equal(retried.error, null, retried.error?.message);
+  const replayed = h.call(args);
+  assert.equal(replayed.error, null, replayed.error?.message);
+  assert.equal(replayed.data.transaction_id, `purchase_${purchase.id}`);
   const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
   assert.equal(txs.length, 1);
   assert.equal(txs[0].id, `recurring_${recurring.id}_2026-10-28`);
@@ -657,7 +660,7 @@ test('purchase confirmation can retry after a partial write without duplicating 
     return originalUpdate(name, rows);
   };
   const args = { action: 'rpc', token: user.token, name: 'confirm_planned_purchase', params: {
-    p_purchase_id: purchase.id, p_operation_date: '2026-10-28'
+    p_purchase_id: purchase.id, p_operation_date: '2026-10-28', p_expected_purchase: purchase
   }};
   const failed = h.call(args);
   assert.match(failed.error.message, /simulated purchase status write failure/);
