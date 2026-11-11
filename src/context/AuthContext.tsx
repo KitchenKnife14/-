@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await googleSheets.rpc('get_my_context', {})
       if (error) throw new Error(error.message)
       const c = data as { profile: Profile | null; members: FamilyMember[]; family: Family | null; member_profiles?: Profile[] }
+      if (sequence !== loadSequence.current) return
       setProfile(c.profile)
       setMembers(c.members ?? [])
       setMemberProfiles(c.member_profiles ?? (c.profile ? [c.profile] : []))

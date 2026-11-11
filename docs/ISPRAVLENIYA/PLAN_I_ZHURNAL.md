@@ -1880,3 +1880,13 @@ HEAD до:
 - Изменение production parser не потребовалось: его поведение уже соответствует контракту, расширено только покрытие.
 - В плане закрыт соответствующий unit-test пункт FRONT-02. Реальные timeout/abort и redirect остаются интеграционными проверками. Прогресс: 156/272 (57.4%).
 - CI для коммита `78dc5662adddf9524767b43d848b4d508d6f9d04` завершился `completed / success`: [run 42907534817](https://github.com/KitchenKnife14/-/actions/runs/42907534817). TypeScript/production build, полный набор из 165 тестов (165 passed, 0 failed), Apps Script syntax, runtime diagnostics syntax, manifest validation и `npm audit` (0 vulnerabilities) прошли. Изменён только тестовый набор и журнал; parser production-кода не менялся.
+
+
+### Журнал — 2026-11-11: гонки загрузки сессии и проверка маршрутов (работа № 57)
+
+- Проверен `src/App.tsx`: без сессии все пути ведут на AuthPage; сессия без семьи — на OnboardingPage; неизвестный путь после авторизации перенаправляется на `/`. Все 14 основных маршрутов подключены через Layout.
+- Проверен `vercel.json`: catch-all rewrite `/(.*) -> /index.html` поддерживает прямые SPA URL и обновление вложенных маршрутов. Конфигурация не переписывает внешние `/api/*` функции; API endpoints в Vercel не изменялись.
+- В `AuthContext` обнаружена гонка: initial `getSession`, auth state events и ручной refresh могли завершаться не по порядку и старый `get_my_context` response мог перезаписать состояние более новой сессии.
+- Добавлен монотонный request sequence: устаревший ответ теперь отбрасывается до записи profile/family/members; начальная проверка сессии не перезаписывает более позднее auth event; refresh отменяется логически при новом auth event; cleanup инвалидирует запросы после unmount.
+- Добавлен `tests/auth-routing.test.cjs`: проверяет stale-response guards, порядок initial session/auth listener, refresh invalidation, состояния маршрутизации и Vercel SPA rewrite.
+- Не закрывал полный пункт ROUTE-01: browser back/forward, прямое открытие deep links на Preview, logout/login и фактическая работа auth на мобильном браузере ещё не проверялись. Прогресс чек-листа пока не изменён.
