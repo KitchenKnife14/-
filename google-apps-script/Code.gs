@@ -914,28 +914,35 @@ function query_(req,user){
       assertGoalContributionTotalsSafe_(goalIds,replacements,changed.map(row=>row.id));
     }
     if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
-    if(table==='recurring_payments'&&mode==='delete'&&changed.length){
-      const deletedIds=new Set(changed.map(payment=>String(payment.id)));
-      const transactions=rows_('transactions'),transactionsChanged=[];
-      transactions.forEach(tx=>{
-        if(tx.parent_recurring_id&&deletedIds.has(String(tx.parent_recurring_id))){
-          tx.parent_recurring_id='';
-          transactionsChanged.push(tx);
-        }
-      });
-      if(transactionsChanged.length)updateRows_('transactions',transactionsChanged);
-    }
-    if(table==='transactions'&&mode==='delete'&&changed.length){
-      const deletedIds=new Set(changed.map(tx=>String(tx.id)));
-      const purchases=rows_('planned_purchases'),purchasesChanged=[];
-      purchases.forEach(p=>{
-        if(p.linked_transaction_id&&deletedIds.has(String(p.linked_transaction_id))){
-          p.linked_transaction_id='';
-          if(p.status==='bought')p.status='planned';
-          purchasesChanged.push(p);
-        }
-      });
-      if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
+    if(mode==='delete'&&(table==='recurring_payments'||table==='transactions')){
+      // A delete may commit before its dependent-row update fails. On retry the
+      // parent row is already gone, so recover links from the explicit ID filter.
+      const requestedIds=new Set((req.filters||[])
+        .filter(filter=>filter&&filter.column==='id'&&filter.op==='eq'&&filter.value!==undefined&&filter.value!==null)
+        .map(filter=>String(filter.value)));
+      const deletedIds=new Set(changed.map(row=>String(row.id)));
+      requestedIds.forEach(id=>deletedIds.add(id));
+      if(table==='recurring_payments'&&deletedIds.size){
+        const transactions=rows_('transactions'),transactionsChanged=[];
+        transactions.forEach(tx=>{
+          if(tx.parent_recurring_id&&deletedIds.has(String(tx.parent_recurring_id))&&canAccessRow_('transactions',tx,user)){
+            tx.parent_recurring_id='';
+            transactionsChanged.push(tx);
+          }
+        });
+        if(transactionsChanged.length)updateRows_('transactions',transactionsChanged);
+      }
+      if(table==='transactions'&&deletedIds.size){
+        const purchases=rows_('planned_purchases'),purchasesChanged=[];
+        purchases.forEach(p=>{
+          if(p.linked_transaction_id&&deletedIds.has(String(p.linked_transaction_id))&&canAccessRow_('planned_purchases',p,user)){
+            p.linked_transaction_id='';
+            if(p.status==='bought')p.status='planned';
+            purchasesChanged.push(p);
+          }
+        });
+        if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
+      }
     }
     if(table==='goals'&&mode==='delete'&&changed.length){
       const deletedIds=new Set(changed.map(g=>String(g.id)));
