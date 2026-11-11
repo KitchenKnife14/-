@@ -1178,6 +1178,7 @@ function rpc_(req,user){
       String(tx.category_id||'')!==String(purchase.category_id||'') ||
       String(tx.description||'')!==String(purchase.name||'') ||
       String(tx.account_id||'')!==accountId ||
+      String(tx.operation_date||'')!==String(p.p_operation_date||'') ||
       String(tx.parent_recurring_id||'')!==''
     ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
     if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
@@ -1205,7 +1206,8 @@ function rpc_(req,user){
       Number(existingTx.amount_kopecks)!==Number(r.amount_kopecks) ||
       String(existingTx.category_id||'')!==String(r.category_id||'') ||
       String(existingTx.account_id||'')!==String(r.account_id||'') ||
-      String(existingTx.description||'')!==String(r.description||'')
+      String(existingTx.description||'')!==String(r.description||'') ||
+      String(existingTx.operation_date||'')!==String(p.p_operation_date||'')
     ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
     if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
     r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
