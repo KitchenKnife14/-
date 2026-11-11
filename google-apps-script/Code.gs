@@ -1248,8 +1248,8 @@ function rpc_(req,user){
       String(existingTx.operation_date||'')!==operationDate
     ))throw new Error('Конфликт ID операции: запись не соответствует исходному регулярному платежу');
     // A fully committed replay is safe even though next_due_date has already advanced.
-    if(existingTx && r.next_due_date===nextExpectedDate){
-      if(r.end_date && nextExpectedDate>r.end_date && r.active)throw new Error('Состояние регулярного платежа не соответствует завершённому периоду');
+    if(existingTx && r.next_due_date!==expectedDueDate){
+      // The occurrence already advanced. Later edits to the recurring schedule must not turn a safe replay into a failure.
       return true;
     }
     // Before creating a transaction, require the complete row snapshot shown to the user.
