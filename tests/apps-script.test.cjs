@@ -286,6 +286,29 @@ test('joinFamily validates membership before changing profile and remains idempo
   assert.ok(otherFamily.id);
 });
 
+test('joinFamily does not change the profile when the membership write fails', () => {
+  const h = makeHarness();
+  const owner = h.signup('join-write-owner@example.com');
+  const partner = h.signup('join-write-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья для проверки записи' }).data;
+  const profileBefore = h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name;
+  const originalAppend = h.context.appendRows_;
+  h.context.appendRows_ = function(name, rows) {
+    if (name === 'family_members') throw new Error('simulated membership append failure');
+    return originalAppend(name, rows);
+  };
+
+  const failed = h.call({
+    action: 'joinFamily',
+    token: partner.token,
+    invite_code: family.invite_code,
+    display_name: 'Имя не должно сохраниться'
+  });
+  assert.match(failed.error.message, /simulated membership append failure/);
+  assert.equal(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, profileBefore);
+  assert.equal(h.context.rows_('family_members').filter(row => row.user_id === partner.user.id).length, 0);
+});
+
 test('recurring payment confirmation can retry after a partial write without duplicating the transaction', () => {
   const h = makeHarness();
   const user = h.signup('owner@example.com');

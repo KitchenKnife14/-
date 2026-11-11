@@ -495,9 +495,10 @@ function route_(req,user){
     if(members.some(m=>m.user_id===user.id)){setProfileName_(user.id,req.display_name);return f;}
     if(members.length>=2)throw new Error('В семье уже два участника');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Вы уже состоите в другой семье');
-    // Validate membership constraints before changing the profile: a rejected join must have no side effects.
-    setProfileName_(user.id,req.display_name);
+    // Persist membership before changing the profile. If the membership write fails, profile data stays untouched.
+    // If the profile update fails afterward, retry is safe: the existing-member path completes the profile update.
     const member={id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()};appendRows_('family_members',[member]);
+    setProfileName_(user.id,req.display_name);
     return f;
   }
   if(req.action==='query')return query_(req,user);
