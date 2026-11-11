@@ -944,7 +944,16 @@ function query_(req,user){
       purchases.forEach(p=>{if(p.goal_id&&deletedIds.has(String(p.goal_id))){p.goal_id='';purchasesChanged.push(p);}});
       if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
     }
-    if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
+    if(table==='goal_contributions'){
+      // A retried delete may find no contribution row because the previous request
+      // deleted it before failing to update the denormalized goal balance.
+      // Reconcile all goals in the caller's family so the retry repairs that partial commit.
+      if(mode==='delete'){
+        const familyIds=new Set(allowedFamilyIds_(user));
+        rows_('goals').forEach(goal=>{if(familyIds.has(String(goal.family_id)))affectedGoalIds.add(String(goal.id));});
+      }
+      syncGoalTotals_([...affectedGoalIds]);
+    }
     return req.returning?changed.map(strip_):null;
   }
   if(mode==='upsert'){
@@ -995,16 +1004,7 @@ function query_(req,user){
     }
     updateRows_(table,updatedRows);
     appendRows_(table,insertedRows);
-    if(table==='goal_contributions'){
-      // A retried delete may find no contribution row because the previous request
-      // deleted it before failing to update the denormalized goal balance.
-      // Reconcile all goals in the caller's family so the retry repairs that partial commit.
-      if(mode==='delete'){
-        const familyIds=new Set(allowedFamilyIds_(user));
-        rows_('goals').forEach(goal=>{if(familyIds.has(String(goal.family_id)))affectedGoalIds.add(String(goal.id));});
-      }
-      syncGoalTotals_([...affectedGoalIds]);
-    }
+    if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
     return null;
   }
   throw new Error('Неизвестный режим запроса');
