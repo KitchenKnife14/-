@@ -32,5 +32,7 @@ jobs:
         run: node --check < google-apps-script/Code.gs
       - name: Apps Script runtime diagnostics syntax check
         run: node --check < google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs
+      - name: Isolated Apps Script idempotency test syntax check
+        run: node --check < tests/gas/IdempotencyConcurrencyTest.gs
       - name: Validate Apps Script manifest
         run: node -e "const m=JSON.parse(require('node:fs').readFileSync('google-apps-script/appsscript.json','utf8')); if(m.timeZone!=='Europe/Moscow'||m.runtimeVersion!=='V8'||m.exceptionLogging!=='STACKDRIVER') throw new Error('Unexpected Apps Script manifest configuration')"
