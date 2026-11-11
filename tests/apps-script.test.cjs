@@ -120,6 +120,14 @@ function makeHarness() {
   };
 }
 
+function seedTable(h, name) {
+  const headers = JSON.parse(JSON.stringify(vm.runInContext(`TABLES[${JSON.stringify(name)}]`, h.context)));
+  const sheet = h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name)
+    || h.context.SpreadsheetApp.getActiveSpreadsheet().insertSheet(name);
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  return sheet;
+}
+
 test('doGet omits spreadsheet diagnostics unless DEBUG_INFO is explicitly enabled', () => {
   const h = makeHarness();
   const parse = output => JSON.parse(output.getContent());
@@ -1229,6 +1237,7 @@ test('monthly and yearly recurring dates preserve the original calendar anchor',
 
 test('confirming a planned purchase can debit a selected active family account', () => {
   const h = makeHarness();
+  seedTable(h, 'transactions');
   const user = h.signup('purchase-account-owner@example.com');
   const outsider = h.signup('purchase-account-outsider@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Покупка со счёта' }).data;
@@ -1674,6 +1683,7 @@ test('Telegram salary expenses are assigned to the linked family member category
 
 test('Telegram rejects ambiguous messages containing multiple numbers without writing a transaction', () => {
   const h = makeHarness();
+  seedTable(h, 'transactions');
   const user = h.signup('telegram-ambiguous@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Без неоднозначных операций' });
   h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', 'ambiguous-secret-0123456789abcdef01234567');
@@ -1783,7 +1793,7 @@ test('_auth refuses a mismatched header without changing credential rows', () =>
   assert.deepEqual(sheet.getRange(2, 1, 1, credentialRow.length).getValues()[0], credentialRow);
 });
 
-test('schema migration appends transaction participant column without changing prior columns', () => {
+test('read-only query refuses implicit schema migration and preserves legacy transaction rows', () => {
   const h = makeHarness();
   const user = h.signup('schema-additive@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Миграция схемы' });
@@ -1794,11 +1804,10 @@ test('schema migration appends transaction participant column without changing p
   const preservedRow = ['legacy-id', 'family-1', 'expense', 4500, '2026-11-03', '', '', '', '', 'Старый расход', 'user-1', 'user-1', false, '', '2026-11-03T10:00:00.000Z', '2026-11-03T10:00:00.000Z'];
   sheet.getRange(2, 1, 1, oldHeaders.length).setValues([preservedRow]);
   const result = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
-  assert.equal(result.error, null, result.error?.message);
+  assert.match(result.error?.message || '', /требует обслуживания.*без автоматического изменения заголовков/);
   assert.deepEqual(sheet.getRange(1, 1, 1, oldHeaders.length).getValues()[0], oldHeaders);
-  assert.equal(sheet.getRange(1, oldHeaders.length + 1, 1, 1).getValues()[0][0], 'responsible_user_id');
+  assert.equal(sheet.getRange(1, oldHeaders.length + 1, 1, 1).getValues()[0][0], '');
   assert.deepEqual(sheet.getRange(2, 1, 1, oldHeaders.length).getValues()[0], preservedRow);
-  assert.equal(sheet.getRange(2, oldHeaders.length + 1, 1, 1).getValues()[0][0], '');
 });
 
 test('doPost reports lock timeout without attempting to release an unacquired lock', () => {
@@ -2099,6 +2108,7 @@ test('request lock classifier treats mixed or malformed batches as writes', () =
 
 test('baseline: a read-only query currently acquires and releases the global ScriptLock', () => {
   const h = makeHarness();
+  seedTable(h, 'transactions');
   const user = h.signup('lock-baseline@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Baseline блокировки' }).data;
   assert.ok(family?.id);
@@ -2192,6 +2202,7 @@ test('monetary fields reject integers outside the JavaScript safe integer range'
 
 test('create_goal_with_purchase rejects numeric strings for target kopecks', () => {
   const h = makeHarness();
+  seedTable(h, 'goals');
   const user = h.signup('strict-goal-rpc@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Строгий RPC' }).data;
   const result = h.call({
@@ -2206,6 +2217,8 @@ test('create_goal_with_purchase rejects numeric strings for target kopecks', () 
 
 test('batch requests enforce the same strict kopecks validation as direct query requests', () => {
   const h = makeHarness();
+  seedTable(h, 'transactions');
+  seedTable(h, 'monthly_plans');
   const user = h.signup('strict-money-batch@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Денежный batch' }).data;
   const result = h.call({
@@ -3185,7 +3198,7 @@ test('isolated Apps Script PBKDF2 runtime diagnostic measures 30000 and 600000 i
 
 test('read-candidate requests fail closed instead of creating a missing sheet', () => {
   const h = makeHarness();
-  h.context.READ_ONLY_REQUEST = true;
+  vm.runInContext('READ_ONLY_REQUEST = true', h.context);
   assert.throws(() => h.context.sheet_('transactions'), /отсутствует.*без автоматического создания структуры/);
   assert.equal(h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions'), null);
   assert.equal(h.context.SHEET_WRITES, 0);
@@ -3195,7 +3208,7 @@ test('read-candidate requests fail closed on incomplete headers without repairin
   const h = makeHarness();
   const ss = h.context.SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.insertSheet('transactions');
-  const oldHeaders = h.context.TABLES.transactions.slice(0, -1);
+  const oldHeaders = JSON.parse(JSON.stringify(vm.runInContext('TABLES.transactions.slice(0, -1)', h.context)));
   sheet.getRange(1, 1, 1, oldHeaders.length).setValues([oldHeaders]);
   h.context.READ_ONLY_REQUEST = true;
   assert.throws(() => h.context.sheet_('transactions'), /требует обслуживания.*без автоматического изменения заголовков/);
