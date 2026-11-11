@@ -114,9 +114,6 @@ export default function Layout() {
                 <div className="truncate text-[11px] text-muted">{family?.name || 'Для двоих'}</div>
               </div>
             </div>
-            <button onClick={signOut} disabled={signingOut} className="rounded-xl p-2 text-muted hover:bg-canvas hover:text-ink disabled:opacity-50" aria-label="Выйти">
-              <LogOut size={18} />
-            </button>
           </div>
         </header>
 
@@ -129,21 +126,33 @@ export default function Layout() {
         {moreOpen && (
           <>
             <button type="button" aria-label="Закрыть меню" className="fixed inset-0 z-0 bg-black/20" onClick={() => setMoreOpen(false)} />
-            <nav aria-label="Дополнительная навигация" className="absolute z-10 bottom-full left-3 right-3 mb-2 grid max-h-[65vh] grid-cols-2 gap-1 overflow-y-auto rounded-2xl border border-line bg-surface p-2 shadow-xl">
-              {mobileMoreItems.map(item => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMoreOpen(false)}
-                  className={({ isActive }) => `flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
-                    isActive ? 'bg-primary-50 font-semibold text-primary-800' : 'text-muted hover:bg-canvas'
-                  }`}
-                >
-                  <item.icon size={17} className="shrink-0" />
-                  <span className="min-w-0">{item.label}</span>
-                </NavLink>
-              ))}
-            </nav>
+            <div className="absolute z-10 bottom-full left-3 right-3 mb-2 rounded-2xl border border-line bg-surface p-2 shadow-xl">
+              <nav aria-label="Дополнительная навигация" className="grid max-h-[55vh] grid-cols-2 gap-1 overflow-y-auto">
+                {mobileMoreItems.map(item => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMoreOpen(false)}
+                    className={({ isActive }) => `flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
+                      isActive ? 'bg-primary-50 font-semibold text-primary-800' : 'text-muted hover:bg-canvas'
+                    }`}
+                  >
+                    <item.icon size={17} className="shrink-0" />
+                    <span className="min-w-0">{item.label}</span>
+                  </NavLink>
+                ))}
+              </nav>
+              <div className="mt-2 flex items-center gap-3 border-t border-line px-2 pt-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">Код приглашения</div>
+                  <div className="truncate font-mono text-sm font-semibold text-primary-800">{family?.invite_code || 'Недоступен'}</div>
+                </div>
+                <button type="button" onClick={() => void signOut()} disabled={signingOut} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-medium text-muted hover:bg-canvas hover:text-ink disabled:opacity-50">
+                  <LogOut size={16} />
+                  Выйти
+                </button>
+              </div>
+            </div>
           </>
         )}
         <nav aria-label="Нижняя навигация" className="relative z-10 grid grid-cols-5">
