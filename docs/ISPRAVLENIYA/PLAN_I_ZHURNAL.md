@@ -1967,3 +1967,5 @@ HEAD до:
 - Добавлена строгая проверка структуры session record: объект не-массив, непустой строковый `userId`, числовой конечный `expires` в будущем. Некорректная запись удаляется из Script Properties, клиент получает стандартную ошибку завершённой сессии.
 - Добавлен regression test для malformed JSON, JSON `null` и объекта без `userId`; во всех случаях запрос отклоняется и повреждённая запись удаляется.
 - Изменения только в ветке `ispravleniya`, без затрагивания Production Apps Script, `main`, основной Google-таблицы и Telegram webhook. Прогресс не менять до успешного CI.
+
+- CI для работы №63: коммит `7dfbcf79c8f734dd0c161c01007e4b638853b5e8` завершился `completed / success`: [run 42985481426](https://github.com/KitchenKnife14/-/actions/runs/42985481426). TypeScript/production build, 178 regression tests (178 passed, 0 failed), Apps Script syntax, runtime diagnostics syntax, manifest validation и `npm audit` (0 vulnerabilities) прошли. Прогресс остаётся 160/272 (58.8%): fail-closed проверка расширяет уже существующий пункт AUTH-SESSION и не добавляет новый пункт чек-листа.
