@@ -2029,7 +2029,7 @@ test('Telegram webhook rejects an invalid backend secret and prevents reuse of a
 test('unlink Telegram revokes unused codes before deleting the active link', () => {
   const h = makeHarness();
   const user = h.signup('telegram-unlink-partial@example.com');
-  h.call({ action: 'createFamily', token: user.token, name: 'Безопасная отвязка Telegram' });
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Безопасная отвязка Telegram' }).data;
   const secret = 'unlink-partial-secret-0123456789abcdef';
   h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', secret);
   const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
@@ -2041,9 +2041,12 @@ test('unlink Telegram revokes unused codes before deleting the active link', () 
     }}
   });
   assert.equal(linked.error, null, linked.error?.message);
-  const unused = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
-  assert.equal(unused.error, null, unused.error?.message);
-  assert.equal(h.context.rows_('telegram_link_codes').length, 1);
+  h.context.appendRows_('telegram_link_codes', [{
+    id: 'unused-link-code', user_id: user.user.id, family_id: family.id,
+    code_hash: h.context.telegramCodeHash_('UNUSED123456'),
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), used_at: '', created_at: new Date().toISOString()
+  }]);
+  assert.equal(h.context.rows_('telegram_link_codes').filter(row => !row.used_at).length, 1);
 
   const originalDelete = h.context.deleteRows_;
   let failLinkDelete = true;
