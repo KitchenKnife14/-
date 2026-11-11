@@ -3101,8 +3101,8 @@ test('Telegram replay cache has a documented 24-hour TTL and prunes expired entr
   const props = h.context.PropertiesService.getScriptProperties();
   const secret = 'telegram-retention-secret-0123456789abcdef';
   props.setProperty('TELEGRAM_BACKEND_SECRET', secret);
-  assert.equal(h.context.TELEGRAM_UPDATE_TTL_MS, 24 * 60 * 60 * 1000);
-  assert.equal(h.context.TELEGRAM_UPDATE_PRUNE_INTERVAL_MS, 6 * 60 * 60 * 1000);
+  assert.equal(vm.runInContext('TELEGRAM_UPDATE_TTL_MS', h.context), 24 * 60 * 60 * 1000);
+  assert.equal(vm.runInContext('TELEGRAM_UPDATE_PRUNE_INTERVAL_MS', h.context), 6 * 60 * 60 * 1000);
 
   props.setProperty('telegram:last_prune', 'not-a-timestamp');
   props.setProperty('telegram:update:expired', JSON.stringify({ expires: Date.now() - 1000, reply: { skip: true } }));
