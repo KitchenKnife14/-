@@ -975,7 +975,8 @@ function query_(req,user){
     const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
     if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
     const affectedGoalIds=new Set(), updatedRows=[], insertedRows=[];
-    input.forEach(raw=>{
+    input.forEach((raw,inputIndex)=>{
+      if(req.expectedRows!==undefined){if(!Array.isArray(req.expectedRows)||req.expectedRows.length!==input.length)throw new Error('Некорректный снимок месячного плана');const expected=req.expectedRows[inputIndex];const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());const expectedMatches=expected&&typeof expected==='object'&&!Array.isArray(expected)&&keys.every(k=>String(expected[k]??'')===String(raw[k]??''));if(expected!==null&&expected!==undefined&&!expectedMatches)throw new Error('Некорректный снимок месячного плана');}
       if(table==='goals'&&Object.prototype.hasOwnProperty.call(raw,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');
       if(table==='notifications'&&raw.user_id&&String(raw.user_id)!==user.id)throw new Error('Нельзя создавать уведомления для другого пользователя');
       if(table==='notifications')raw.user_id=user.id;
@@ -987,6 +988,7 @@ function query_(req,user){
       if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(raw.id!==undefined&&existing.some(r=>String(r.id)===String(raw.id))&&(!found||String(found.id)!==String(raw.id)))throw new Error('Запись с таким ID уже существует или недоступна');
       if(found){
+        if(req.expectedRows!==undefined){const expected=req.expectedRows[inputIndex];if(!expected)throw new Error('Запись была создана другим участником. Обновите планы и повторите действие.');const stale=TABLES[table].some(column=>Object.prototype.hasOwnProperty.call(expected,column)&&JSON.stringify(expected[column]??null)!==JSON.stringify(found[column]??null));if(stale)throw new Error('План был изменён другим участником. Обновите данные и повторите изменение.');}
         if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
         if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');
         if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');
@@ -999,6 +1001,7 @@ function query_(req,user){
         if(TABLES[table].includes('updated_at'))found.updated_at=now_();
         updatedRows.push(found);
       }else {
+        if(req.expectedRows!==undefined&&req.expectedRows[inputIndex])throw new Error('Запись была удалена другим участником. Обновите планы и повторите действие.');
         const r=Object.assign({id:id_()},raw);
         if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
         if(TABLES[table].includes('created_at'))r.created_at=now_();
