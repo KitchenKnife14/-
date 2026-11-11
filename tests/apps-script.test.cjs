@@ -1135,6 +1135,34 @@ test('transaction update cannot attach a foreign category or rewrite created_at'
 });
 
 
+test('planned purchase confirmation rejects a stale UI snapshot before creating an expense', () => {
+  const h = makeHarness();
+  const owner = h.signup('purchase-stale-owner@example.com');
+  const partner = h.signup('purchase-stale-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Устаревшее подтверждение покупки' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+  const purchase = h.call({
+    action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Телевизор', estimated_kopecks: 5500000, status: 'planned' }
+  }).data[0];
+  const changed = h.call({
+    action: 'query', token: partner.token, table: 'planned_purchases', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }],
+    values: { estimated_kopecks: 6000000 }
+  });
+  assert.equal(changed.error, null, changed.error?.message);
+
+  const stale = h.call({
+    action: 'rpc', token: owner.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-11', p_expected_purchase: purchase }
+  });
+  assert.match(stale.error?.message || '', /изменена другим участником/i);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data.length, 0);
+  const unchanged = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  assert.equal(unchanged.status, 'planned');
+  assert.equal(unchanged.estimated_kopecks, 6000000);
+});
+
 test('planned purchase confirmation rejects a deterministic ID collision', () => {
   const h = makeHarness();
   const user = h.signup('purchase-collision@example.com');
