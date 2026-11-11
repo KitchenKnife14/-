@@ -192,7 +192,7 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
         desired_date: desiredDate || null, url: normalizedUrl, comment: comment.trim(), status, goal_id: goalId || null,
       }
       if (editing) {
-        const { error: err } = await googleSheets.from('planned_purchases').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('planned_purchases').update(payload).eq('id', editing.id).expect(editing as unknown as Record<string, unknown>)
         if (err) throw err
       } else {
         const insertPayload = { ...payload, family_id: familyId, created_by: userId }
