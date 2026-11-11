@@ -1808,7 +1808,7 @@ test('failed Telegram link-code replacement keeps the previous unexpired code us
   });
   assert.equal(linked.error, null, linked.error?.message);
   assert.match(linked.data.text, /успешно привязан/);
-  assert.equal(h.context.rows_('telegram_links').filter(row => row.user_id === user.id).length, 1);
+  assert.equal(h.context.rows_('telegram_links').filter(row => row.user_id === user.user.id).length, 1);
 });
 
 test('Telegram webhook rejects an invalid backend secret and prevents reuse of a link code', () => {
