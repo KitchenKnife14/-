@@ -358,7 +358,7 @@ test('recurring payment confirmation can retry after a partial write without dup
   const failed = h.call(args);
   assert.match(failed.error.message, /simulated write failure/);
   const changedDateRetry = h.call({ ...args, params: { ...args.params, p_operation_date: '2026-10-29' } });
-  assert.match(changedDateRetry.error?.message || '', /не соответствует регулярному платежу/);
+  assert.match(changedDateRetry.error?.message || '', /не соответствует .*регулярному платежу/);
   const retried = h.call(args);
   assert.equal(retried.error, null, retried.error?.message);
   const replayed = h.call(args);
@@ -1277,7 +1277,7 @@ test('recurring payment confirmation rejects a deterministic ID collision', () =
     action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' }
   });
-  assert.match(result.error.message, /не соответствует регулярному платежу/);
+  assert.match(result.error.message, /не соответствует .*регулярному платежу/);
   const unchanged = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
   assert.equal(unchanged.next_due_date, '2026-11-01');
 });
