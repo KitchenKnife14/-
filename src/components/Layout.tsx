@@ -128,8 +128,8 @@ export default function Layout() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
         {moreOpen && (
           <>
-            <button type="button" aria-label="Закрыть меню" className="fixed inset-0 z-[-1] bg-black/20" onClick={() => setMoreOpen(false)} />
-            <nav aria-label="Дополнительная навигация" className="absolute bottom-full left-3 right-3 mb-2 grid max-h-[65vh] grid-cols-2 gap-1 overflow-y-auto rounded-2xl border border-line bg-surface p-2 shadow-xl">
+            <button type="button" aria-label="Закрыть меню" className="fixed inset-0 z-0 bg-black/20" onClick={() => setMoreOpen(false)} />
+            <nav aria-label="Дополнительная навигация" className="absolute z-10 bottom-full left-3 right-3 mb-2 grid max-h-[65vh] grid-cols-2 gap-1 overflow-y-auto rounded-2xl border border-line bg-surface p-2 shadow-xl">
               {mobileMoreItems.map(item => (
                 <NavLink
                   key={item.to}
@@ -146,7 +146,7 @@ export default function Layout() {
             </nav>
           </>
         )}
-        <nav aria-label="Нижняя навигация" className="grid grid-cols-5">
+        <nav aria-label="Нижняя навигация" className="relative z-10 grid grid-cols-5">
           {navItems.filter(item => mobilePrimary.includes(item.to)).map(item => (
             <NavLink
               key={item.to}
