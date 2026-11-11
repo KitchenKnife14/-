@@ -2669,6 +2669,37 @@ test('selected non-transaction inserts are idempotent for the same ID and exact 
   assert.match(duplicateBudgetWithNewId.error.message, /уже задан бюджет/);
 });
 
+test('category inserts are idempotent for the same ID and exact payload', () => {
+  const h = makeHarness();
+  const owner = h.signup('category-idempotency-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Повтор категории' }).data;
+  const payload = {
+    id: 'idem-category-retry-001',
+    family_id: family.id,
+    parent_id: null,
+    name: 'Категория после потери ответа',
+    kind: 'expense',
+    color: '#64748b',
+    icon: '🏷️'
+  };
+  const first = h.call({
+    action: 'query', token: owner.token, table: 'categories', mode: 'insert', returning: true, values: payload
+  });
+  assert.equal(first.error, null, first.error?.message);
+  const retry = h.call({
+    action: 'query', token: owner.token, table: 'categories', mode: 'insert', returning: true, values: payload
+  });
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(retry.data[0].id, first.data[0].id);
+  assert.equal(h.context.rows_('categories').filter(row => row.id === payload.id).length, 1);
+  const changed = h.call({
+    action: 'query', token: owner.token, table: 'categories', mode: 'insert',
+    values: { ...payload, color: '#000000' }
+  });
+  assert.match(changed.error?.message || '', /таким ID уже существует|другие данные/);
+  assert.equal(h.context.rows_('categories').filter(row => row.id === payload.id).length, 1);
+});
+
 test('transaction inserts are idempotent for the same ID and exact payload', () => {
   const h = makeHarness();
   const owner = h.signup('transaction-idempotency-owner@example.com');

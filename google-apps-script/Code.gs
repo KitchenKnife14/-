@@ -765,6 +765,7 @@ function readTransactionRangeRows_(filters,user){
   return result;
 }
 const IDEMPOTENT_INSERT_FIELDS = {
+  categories:['family_id','parent_id','name','kind','color','icon','archived','sort_order'],
   accounts:['family_id','name','kind','owner_user_id','starting_balance_kopecks','archived'],
   goal_contributions:['goal_id','amount_kopecks','contribution_date','note'],
   planned_purchases:['family_id','name','category_id','estimated_kopecks','priority','desired_month','desired_date','url','comment','status','responsible_user_id','goal_id','linked_transaction_id'],

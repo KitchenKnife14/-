@@ -2277,3 +2277,13 @@ HEAD до:
 
 - CI после добавления runner завершился успешно: run 43028060075 на commit b6d2fbf6a313ffc203b7aa65cc70a41aaf1da1c8 — success; TypeScript/build, 195 regression tests, Apps Script syntax, runtime diagnostics, manifest и npm audit — success.
 - В workflow добавлен отдельный шаг синтаксической проверки тестового runner. Финальный CI run 43028174134 на commit 97c08485a161d4539225812e31b6e81d9add90d7 — success; все шаги зелёные, включая новый Isolated Apps Script idempotency test syntax check. npm audit: 0 vulnerabilities. Runner синтаксически валиден; это не заменяет его фактический запуск в отдельном GAS deployment.
+
+
+### Работа №85 — идемпотентность создания пользовательских категорий (2026-11-11)
+
+- Проведён повторный поиск frontend create-вызовов. После работы №83 стабильные pending ID уже были подключены к accounts, goal_contributions, planned_purchases, recurring_payments и budgets; транзакции используют отдельный существующий механизм, monthly_plans — upsert по составному ключу. Обнаружен оставшийся пользовательский insert без стабильного ID: создание категорий в CategoriesPage.
+- Backend allowlist идемпотентных insert расширен на categories с точным сравнением family_id, parent_id, name, kind, color, icon, archived и sort_order. Существующие category ID и payload не переписываются; повтор возвращает существующую запись, изменение payload при том же ID отклоняется.
+- В CategoryForm добавлены pending ID, SHA-256 fingerprint и очистка только после подтверждённого успешного ответа. Ключ изолирован по таблице, семье, пользователю и области (корневая категория или конкретный родитель). При ошибке/неопределённом результате ID сохраняется для повторной отправки.
+- Добавлены backend regression test на повтор категории и запрет изменённого payload, а также frontend source test на подключение pending ID.
+- Изменения ограничены веткой ispravleniya и тестами; существующие категории/строки не мигрируются и не меняются. Production, main, основная таблица и Apps Script deployment не затронуты.
+- Прогресс остаётся 161/272 (59,2%), 1/12 макроэтапов. Новая проверка увеличивает тестовое покрытие, но сама по себе не закрывает пункт чек-листа до успешного CI и интеграционной проверки.

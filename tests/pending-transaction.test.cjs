@@ -121,3 +121,12 @@ test('generic pending mutation reuses ID after lost response and clears only aft
   const nextIntent = getOrCreatePendingMutationId(storage,key,'c'.repeat(64),createId,3000)
   assert.notEqual(nextIntent,first)
 })
+
+
+test('category create form keeps a stable pending ID for an uncertain insert', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/pages/CategoriesPage.tsx'), 'utf8')
+  assert.match(source, /pendingMutationStorageKey\('categories'/)
+  assert.match(source, /fingerprintTransactionPayload\(insertPayload\)/)
+  assert.match(source, /from\('categories'\)\.insert\(\{ \.\.\.insertPayload, id \}\)/)
+  assert.match(source, /clearPendingMutation\(storage, pendingKey, id\)/)
+})
