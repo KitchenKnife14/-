@@ -2273,3 +2273,7 @@ HEAD до:
 - «Потерянный ответ» моделируется повтором после игнорирования предыдущего результата; это не физический обрыв TCP после commit. Ограничение указано в инструкции.
 - Тест не запускался: нет подтверждённых URL отдельного тестового deployment, тестового token и ID тестовой семьи/цели. Подготовку сценария нельзя считать доказательством concurrency. Production, main, основная таблица и основной Apps Script deployment не затронуты.
 - Прогресс остаётся 161/272 (59,2%), 1/12 макроэтапов. Пункт не закрывается до успешного запуска на изолированной среде.
+
+
+- CI после добавления runner завершился успешно: run 43028060075 на commit b6d2fbf6a313ffc203b7aa65cc70a41aaf1da1c8 — success; TypeScript/build, 195 regression tests, Apps Script syntax, runtime diagnostics, manifest и npm audit — success.
+- В workflow добавлен отдельный шаг синтаксической проверки тестового runner. Финальный CI run 43028174134 на commit 97c08485a161d4539225812e31b6e81d9add90d7 — success; все шаги зелёные, включая новый Isolated Apps Script idempotency test syntax check. npm audit: 0 vulnerabilities. Runner синтаксически валиден; это не заменяет его фактический запуск в отдельном GAS deployment.
