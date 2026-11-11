@@ -1341,6 +1341,43 @@ function formatSheet_(sh,name){
 }
 function formatAuth_(sh){timedSheetWrite_(()=>sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@'));}
 // Один раз после установки: применяет текстовый формат к столбцам всех листов.
+// Read-only structural check for a backup/restore copy. Does not create, repair or modify sheets.
+function auditBackupStructure_(){
+  const ss=ss_();
+  const expected=Object.assign({},TABLES);
+  expected[AUTH_SHEET]=['id','email','salt','password_hash','display_name','created_at'];
+  const details=Object.keys(expected).map(name=>{
+    const headers=expected[name], sh=ss.getSheetByName(name);
+    if(!sh)return {name,exists:false,headersMatch:false,hidden:null,dataRows:0};
+    const actual=sh.getRange(1,1,1,headers.length).getValues()[0].map(value=>String(value??''));
+    return {
+      name,
+      exists:true,
+      headersMatch:actual.join('|')===headers.join('|'),
+      hidden:sh.isSheetHidden(),
+      dataRows:Math.max(0,sh.getLastRow()-1)
+    };
+  });
+  const missingSheets=details.filter(item=>!item.exists).map(item=>item.name);
+  const headerMismatches=details.filter(item=>item.exists&&!item.headersMatch).map(item=>item.name);
+  const auth=details.find(item=>item.name===AUTH_SHEET);
+  const spreadsheetTimeZone=ss.getSpreadsheetTimeZone();
+  const report={
+    expectedSheetCount:details.length,
+    presentSheetCount:details.length-missingSheets.length,
+    missingSheets,
+    headerMismatches,
+    authHidden:!!(auth&&auth.hidden),
+    spreadsheetTimeZone,
+    timezoneOk:spreadsheetTimeZone==='Europe/Moscow',
+    allChecksPassed:missingSheets.length===0&&headerMismatches.length===0&&!!(auth&&auth.hidden)&&spreadsheetTimeZone==='Europe/Moscow',
+    sheets:details
+  };
+  // Report contains only sheet names, structural status and row counts; never row values or credentials.
+  console.log('BACKUP_STRUCTURE_AUDIT '+JSON.stringify(report));
+  return report;
+}
+
 function setupSheets(){
   Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));
   const a=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AUTH_SHEET); if(a)formatAuth_(a);

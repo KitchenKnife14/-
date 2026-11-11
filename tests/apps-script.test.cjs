@@ -41,7 +41,7 @@ function makeHarness() {
     getNumberFormat() { return this.numberFormat || 'General'; }
   }
   class Sheet {
-    constructor(name) { this.name = name; this.cells = []; this.maxRows = 1000; }
+    constructor(name) { this.name = name; this.cells = []; this.maxRows = 1000; this.hidden = false; }
     getRange(...args) { return new Range(this, ...args); }
     getDataRange() {
       const last = this.getLastRow() || 1;
@@ -62,7 +62,8 @@ function makeHarness() {
       this.cells.splice(row - 1, howMany); this.maxRows -= howMany; return this;
     }
     setFrozenRows() {}
-    hideSheet() {}
+    hideSheet() { this.hidden = true; return this; }
+    isSheetHidden() { return this.hidden; }
   }
   const spreadsheet = {
     getName: () => 'Семейный бюджет',
@@ -3122,4 +3123,40 @@ test('Telegram replay cache has a documented 24-hour TTL and prunes expired entr
   const saved = JSON.parse(props.getProperty('telegram:update:7502'));
   assert.ok(saved.expires >= now + 24 * 60 * 60 * 1000 - 1000);
   assert.ok(saved.expires <= Date.now() + 24 * 60 * 60 * 1000 + 1000);
+});
+
+
+test('backup structure audit is read-only and validates all table headers plus hidden auth sheet', () => {
+  const h = makeHarness();
+  const names = ['profiles','families','family_members','categories','accounts','transactions','recurring_payments','budgets','goals','goal_contributions','planned_purchases','monthly_plans','notifications','telegram_links','telegram_link_codes'];
+  names.forEach(name => h.context.sheet_(name));
+  const user = h.signup('backup-audit@example.com');
+  assert.equal(user.error, null, user.error?.message);
+  const report = h.context.auditBackupStructure_();
+  assert.equal(report.allChecksPassed, true);
+  assert.equal(report.expectedSheetCount, 16);
+  assert.equal(report.presentSheetCount, 16);
+  assert.deepEqual(report.missingSheets, []);
+  assert.deepEqual(report.headerMismatches, []);
+  assert.equal(report.authHidden, true);
+  assert.equal(report.timezoneOk, true);
+  assert.ok(report.sheets.find(sheet => sheet.name === 'transactions').dataRows >= 0);
+});
+
+test('backup structure audit reports missing/mismatched sheets without creating or repairing them', () => {
+  const h = makeHarness();
+  const names = ['profiles','families','family_members','categories','accounts','transactions','recurring_payments','budgets','goals','goal_contributions','planned_purchases','monthly_plans','notifications','telegram_links','telegram_link_codes'];
+  names.forEach(name => h.context.sheet_(name));
+  const user = h.signup('backup-audit-damaged@example.com');
+  assert.equal(user.error, null, user.error?.message);
+  const ss = h.context.SpreadsheetApp.getActiveSpreadsheet();
+  ss.getSheetByName('budgets').getRange(1,1).setValue('wrong-header');
+  ss.deleteSheet(ss.getSheetByName('transactions'));
+  const before = ss.getSheetByName('transactions');
+  const report = h.context.auditBackupStructure_();
+  assert.equal(report.allChecksPassed, false);
+  assert.ok(report.missingSheets.includes('transactions'));
+  assert.ok(report.headerMismatches.includes('budgets'));
+  assert.equal(ss.getSheetByName('transactions'), before);
+  assert.equal(ss.getSheetByName('transactions'), null);
 });
