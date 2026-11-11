@@ -3158,3 +3158,16 @@ test('backup structure audit reports missing/mismatched sheets without creating 
   assert.equal(ss.getSheetByName('transactions'), before);
   assert.equal(ss.getSheetByName('transactions'), null);
 });
+
+
+test('password hash benchmark is editor-only and uses dummy data without reading or writing credentials', () => {
+  const source = fs.readFileSync('google-apps-script/Code.gs', 'utf8');
+  const start = source.indexOf('function benchmarkPasswordHash()');
+  const end = source.indexOf('\nfunction ', start + 10);
+  const body = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(body, /local-only-pbkdf2-benchmark/);
+  assert.match(body, /non-secret-fixed-benchmark-salt/);
+  assert.match(body, /PW_ITERATIONS,600000/);
+  assert.doesNotMatch(body, /authRows_|PropertiesService|appendRows_|setProperty/);
+})

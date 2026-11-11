@@ -385,7 +385,7 @@ function passwordMatches_(password,salt,stored){
   }
   return safeEqual_(hash_(password,salt),stored); // старые аккаунты: медленный прежний способ, при успешном входе хеш обновляется
 }
-function benchmarkPasswordHash_(){
+function benchmarkPasswordHash(){
   // Editor-only diagnostic: fixed dummy input; never reads or writes user credentials.
   const password='local-only-pbkdf2-benchmark', salt='non-secret-fixed-benchmark-salt';
   const candidates=Array.from(new Set([PW_ITERATIONS,600000]));

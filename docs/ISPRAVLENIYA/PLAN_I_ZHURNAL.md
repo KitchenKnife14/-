@@ -2041,3 +2041,11 @@ HEAD до:
 - CI для работы №68: коммит `85b372f7d6eee08bf5cccbe2f8456cdf20e61a9a` завершился `success`: [run 42987788166](https://github.com/KitchenKnife14/-/actions/runs/42987788166), 184/184 tests, TypeScript/production build, Apps Script syntax/diagnostics, manifest validation и `npm audit` (0 vulnerabilities). Функция переименована в `auditBackupStructure()` для ручного запуска из Apps Script editor; runbook уточнён: выполнять проверку из проекта, bound именно к исходной тестовой таблице/копии/restore-копии. SAFE-01/FC-11/FC-12 не закрываются до фактической копии и восстановления.
 
 - Итоговый CI для работы №68: commit `23458bed242522f6eed5cce4148a46406522b73f` — `success`, [run 42988004902](https://github.com/KitchenKnife14/-/actions/runs/42988004902). 184/184 regression tests, TypeScript/production build, Apps Script syntax/diagnostics, manifest validation и `npm audit` (0 vulnerabilities) прошли. Read-only backup audit helper и обновлённый runbook готовы к ручному применению в тестовой среде. SAFE-01/FC-11/FC-12 остаются открытыми до создания и проверки реальной тестовой копии/restore-копии; прогресс не увеличен.
+
+
+### Журнал — 2026-11-11: подготовка безопасного замера PBKDF2 на тестовом Apps Script (работа № 69)
+
+- Существующая функция `benchmarkPasswordHash_()` уже сравнивает текущие 30 000 итераций и 600 000 итераций OWASP на фиксированных тестовых данных, не читая и не меняя пользовательские credentials.
+- Функция переименована в `benchmarkPasswordHash()`, чтобы её было проще выбрать вручную в редакторе Apps Script. Добавлен source-level test: фиксированные dummy input/salt, кандидаты 30k/600k, отсутствие чтения auth sheet и записи в Script Properties/Sheets.
+- Подготовлен отдельный runbook с безопасным порядком измерения только в тестовом Apps Script; 600k не включать автоматически до фактического измерения времени и проверки UX входа.
+- Пункты SEC-01 остаются открытыми: Node/CI benchmark не заменяет Google Apps Script benchmark. Production и хеши пользователей не затрагивались.
