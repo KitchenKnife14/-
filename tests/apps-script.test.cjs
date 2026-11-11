@@ -3212,7 +3212,8 @@ test('read-only requests revalidate headers even when the script cache is warm',
   const sheet = seedTable(h, 'transactions');
   h.context.sheet_('transactions'); // Populate the successful header cache.
   sheet.getRange(1, 1, 1, 1).setValue('tampered_header');
-  vm.runInContext('READ_ONLY_REQUEST = true', h.context);
+  // A new request has a fresh execution-local validation cache; only the persistent cache is warm.
+  vm.runInContext('READ_ONLY_REQUEST = true; SHEET_SCHEMA_VALIDATED = {}', h.context);
   assert.throws(() => h.context.sheet_('transactions'), /требует обслуживания.*без автоматического изменения заголовков/);
 });
 
