@@ -80,6 +80,7 @@ export default function PurchasesPage() {
         p_purchase_id: buying.id,
         p_operation_date: todayISO(),
         p_account_id: buyAccountId || null,
+        p_expected_purchase: buying,
       })
       if (buyError) throw buyError
       setBuying(null)
