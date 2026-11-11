@@ -2024,3 +2024,5 @@ HEAD до:
 - CI `42986775133` выявил только некорректное экранирование `*` в source-level regex теста констант TTL. Заменено на точную проверку `source.includes(...)`; поведение backend и TTL не менялись.
 
 - CI `42986925806` выявил оставшееся обращение теста к `h.context.TELEGRAM_UPDATE_TTL_MS` как к обычному свойству VM context. Оно заменено на числовую проверку фактического expiry; соответствие значения 24 часа уже закреплено отдельной проверкой исходного объявления константы.
+
+- Итоговый CI для работы №67: коммит `2f81b40d4d31e719cd36ffd80196215f232cda16` завершился `success`: [run 42987076697](https://github.com/KitchenKnife14/-/actions/runs/42987076697). 182/182 regression tests, TypeScript/production build, Apps Script syntax, runtime diagnostics, manifest validation и `npm audit` (0 vulnerabilities) прошли. Политика хранения replay cache подтверждена тестами; пункт TG-04 по retention закрыт. Конкурентная доставка остаётся открытой до реального Apps Script теста.
