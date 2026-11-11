@@ -2078,3 +2078,10 @@ HEAD до:
 - Следующий CI должен подтвердить исправление; пока он не завершён, тестовый набор не считаю зелёным.
 - Далее проверяется реальная сериализация критичных операций через `LockService`: область действия блокировки, timeout, гарантированный release в `finally`, и охват записи в Google Sheets/Script Properties. Source review не заменяет настоящего одновременного выполнения в Apps Script.
 - Прогресс чек-листа остаётся 161/272 (59,2%). Изменения не закрывают пункт параллельной идемпотентности.
+
+
+- Повторный CI после исправления пути PBKDF2 diagnostic завершился `completed / success`: [run 42995375450](https://github.com/KitchenKnife14/-/actions/runs/42995375450). Все шаги workflow зелёные; 186/186 regression tests, TypeScript/production build, Apps Script syntax, PBKDF2 diagnostics syntax, manifest validation и `npm audit` (0 vulnerabilities).
+- Углублённый аудит кандидатов на read-lock выявил причину, почему классификатор нельзя пока подключать к оптимизации: `query_()` при select вызывает `rows_()`, а тот через `sheet_()` может создать отсутствующий лист и безопасно дописать отсутствующие trailing headers. Аналогично `get_my_context` и `get_table_revision` косвенно читают таблицы через `rows_()`; это может приводить к обслуживающим записям при первом обращении/миграции структуры. Поэтому формально read-only API не гарантированно read-only на уровне инфраструктуры.
+- Текущие тесты подтверждают baseline: read-only query всё ещё получает ScriptLock; отдельно тестируются timeout/release и fail-closed lock classifier. Они синтетические и не моделируют конкурентные Apps Script executions.
+- Решение: пока оставить общий ScriptLock. Следующий технический шаг — отделить чистое чтение от auto-provision/header-repair (или предварительно инициализировать/проверять структуру без записи), проверить revision/cache consistency и только затем проектировать конкурентную read strategy. Реальную гонку двух Web App executions нужно проверить на изолированной тестовой таблице.
+- Прогресс: 161/272 (59,2%). Успешный CI не закрывает настоящий parallel/idempotency пункт. Никаких Production/основных данных/деплоев не затронуто.
