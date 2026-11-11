@@ -118,6 +118,14 @@ function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSpreadsheet(); if(!s) throw new Error('Скрипт должен быть привязан к таблице бюджета'); return SS_CACHE=s; }
+function invalidateHeaderCache_(name){
+  try{
+    const cache=CacheService.getScriptCache();
+    const names=name?[name]:Object.keys(TABLES);
+    names.forEach(table=>cache.remove('hdr'+API_VERSION+':'+table));
+  }catch(_){}
+}
+
 function sheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
@@ -127,7 +135,7 @@ function sheet_(name) {
   }
   // Заголовки проверяем не на каждый запрос: успешная проверка запоминается на 6 часов (ключ содержит версию API).
   const hdrKey='hdr'+API_VERSION+':'+name; let cache=null; try{cache=CacheService.getScriptCache();}catch(_){}
-  if (cache && cache.get(hdrKey)==='1') return sh;
+  if (cache && !READ_ONLY_REQUEST && cache.get(hdrKey)==='1') return sh;
   SHEET_READS++;
   const header=timedSheetRead_(()=>sh.getRange(1,1,1,TABLES[name].length).getValues())[0];
   let used=header.length;
@@ -1387,6 +1395,8 @@ function auditBackupStructure(){
 }
 
 function setupSheets(){
+  // Explicit maintenance always revalidates headers, even when a previous schema cache exists.
+  invalidateHeaderCache_();
   Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));
   const a=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AUTH_SHEET); if(a)formatAuth_(a);
   const tz=SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();

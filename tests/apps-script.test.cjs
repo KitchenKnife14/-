@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 function makeHarness() {
   const sheets = new Map();
   const properties = new Map();
+  const scriptCache = new Map();
   let uuidCounter = 0;
   let lockAcquires = 0, lockReleases = 0, failNextLockWait = false;
   let setValuesCalls = 0, failSetValuesAt = null;
@@ -75,6 +76,7 @@ function makeHarness() {
   const context = {
     console,
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, },
+    CacheService: { getScriptCache: () => ({ get: key => scriptCache.get(key) ?? null, put: (key, value) => scriptCache.set(key, value), remove: key => scriptCache.delete(key) }) },
     ContentService: {
       MimeType: { JSON: 'application/json' },
       createTextOutput: text => ({ text, setMimeType() { return this; }, getContent() { return this.text; } })
@@ -3195,6 +3197,15 @@ test('isolated Apps Script PBKDF2 runtime diagnostic measures 30000 and 600000 i
   assert.doesNotMatch(source, /authRows_|PropertiesService|SpreadsheetApp|appendRow|setValue|deleteRow/)
 })
 
+
+test('read-only requests revalidate headers even when the script cache is warm', () => {
+  const h = makeHarness();
+  const sheet = seedTable(h, 'transactions');
+  h.context.sheet_('transactions'); // Populate the successful header cache.
+  sheet.getRange(1, 1, 1, 1).setValue('tampered_header');
+  vm.runInContext('READ_ONLY_REQUEST = true', h.context);
+  assert.throws(() => h.context.sheet_('transactions'), /требует обслуживания.*без автоматического изменения заголовков/);
+});
 
 test('read-candidate requests fail closed instead of creating a missing sheet', () => {
   const h = makeHarness();
