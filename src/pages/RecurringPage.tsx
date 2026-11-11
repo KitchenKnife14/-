@@ -66,7 +66,7 @@ export default function RecurringPage() {
   }
 
   const toggleActive = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').update({ active: !r.active }).eq('id', r.id).expect(r as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
-  const remove = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').delete().eq('id', r.id); if (err) setError(err.message); load() }
+  const remove = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').delete().eq('id', r.id).expect(r as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
 
   const overdue = items.filter((r) => r.active && r.next_due_date < todayISO())
   const upcoming = items.filter((r) => r.active && r.next_due_date >= todayISO())
