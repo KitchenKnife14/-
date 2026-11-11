@@ -2026,6 +2026,45 @@ test('Telegram webhook rejects an invalid backend secret and prevents reuse of a
 });
 
 
+test('unlink Telegram revokes unused codes before deleting the active link', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-unlink-partial@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Безопасная отвязка Telegram' });
+  const secret = 'unlink-partial-secret-0123456789abcdef';
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', secret);
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: secret,
+    update: { update_id: 7199, message: {
+      chat: { id: 719, type: 'private' }, from: { id: 719 }, text: '/link ' + generated.data.code
+    }}
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+  const unused = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(unused.error, null, unused.error?.message);
+  assert.equal(h.context.rows_('telegram_link_codes').length, 1);
+
+  const originalDelete = h.context.deleteRows_;
+  let failLinkDelete = true;
+  h.context.deleteRows_ = function(table, rows) {
+    if (table === 'telegram_links' && failLinkDelete) {
+      failLinkDelete = false;
+      throw new Error('simulated Telegram link deletion failure');
+    }
+    return originalDelete(table, rows);
+  };
+  const failed = h.call({ action: 'rpc', token: user.token, name: 'unlink_telegram' });
+  assert.match(failed.error?.message || '', /simulated Telegram link deletion failure/);
+  assert.equal(h.context.rows_('telegram_link_codes').length, 0, 'unused codes must be revoked first');
+  assert.equal(h.context.rows_('telegram_links').length, 1, 'failed unlink must leave the existing link intact');
+
+  const retry = h.call({ action: 'rpc', token: user.token, name: 'unlink_telegram' });
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(h.context.rows_('telegram_link_codes').length, 0);
+  assert.equal(h.context.rows_('telegram_links').length, 0);
+});
+
 test('Telegram link tables cannot be forged through the public generic data API', () => {
   const h = makeHarness();
   const user = h.signup('telegram-table-guard@example.com');
