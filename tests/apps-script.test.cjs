@@ -2027,6 +2027,51 @@ test('failed Telegram link-code replacement keeps the previous unexpired code us
   assert.equal(h.context.rows_('telegram_links').filter(row => row.user_id === user.user.id).length, 1);
 });
 
+test('Telegram /unlink revokes pending link codes before removing the active link', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-command-unlink@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Отвязка командой Telegram' }).data;
+  const secret = 'telegram-command-unlink-secret-0123456789abcdef';
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', secret);
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const link = h.call({
+    action: 'telegramWebhook', telegramSecret: secret,
+    update: { update_id: 7601, message: { chat: { id: 760, type: 'private' }, from: { id: 760 }, text: '/link ' + generated.data.code } }
+  });
+  assert.equal(link.error, null, link.error?.message);
+
+  h.context.appendRows_('telegram_link_codes', [{
+    id: 'pending-unlink-code', user_id: user.user.id, family_id: family.id,
+    code_hash: h.context.telegramCodeHash_('PENDING760001'),
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    used_at: '', created_at: new Date().toISOString()
+  }]);
+  assert.equal(h.context.rows_('telegram_links').length, 1);
+  assert.equal(h.context.rows_('telegram_link_codes').filter(row => !row.used_at).length, 1);
+
+  const originalDelete = h.context.deleteRows_;
+  let failLinkDelete = true;
+  h.context.deleteRows_ = function(table, rows) {
+    if (table === 'telegram_links' && failLinkDelete) {
+      failLinkDelete = false;
+      throw new Error('simulated Telegram link deletion failure');
+    }
+    return originalDelete(table, rows);
+  };
+  const update = { update_id: 7602, message: { chat: { id: 760, type: 'private' }, from: { id: 760 }, text: '/unlink' } };
+  const failed = h.call({ action: 'telegramWebhook', telegramSecret: secret, update });
+  assert.match(failed.error?.message || '', /simulated Telegram link deletion failure/);
+  assert.equal(h.context.rows_('telegram_link_codes').length, 0, 'pending codes must be revoked first');
+  assert.equal(h.context.rows_('telegram_links').length, 1, 'link remains if its deletion fails');
+
+  const retry = h.call({ action: 'telegramWebhook', telegramSecret: secret, update: { ...update, update_id: 7603 } });
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.match(retry.data.text, /Telegram отвязан/);
+  assert.equal(h.context.rows_('telegram_link_codes').length, 0);
+  assert.equal(h.context.rows_('telegram_links').length, 0);
+});
+
 test('Telegram webhook rejects an invalid backend secret and prevents reuse of a link code', () => {
   const h = makeHarness();
   const user = h.signup('telegram-code-owner@example.com');
