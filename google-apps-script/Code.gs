@@ -34,6 +34,8 @@ const DEFAULT_CATEGORIES=[{"name":"Жильё и обязательные пла
 // Кэш чтения листов на время ОДНОГО запроса (сбрасывается в doPost и после каждой записи).
 let ROWS_CACHE = {};
 let TZ_CACHE = null;
+// Read-candidate requests must never provision or repair spreadsheet structure.
+let READ_ONLY_REQUEST = false;
 // Столбцы, которые должны оставаться текстом (иначе Google Sheets превращает даты/время в Date,
 // а строки, начинающиеся с "=", в формулы).
 const TEXT_COLS = ['created_at','updated_at','joined_at','linked_at','expires_at','used_at','operation_date','operation_time','start_date','end_date','next_due_date','month_date','target_date','desired_month','desired_date','contribution_date','description','name','note','comment','body','title','url','invite_code','display_name','telegram_user_id','telegram_chat_id','code_hash','responsible_user_id'];
@@ -69,7 +71,7 @@ function doPost(e) {
   const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
   const lock = LockService.getScriptLock();
   try {
-    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
+    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; READ_ONLY_REQUEST = requestLockMode_(req) === 'read-candidate'; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!req.action) throw new Error('Не указано действие');
     if (req.action === 'telegramWebhook') {
@@ -99,6 +101,7 @@ function doPost(e) {
     try { if (lock.hasLock()) lock.releaseLock(); } catch (_) {}
     return json_({data:null, error:{message:String(err && err.message || err)}});
   } finally {
+    READ_ONLY_REQUEST = false;
     // Одна строка в журнале выполнения: только названия действий и числа, без данных пользователей.
     const ended = Date.now();
     try { const action=req&&req.action;const loggedAction=typeof action==='string'&&['telegramWebhook','signup','signin','signout','batch','getSession','getUser','ensureProfile','createFamily','joinFamily','query','rpc'].includes(action)?action:'unknown';console.log(JSON.stringify({act:loggedAction,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS})); } catch (_) {}
@@ -117,7 +120,10 @@ function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSp
 function sheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
-  if (!sh) { sh=ss.insertSheet(name); SHEET_WRITES++; timedSheetWrite_(()=>sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]])); sh.setFrozenRows(1); formatSheet_(sh,name); }
+  if (!sh) {
+    if (READ_ONLY_REQUEST) throw new Error('Лист '+name+' отсутствует; чтение остановлено без автоматического создания структуры');
+    sh=ss.insertSheet(name); SHEET_WRITES++; timedSheetWrite_(()=>sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]])); sh.setFrozenRows(1); formatSheet_(sh,name);
+  }
   // Заголовки проверяем не на каждый запрос: успешная проверка запоминается на 6 часов (ключ содержит версию API).
   const hdrKey='hdr'+API_VERSION+':'+name; let cache=null; try{cache=CacheService.getScriptCache();}catch(_){}
   if (cache && cache.get(hdrKey)==='1') return sh;
@@ -127,6 +133,7 @@ function sheet_(name) {
   while(used>0&&(header[used-1]===''||header[used-1]===null))used--;
   const current=header.slice(0,used), expected=TABLES[name];
   if(current.join('|')!==expected.join('|')){
+    if (READ_ONLY_REQUEST) throw new Error('Структура листа '+name+' требует обслуживания; чтение остановлено без автоматического изменения заголовков');
     // Only append missing trailing columns when every existing column is an exact prefix.
     // Never reorder, clear or overwrite existing data.
     const safePrefix=current.length<expected.length&&current.every((value,index)=>value===expected[index]);

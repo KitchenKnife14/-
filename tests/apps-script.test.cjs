@@ -3181,3 +3181,27 @@ test('isolated Apps Script PBKDF2 runtime diagnostic measures 30000 and 600000 i
   assert.match(source, /synthetic-runtime-benchmark-salt/)
   assert.doesNotMatch(source, /authRows_|PropertiesService|SpreadsheetApp|appendRow|setValue|deleteRow/)
 })
+
+
+test('read-candidate requests fail closed instead of creating a missing sheet', () => {
+  const h = makeHarness();
+  h.context.READ_ONLY_REQUEST = true;
+  const before = h.context.SpreadsheetApp.getActiveSpreadsheet().getSheets().length;
+  assert.throws(() => h.context.sheet_('transactions'), /отсутствует.*без автоматического создания структуры/);
+  assert.equal(h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions'), null);
+  assert.equal(h.context.SpreadsheetApp.getActiveSpreadsheet().getSheets().length, before);
+  assert.equal(h.context.SHEET_WRITES, 0);
+});
+
+test('read-candidate requests fail closed on incomplete headers without repairing them', () => {
+  const h = makeHarness();
+  const ss = h.context.SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.insertSheet('transactions');
+  const oldHeaders = h.context.TABLES.transactions.slice(0, -1);
+  sheet.getRange(1, 1, 1, oldHeaders.length).setValues([oldHeaders]);
+  h.context.READ_ONLY_REQUEST = true;
+  assert.throws(() => h.context.sheet_('transactions'), /требует обслуживания.*без автоматического изменения заголовков/);
+  assert.deepEqual(sheet.getRange(1, 1, 1, oldHeaders.length).getValues()[0], oldHeaders);
+  assert.equal(sheet.getLastColumn(), oldHeaders.length);
+  assert.equal(h.context.SHEET_WRITES, 0);
+});
