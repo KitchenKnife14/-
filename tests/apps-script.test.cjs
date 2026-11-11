@@ -3212,7 +3212,7 @@ test('read-candidate requests fail closed instead of creating a missing sheet', 
   vm.runInContext('READ_ONLY_REQUEST = true', h.context);
   assert.throws(() => h.context.sheet_('transactions'), /отсутствует.*без автоматического создания структуры/);
   assert.equal(h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions'), null);
-  assert.equal(h.context.SHEET_WRITES, 0);
+  assert.equal(vm.runInContext('SHEET_WRITES', h.context), 0);
 });
 
 test('read-candidate requests fail closed on incomplete headers without repairing them', () => {
@@ -3221,7 +3221,7 @@ test('read-candidate requests fail closed on incomplete headers without repairin
   const sheet = ss.insertSheet('transactions');
   const oldHeaders = JSON.parse(JSON.stringify(vm.runInContext('TABLES.transactions.slice(0, -1)', h.context)));
   sheet.getRange(1, 1, 1, oldHeaders.length).setValues([oldHeaders]);
-  h.context.READ_ONLY_REQUEST = true;
+  vm.runInContext('READ_ONLY_REQUEST = true', h.context);
   assert.throws(() => h.context.sheet_('transactions'), /требует обслуживания.*без автоматического изменения заголовков/);
   assert.deepEqual(sheet.getRange(1, 1, 1, oldHeaders.length).getValues()[0], oldHeaders);
   assert.equal(sheet.getDataRange().getValues()[0].length, oldHeaders.length);
