@@ -1357,7 +1357,13 @@ function telegramWebhook_(req){
     }
   }else if(/^\/unlink(?:@\w+)?$/i.test(text)){
     const links=rows_('telegram_links').filter(x=>String(x.telegram_user_id)===telegramUserId);
-    if(links.length)deleteRows_('telegram_links',links);
+    if(links.length){
+      const userIds=new Set(links.map(x=>String(x.user_id)));
+      const codes=rows_('telegram_link_codes').filter(x=>userIds.has(String(x.user_id)));
+      // Revoke pending codes before removing links, matching the app-side unlink order.
+      if(codes.length)deleteRows_('telegram_link_codes',codes);
+      deleteRows_('telegram_links',links);
+    }
     reply={chat_id:chatId,text:links.length?'Telegram отвязан. Доступ к бюджету через бота закрыт.':'Этот Telegram не был привязан.'};
   }else if(/^\/balance(?:@\w+)?$/i.test(text)){
     const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
