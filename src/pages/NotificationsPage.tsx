@@ -36,7 +36,7 @@ export default function NotificationsPage() {
   }, [familyId, load])
 
 
-  const markRead = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('id', n.id); if (err) setError(err.message); load() }
+  const markRead = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('id', n.id).expect(n as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
   const markAllRead = async () => {
     if (!family) return
     const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('family_id', family.id).eq('read', false)
