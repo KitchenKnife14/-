@@ -69,7 +69,7 @@ export default function BudgetsPage() {
   const totalSpent = budgets.reduce((s, b) => s + (spentByCat.get(b.category_id) ?? 0), 0)
   const totalPct = totalLimit > 0 ? (totalSpent / totalLimit) * 100 : 0
 
-  const remove = async (b: Budget) => { const { error: err } = await googleSheets.from('budgets').delete().eq('id', b.id); if (err) setError(err.message); load() }
+  const remove = async (b: Budget) => { const { error: err } = await googleSheets.from('budgets').delete().eq('id', b.id).expect(b as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
 
