@@ -493,8 +493,8 @@ function route_(req,user){
     if(!f)throw new Error('Код приглашения не найден');
     const members=rows_('family_members').filter(m=>m.family_id===f.id);
     if(members.some(m=>m.user_id===user.id)){setProfileName_(user.id,req.display_name);return f;}
-    if(members.length>=2)throw new Error('В семье уже два участника');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Вы уже состоите в другой семье');
+    if(members.length>=2)throw new Error('В семье уже два участника');
     // Persist membership before changing the profile. If the membership write fails, profile data stays untouched.
     // If the profile update fails afterward, retry is safe: the existing-member path completes the profile update.
     const member={id:id_(),family_id:f.id,user_id:user.id,role:'member',joined_at:now_()};appendRows_('family_members',[member]);
