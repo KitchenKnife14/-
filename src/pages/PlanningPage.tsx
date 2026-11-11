@@ -78,12 +78,17 @@ export default function PlanningPage() {
     const { data: prevPlans, error } = await googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', prevMonthDate)
     if (error) { setError(error.message); return }
     if (!prevPlans || prevPlans.length === 0) { setError('В предыдущем месяце нет планов для копирования'); return }
+    const { data: currentPlans, error: currentError } = await googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', monthDate)
+    if (currentError) { setError(currentError.message); return }
+    const currentByKey = new Map((currentPlans as MonthlyPlan[]).map((p) => [JSON.stringify([p.family_id, p.month_date, p.category_id ?? null, p.type]), p]))
+    const copyRows = (prevPlans as MonthlyPlan[]).map((p) => ({
+      family_id: family.id, month_date: monthDate, category_id: p.category_id, type: p.type, planned_kopecks: p.planned_kopecks, note: p.note,
+    }))
+    const expectedRows = copyRows.map((p) => currentByKey.get(JSON.stringify([p.family_id, p.month_date, p.category_id ?? null, p.type])) ?? null)
     const { error: copyError } = await googleSheets.from('monthly_plans').upsert(
-      (prevPlans as MonthlyPlan[]).map((p) => ({
-        family_id: family.id, month_date: monthDate, category_id: p.category_id, type: p.type, planned_kopecks: p.planned_kopecks, note: p.note,
-      })),
+      copyRows,
       { onConflict: 'family_id,month_date,category_id,type' }
-    )
+    ).expectUpsert(expectedRows)
     if (copyError) setError(`Не удалось скопировать планы: ${copyError.message}`)
     await load()
   }
@@ -164,9 +169,14 @@ function PlanForm({ open, onClose, onSaved, categories, familyId, monthDate }: {
     if (amtK === null || amtK <= 0) { setError('Введите корректную сумму больше нуля с точностью до копейки'); return }
     setSaving(true)
     try {
-      const { error: err } = await googleSheets.from('monthly_plans').upsert({
-        family_id: familyId, month_date: monthDate, category_id: categoryId || null, type, planned_kopecks: amtK, note: note.trim(),
-      }, { onConflict: 'family_id,month_date,category_id,type' })
+      const payload = { family_id: familyId, month_date: monthDate, category_id: categoryId || null, type, planned_kopecks: amtK, note: note.trim() }
+      let existingQuery = googleSheets.from('monthly_plans').select('*').eq('family_id', familyId).eq('month_date', monthDate).eq('type', type)
+      existingQuery = categoryId ? existingQuery.eq('category_id', categoryId) : existingQuery.is('category_id', null)
+      const { data: existing, error: lookupError } = await existingQuery.maybeSingle()
+      if (lookupError) throw lookupError
+      const { error: err } = await googleSheets.from('monthly_plans').upsert(
+        payload, { onConflict: 'family_id,month_date,category_id,type' }
+      ).expectUpsert([existing as MonthlyPlan | null])
       if (err) throw err
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
