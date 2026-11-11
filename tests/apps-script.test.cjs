@@ -363,7 +363,7 @@ test('recurring payment confirmation can retry after a partial write without dup
   assert.equal(retried.error, null, retried.error?.message);
   const replayed = h.call(args);
   assert.equal(replayed.error, null, replayed.error?.message);
-  assert.equal(replayed.data.transaction_id, `purchase_${purchase.id}`);
+  assert.equal(replayed.data.transaction_id, `recurring_${recurring.id}_2026-10-28`);
   const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
   assert.equal(txs.length, 1);
   assert.equal(txs[0].id, `recurring_${recurring.id}_2026-10-28`);
