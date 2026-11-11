@@ -45,7 +45,7 @@ export default function NotificationsPage() {
     if (conflicts.length) setError(`${conflicts.length} уведомлений изменились одновременно. Обновите список и повторите действие.`)
     load()
   }
-  const remove = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').delete().eq('id', n.id); if (err) setError(err.message); load() }
+  const remove = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').delete().eq('id', n.id).expect(n as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
 
   const KIND_LABELS: Record<string, string> = {
     budget_warning: 'Предупреждение о бюджете', goal_progress: 'Прогресс цели', recurring_due: 'Повторяющийся платёж',
