@@ -1920,7 +1920,7 @@ test('create_goal_with_purchase creates a linked goal and planned purchase', () 
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Связанные цели' }).data;
   const result = h.call({
     action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
-    params: { p_family_id: family.id, p_name: 'Телевизор', p_description: 'Для гостиной', p_target_kopecks: 7000000, p_target_date: '2027-03-01', p_priority: 2, p_create_purchase: true }
+    params: { p_request_id: 'op_11111111111111111111111111111111', p_family_id: family.id, p_name: 'Телевизор', p_description: 'Для гостиной', p_target_kopecks: 7000000, p_target_date: '2027-03-01', p_priority: 2, p_create_purchase: true }
   });
   assert.equal(result.error, null, result.error?.message);
   const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data.find(g => g.id === result.data.goal_id);
@@ -2475,7 +2475,7 @@ test('create_goal_with_purchase rejects numeric strings for target kopecks', () 
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Строгий RPC' }).data;
   const result = h.call({
     action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
-    params: { p_family_id: family.id, p_name: 'Цель', p_target_kopecks: '10000', p_priority: 3, p_create_purchase: false },
+    params: { p_request_id: 'op_22222222222222222222222222222222', p_family_id: family.id, p_name: 'Цель', p_target_kopecks: '10000', p_priority: 3, p_create_purchase: false },
   });
   assert.match(result.error?.message || '', /целым числом копеек/);
   const goals = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' });
