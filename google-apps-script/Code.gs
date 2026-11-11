@@ -1105,6 +1105,8 @@ function rpc_(req,user){
   if(name==='create_goal_with_purchase'){
     const familyId=String(p.p_family_id||'');
     if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    const requestId=String(p.p_request_id||'');
+    if(!/^op_[a-f0-9]{32}$/.test(requestId))throw new Error('Некорректный идентификатор запроса создания цели');
     assertKopecks_(p.p_target_kopecks,'Сумма цели',{positive:true});
     const target=p.p_target_kopecks,priority=Number(p.p_priority);
     const goalName=String(p.p_name||'').trim(),description=String(p.p_description||'').trim();
@@ -1113,22 +1115,34 @@ function rpc_(req,user){
     if(!Number.isInteger(priority)||priority<1||priority>5)throw new Error('Приоритет должен быть от 1 до 5');
     const targetDate=p.p_target_date?String(p.p_target_date):'';
     if(targetDate&&!/^\d{4}-\d{2}-\d{2}$/.test(targetDate))throw new Error('Некорректная целевая дата');
-    const goal={id:id_(),family_id:familyId,name:goalName,description,target_kopecks:target,saved_kopecks:0,target_date:targetDate||null,priority,status:'active',responsible_user_id:user.id,created_at:now_()};
-    appendRows_('goals',[goal]);
+    const goalId='goal_'+requestId;
+    let goal=rows_('goals').find(row=>String(row.id)===goalId);
+    if(goal){
+      if(String(goal.family_id)!==familyId||String(goal.name)!==goalName||String(goal.description||'')!==description||
+        Number(goal.target_kopecks)!==target||String(goal.target_date||'')!==(targetDate||'')||
+        Number(goal.priority)!==priority||String(goal.responsible_user_id||'')!==user.id)
+        throw new Error('Конфликт ID цели: запись не соответствует исходному запросу');
+    }else{
+      goal={id:goalId,family_id:familyId,name:goalName,description,target_kopecks:target,saved_kopecks:0,target_date:targetDate||null,priority,status:'active',responsible_user_id:user.id,created_at:now_()};
+      appendRows_('goals',[goal]);
+    }
     let purchaseId=null;
     if(p.p_create_purchase===true){
-      const purchase={id:id_(),family_id:familyId,name:goalName,category_id:null,estimated_kopecks:target,priority,desired_month:targetDate?targetDate.slice(0,7)+'-01':null,desired_date:targetDate||null,url:'',comment:description,status:'planned',responsible_user_id:user.id,goal_id:goal.id,linked_transaction_id:'',created_by:user.id,created_at:now_()};
-      try{
+      purchaseId='purchase_'+requestId;
+      let purchase=rows_('planned_purchases').find(row=>String(row.id)===purchaseId);
+      if(purchase){
+        if(String(purchase.family_id)!==familyId||String(purchase.name)!==goalName||
+          Number(purchase.estimated_kopecks)!==target||Number(purchase.priority)!==priority||
+          String(purchase.goal_id||'')!==goalId||String(purchase.comment||'')!==description||
+          String(purchase.desired_date||'')!==(targetDate||''))
+          throw new Error('Конфликт ID покупки: запись не соответствует исходному запросу');
+      }else{
+        purchase={id:purchaseId,family_id:familyId,name:goalName,category_id:null,estimated_kopecks:target,priority,desired_month:targetDate?targetDate.slice(0,7)+'-01':null,desired_date:targetDate||null,url:'',comment:description,status:'planned',responsible_user_id:user.id,goal_id:goalId,linked_transaction_id:'',created_by:user.id,created_at:now_()};
         validateRelations_('planned_purchases',purchase,user);
         appendRows_('planned_purchases',[purchase]);
-        purchaseId=purchase.id;
-      }catch(err){
-        const saved=rows_('goals').find(g=>String(g.id)===String(goal.id));
-        if(saved)deleteRows_('goals',[saved]);
-        throw new Error('Не удалось связать цель с покупкой; создание отменено: '+String(err&&err.message||err));
       }
     }
-    return {goal_id:goal.id,purchase_id:purchaseId};
+    return {goal_id:goalId,purchase_id:purchaseId};
   }
   if(name==='create_telegram_link_code'){
     const members=rows_('family_members').filter(m=>String(m.user_id)===user.id);
