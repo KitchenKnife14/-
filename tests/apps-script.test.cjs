@@ -396,6 +396,32 @@ test('recurring payment confirmation replay returns success after the full commi
   assert.equal(after.next_due_date, '2026-11-30');
 });
 
+test('recurring confirmation rejects a stale snapshot after another family member edits the payment', () => {
+  const h = makeHarness();
+  const owner = h.signup('recurring-stale-owner@example.com');
+  const partner = h.signup('recurring-stale-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Устаревший регулярный платёж' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+  const recurring = h.call({
+    action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-11-01', next_due_date: '2026-11-11', frequency: 'monthly', active: true }
+  }).data[0];
+  const changed = h.call({
+    action: 'query', token: partner.token, table: 'recurring_payments', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: recurring.id }], values: { amount_kopecks: 15000 }
+  });
+  assert.equal(changed.error, null, changed.error?.message);
+  const stale = h.call({
+    action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-11', p_expected_recurring: recurring }
+  });
+  assert.match(stale.error?.message || '', /изменён другим участником/i);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data.length, 0);
+  const saved = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select' }).data[0];
+  assert.equal(saved.amount_kopecks, 15000);
+  assert.equal(saved.next_due_date, '2026-11-11');
+});
+
 test('optimistic update rejects stale snapshots and preserves the newer row', () => {
   const h = makeHarness();
   const user = h.signup('stale-update@example.com');
