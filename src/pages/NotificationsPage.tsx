@@ -39,8 +39,11 @@ export default function NotificationsPage() {
   const markRead = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('id', n.id).expect(n as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
   const markAllRead = async () => {
     if (!family) return
-    const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('family_id', family.id).eq('read', false)
-    if (err) setError(err.message); load()
+    const unread = items.filter((n) => !n.read)
+    const results = await Promise.all(unread.map((n) => googleSheets.from('notifications').update({ read: true }).eq('id', n.id).expect(n as unknown as Record<string, unknown>)))
+    const conflicts = results.filter((result) => result.error)
+    if (conflicts.length) setError(`${conflicts.length} уведомлений изменились одновременно. Обновите список и повторите действие.`)
+    load()
   }
   const remove = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').delete().eq('id', n.id); if (err) setError(err.message); load() }
 
