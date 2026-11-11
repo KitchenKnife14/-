@@ -65,7 +65,7 @@ export default function CategoriesPage() {
   }, [])
 
   const archive = async (c: Category) => {
-    const { error: err } = await googleSheets.from('categories').update({ archived: true }).eq('id', c.id)
+    const { error: err } = await googleSheets.from('categories').update({ archived: true }).eq('id', c.id).expect(c as unknown as Record<string, unknown>)
     if (err) setError(err.message)
     load()
   }
@@ -178,7 +178,7 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, f
     try {
       const payload = { name: name.trim(), kind: parentId && parentKind ? parentKind : kind, icon, color }
       if (editing) {
-        const { error: err } = await googleSheets.from('categories').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('categories').update(payload).eq('id', editing.id).expect(editing as unknown as Record<string, unknown>)
         if (err) throw err
       } else {
         const insertPayload = { ...payload, family_id: familyId, parent_id: parentId }
