@@ -928,7 +928,7 @@ function query_(req,user){
       });
       if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
     }
-    if(mode==='delete'){if(table!=='goals')deleteRows_(table,changed);}else updateRows_(table,changed);
+    if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
     if(mode==='delete'&&(table==='recurring_payments'||table==='transactions')){
       // A delete may commit before its dependent-row update fails. On retry the
       // parent row is already gone, so recover links from the explicit ID filter.

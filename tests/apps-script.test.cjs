@@ -709,6 +709,7 @@ test('deleting a goal removes its contribution history and unlinks planned purch
     filters: [{ column: 'id', op: 'eq', value: goal.id }]
   });
   assert.equal(deleted.error, null, deleted.error?.message);
+  assert.equal(h.context.rows_('goals').some(row => row.id === goal.id), false);
   assert.equal(h.context.rows_('goal_contributions').length, 0);
   const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
   assert.equal(purchase.goal_id, '');
