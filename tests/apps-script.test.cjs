@@ -650,6 +650,42 @@ test('recurring payments deactivate after the configured end date', () => {
   assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 1);
 });
 
+test('goal deletion keeps the parent available when unlinking a purchase fails', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-delete-cascade-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор удаления цели' }).data;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Резерв', target_kopecks: 100000 }
+  }).data[0];
+  h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
+    values: { goal_id: goal.id, amount_kopecks: 5000, contribution_date: '2026-11-11' } });
+  const purchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Покупка из цели', estimated_kopecks: 25000, goal_id: goal.id, status: 'planned' }
+  }).data[0];
+
+  const originalUpdate = h.context.updateRows_;
+  let failOnce = true;
+  h.context.updateRows_ = function(table, rows) {
+    if (table === 'planned_purchases' && failOnce) { failOnce = false; throw new Error('simulated goal purchase unlink failure'); }
+    return originalUpdate(table, rows);
+  };
+  const args = { action: 'query', token: user.token, table: 'goals', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: goal.id }] };
+  const first = h.call(args);
+  assert.match(first.error?.message || '', /simulated goal purchase unlink failure/);
+  assert.equal(h.context.rows_('goals').some(row => row.id === goal.id), true);
+  assert.equal(h.context.rows_('goal_contributions').some(row => row.goal_id === goal.id), false);
+  assert.equal(h.context.rows_('planned_purchases').find(row => row.id === purchase.id).goal_id, goal.id);
+
+  const retry = h.call(args);
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(h.context.rows_('goals').some(row => row.id === goal.id), false);
+  assert.equal(h.context.rows_('goal_contributions').some(row => row.goal_id === goal.id), false);
+  assert.equal(h.context.rows_('planned_purchases').find(row => row.id === purchase.id).goal_id, '');
+});
+
 test('deleting a goal removes its contribution history and unlinks planned purchases', () => {
   const h = makeHarness();
   const user = h.signup('goal-delete@example.com');
