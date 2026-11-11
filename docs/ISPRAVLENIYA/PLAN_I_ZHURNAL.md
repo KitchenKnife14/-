@@ -2218,3 +2218,12 @@ HEAD до:
 
 
 - Проверка работы №81 завершена: CI run 43018470910 на commit ed5871195fe6298ca97343220ee6bc549b74401b — success. Все 192/192 regression tests прошли; TypeScript и production build — success; Apps Script syntax, PBKDF2 runtime diagnostics syntax и manifest validation — success; npm audit — 0 vulnerabilities. Текущий head ветки на момент фиксации отчёта совпадает с проверенным commit.
+
+
+### Работа №82 — backend-основа идемпотентности вставок (2026-11-11)
+
+- Подтверждено по коду: обычные транзакции уже используют стабильный ID и точное сравнение payload при повторном insert; monthly_plans использует upsert по составному ключу. Для accounts, goal_contributions, planned_purchases, recurring_payments и budgets generic insert раньше отклонял повтор с тем же ID, а не возвращал исходную запись.
+- Backend теперь допускает повтор с тем же ID и тем же бизнес-payload для этих пяти таблиц. Повтор с тем же ID, но изменёнными значениями по-прежнему отклоняется. Для goal_contributions дополнительно проверяется доступ к семье через связанную цель. Для budgets проверка уникальности исключает текущую запись по ID.
+- Добавлен regression test на accounts, goal_contributions и planned_purchases, включая проверку отсутствия дублей и повторного начисления суммы цели. Это серверная основа; UI пока не передаёт стабильные IDs для всех этих форм, поэтому защита от повторной отправки после timeout ещё не включена end-to-end.
+- Следующий шаг: добавить стабильный client-generated ID на весь жизненный цикл каждой формы (включая повторный клик после неопределённого ответа), затем расширить тесты на recurring_payments и budgets. Автоповтор запросов не включать.
+- Прогресс чек-листа без изменений: 161/272 (59,2%), 1/12 макроэтапов. Production, main, основная таблица и Apps Script deployment не затронуты.

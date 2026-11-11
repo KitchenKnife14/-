@@ -2619,6 +2619,40 @@ test('categories with references cannot be deleted, but can be archived', () => 
 });
 
 
+test('selected non-transaction inserts are idempotent for the same ID and exact payload', () => {
+  const h = makeHarness();
+  const owner = h.signup('nontransaction-idempotency-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Проверка повторов' }).data;
+  const category = h.call({ action: 'query', token: owner.token, table: 'categories', mode: 'insert', returning: true,
+    values: { id: 'idem-category-001', family_id: family.id, name: 'Проверочная', kind: 'expense' } }).data[0];
+  const accountPayload = { id: 'idem-account-001', family_id: family.id, name: 'Наличные', kind: 'cash', owner_user_id: owner.user.id, starting_balance_kopecks: 10000, archived: false };
+  const firstAccount = h.call({ action: 'query', token: owner.token, table: 'accounts', mode: 'insert', returning: true, values: accountPayload });
+  assert.equal(firstAccount.error, null, firstAccount.error?.message);
+  const repeatedAccount = h.call({ action: 'query', token: owner.token, table: 'accounts', mode: 'insert', returning: true, values: accountPayload });
+  assert.equal(repeatedAccount.error, null, repeatedAccount.error?.message);
+  assert.equal(repeatedAccount.data[0].id, firstAccount.data[0].id);
+  assert.equal(h.context.rows_('accounts').filter(row => row.id === accountPayload.id).length, 1);
+  const changedAccount = h.call({ action: 'query', token: owner.token, table: 'accounts', mode: 'insert', values: { ...accountPayload, name: 'Другое имя' } });
+  assert.match(changedAccount.error.message, /уже существует или содержит другие данные/);
+
+  const goal = h.call({ action: 'query', token: owner.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id: 'idem-goal-001', family_id: family.id, name: 'Цель', target_kopecks: 50000, priority: 1, status: 'active' } }).data[0];
+  const contribution = { id: 'idem-contribution-001', goal_id: goal.id, amount_kopecks: 5000, contribution_date: '2026-11-11', note: 'Первый взнос' };
+  const firstContribution = h.call({ action: 'query', token: owner.token, table: 'goal_contributions', mode: 'insert', returning: true, values: contribution });
+  assert.equal(firstContribution.error, null, firstContribution.error?.message);
+  const repeatedContribution = h.call({ action: 'query', token: owner.token, table: 'goal_contributions', mode: 'insert', returning: true, values: contribution });
+  assert.equal(repeatedContribution.error, null, repeatedContribution.error?.message);
+  assert.equal(h.context.rows_('goal_contributions').filter(row => row.id === contribution.id).length, 1);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 5000);
+
+  const purchase = { id: 'idem-purchase-001', family_id: family.id, name: 'Проверочная покупка', category_id: category.id, estimated_kopecks: 12000, priority: 2, status: 'planned', goal_id: null };
+  const firstPurchase = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true, values: purchase });
+  assert.equal(firstPurchase.error, null, firstPurchase.error?.message);
+  const repeatedPurchase = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true, values: purchase });
+  assert.equal(repeatedPurchase.error, null, repeatedPurchase.error?.message);
+  assert.equal(h.context.rows_('planned_purchases').filter(row => row.id === purchase.id).length, 1);
+});
+
 test('transaction inserts are idempotent for the same ID and exact payload', () => {
   const h = makeHarness();
   const owner = h.signup('transaction-idempotency-owner@example.com');

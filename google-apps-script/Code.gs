@@ -764,7 +764,694 @@ function readTransactionRangeRows_(filters,user){
   });
   return result;
 }
-function sameTransactionInsert_(stored,candidate,user){
+const IDEMPOTENT_INSERT_FIELDS = {
+  accounts:['family_id','name','kind','owner_user_id','starting_balance_kopecks','archived'],
+  goal_contributions:['goal_id','amount_kopecks','contribution_date','note'],
+  planned_purchases:['family_id','name','category_id','estimated_kopecks','priority','desired_month','desired_date','url','comment','status','goal_id'],
+  recurring_payments:['family_id','type','amount_kopecks','category_id','account_id','description','start_date','end_date','frequency','custom_interval_days','next_due_date','remind','active','responsible_user_id'],
+  budgets:['family_id','category_id','month_date','limit_kopecks','warn_75','warn_90','warn_100']
+};
+function sameIdempotentInsert_(table,stored,candidate,user){
+  const fields=IDEMPOTENT_INSERT_FIELDS[table];
+  if(!fields)return false;
+  if(TABLES[table].includes('created_by')&&String(stored.created_by||'')!==String(user.id))return false;
+  if(table==='goal_contributions'){
+    const goal=rows_('goals').find(row=>String(row.id)===String(stored.goal_id));
+    if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))return false;
+  }
+  return fields.every(field=>String(stored[field]??'')===String(candidate[field]??''));
+}
+  if(String(stored.created_by||'')!==String(user.id))return false;
+  const fields=['family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','responsible_user_id','planned','parent_recurring_id'];
+  return fields.every(field=>String(stored[field]??'')===String(candidate[field]??''));
+}
+function findRowsByIds_(table,ids){
+  const found=new Map(),wanted=new Set((ids||[]).map(String));
+  if(!wanted.size)return found;
+  const sh=sheet_(table),last=sh.getLastRow(),idColumn=TABLES[table].indexOf('id')+1;
+  if(last<2||idColumn<1)return found;
+  SHEET_READS++;
+  const values=timedSheetRead_(()=>sh.getRange(2,idColumn,last-1,1).getValues());
+  const matches=[];
+  values.forEach((row,index)=>{const id=String(row[0]??'');if(wanted.has(id))matches.push({id,row:index+2});});
+  matches.forEach(match=>{
+    SHEET_READS++;
+    const values=timedSheetRead_(()=>sh.getRange(match.row,1,1,TABLES[table].length).getValues()[0]);
+    const row={};
+    TABLES[table].forEach((column,index)=>row[column]=normal_(values[index],column));
+    row.__row=match.row;
+    found.set(match.id,row);
+  });
+  return found;
+}
+function query_(req,user){
+  const table=req.table, mode=req.mode||'select'; if(!TABLES[table])throw new Error('Неизвестная таблица: '+table);
+  if(table==='telegram_links'||table==='telegram_link_codes')throw new Error('Служебная Telegram-таблица недоступна через обычный API');
+  const filters=req.filters||[];
+  let all=null;
+  if(mode==='select'&&table==='transactions')all=readTransactionRangeRows_(filters,user);
+  if(all===null)all=(mode==='select'||mode==='update'||mode==='delete')?rows_(table):null;
+  const matches=(row)=>filters.every(f=>{
+    const a=row[f.column], b=f.value;
+    switch(f.op){case 'eq':return String(a??'')===String(b??'');case 'neq':return String(a??'')!==String(b??'');case 'gte':return a>=b;case 'lte':return a<=b;case 'gt':return a>b;case 'lt':return a<b;case 'in':return (f.values||[]).map(String).includes(String(a));case 'is':return b===null?(a===null||a===''):String(a)===String(b);default:throw new Error('Фильтр не поддерживается');}
+  });
+  if(mode==='select'){
+    all=all.filter(r=>matches(r)&&canAccessRow_(table,r,user));
+    const orders=Array.isArray(req.orders)&&req.orders.length?req.orders:(req.order?[req.order]:[]);if(orders.length)all.sort((a,b)=>{for(const order of orders){const x=a[order.column],y=b[order.column];const cmp=String(x??'').localeCompare(String(y??''),undefined,{numeric:true});if(cmp)return order.ascending===false?-cmp:cmp;}return 0;});
+    if(req.limit)all=all.slice(0,req.limit);
+    return all.map(({__row,...r})=>r);
+  }
+  if(mode==='insert'){
+    const input=Array.isArray(req.values)?req.values:[req.values];
+    const transactionIds=table==='transactions'?input.filter(raw=>raw&&raw.id).map(raw=>raw.id):[];
+    const transactionRowsById=transactionIds.length?findRowsByIds_(table,transactionIds):new Map();
+    const needsExisting=table==='budgets'||table==='profiles'||(table!=='transactions'&&input.some(raw=>raw&&raw.id));
+    const existing=needsExisting?rows_(table):[];
+    const createdIds_=new Set();
+    const created=input.map(raw=>{
+      const r=Object.assign({},raw);
+      // Server owns identity and audit timestamps.
+      if(table==='profiles' && r.id!==undefined && String(r.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      if(table==='profiles')r.id=user.id;
+      const existingById=r.id?(table==='transactions'?transactionRowsById.get(String(r.id)):existing.find(x=>String(x.id)===String(r.id))):null;
+      if(existingById&&table!=='transactions'&&!IDEMPOTENT_INSERT_FIELDS[table])throw new Error('Запись с таким ID уже существует');
+      if(!r.id)r.id=id_();
+      if(TABLES[table].includes('created_at'))r.created_at=now_();
+      if(TABLES[table].includes('updated_at'))r.updated_at=now_();
+      if(createdIds_.has(String(r.id)))throw new Error('Повторяющийся ID в запросе');
+      createdIds_.add(String(r.id));
+      if((table==='categories'||table==='accounts')&&r.archived===undefined)r.archived=false;
+      if(table==='family_members'){
+        const family=rows_('families').find(f=>String(f.id)===String(r.family_id));
+        if(!family || String(family.created_by)!==user.id || String(r.user_id)!==user.id || r.role!=='owner')throw new Error('Нельзя добавлять участника напрямую');
+        if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');
+      } else if(table==='goal_contributions'){
+        const goal=rows_('goals').find(g=>String(g.id)===String(r.goal_id));
+        if(!goal || !allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
+      } else if(table!=='profiles'&&table!=='families'&&(!r.family_id||(!allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))))) throw new Error('Не указана семья или нет доступа к ней');
+      if(table==='notifications'){
+        if(r.user_id && String(r.user_id)!==user.id)throw new Error('Нельзя создавать уведомления для другого пользователя');
+        r.user_id=user.id;
+      }
+      if(TABLES[table].includes('created_by'))r.created_by=user.id;
+      if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
+      if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
+      if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
+      if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
+      validateRelations_(table,r,user);
+      if(existingById){
+        const same=table==='transactions'?sameTransactionInsert_(existingById,r,user):sameIdempotentInsert_(table,existingById,r,user);
+        if(!same)throw new Error('Запись с таким ID уже существует или содержит другие данные');
+        return {idempotent:true,row:existingById};
+      }
+      if(table==='budgets')assertUniqueBudget_(existing,r,existingById?existingById.id:undefined);
+      existing.push(r);return {idempotent:false,row:r};
+    });
+    const newRows=created.filter(item=>!item.idempotent).map(item=>item.row);
+    if(table==='goal_contributions'&&newRows.length){
+      const goalIds=newRows.map(row=>row.goal_id);
+      assertGoalContributionTotalsSafe_(goalIds,newRows,[]);
+    }
+    if(newRows.length)appendRows_(table,newRows);
+    if(table==='goal_contributions'&&newRows.length)syncGoalTotals_(newRows.map(r=>r.goal_id));
+    return req.returning?created.map(item=>strip_(item.row)):null;
+  }
+  if(mode==='update'||mode==='delete'){
+    if(!filters.length)throw new Error('Для изменения или удаления нужен хотя бы один фильтр');
+    if(table==='family_members')throw new Error('Изменение состава семьи требует отдельной операции');if(mode==='delete'&&(table==='families'||table==='profiles'))throw new Error('Удаление системных записей запрещено');
+    if(mode==='delete'&&table==='accounts'){
+      const accountIds=new Set(all.filter(r=>matches(r)&&canAccessRow_(table,r,user)).map(r=>String(r.id)));
+      const referenced=rows_('transactions').some(tx=>accountIds.has(String(tx.account_id||''))||accountIds.has(String(tx.to_account_id||'')))||
+        rows_('recurring_payments').some(payment=>accountIds.has(String(payment.account_id||'')));
+      if(referenced)throw new Error('Счёт используется в истории. Архивируйте его вместо удаления.');
+    }
+    if(mode==='delete'&&table==='categories'){
+      const categoryIds=new Set(all.filter(r=>matches(r)&&canAccessRow_(table,r,user)).map(r=>String(r.id)));
+      const referenced=rows_('categories').some(row=>categoryIds.has(String(row.parent_id||'')))||
+        rows_('transactions').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('recurring_payments').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('budgets').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('planned_purchases').some(row=>categoryIds.has(String(row.category_id||'')))||
+        rows_('monthly_plans').some(row=>categoryIds.has(String(row.category_id||'')));
+      if(referenced)throw new Error('Категория используется в связанных данных. Архивируйте её вместо удаления.');
+    }
+    const changed=[],affectedGoalIds=new Set();
+    all.forEach(r=>{
+      if(matches(r)&&canAccessRow_(table,r,user)){
+        if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
+        if(mode==='delete')changed.push(r);
+        else {const patch=req.values||{};if(table==='goals'&&Object.prototype.hasOwnProperty.call(patch,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');if(patch.id!==undefined&&String(patch.id)!==String(r.id))throw new Error('Нельзя менять ID записи');if(patch.family_id!==undefined&&String(patch.family_id)!==String(r.family_id))throw new Error('Нельзя переносить запись между семьями');if(table==='families'&&['id','created_by','invite_code'].some(k=>Object.prototype.hasOwnProperty.call(patch,k)))throw new Error('Системные поля семьи нельзя менять');if(table==='notifications'&&Object.prototype.hasOwnProperty.call(patch,'user_id')&&String(patch.user_id)!==String(r.user_id))throw new Error('Нельзя менять получателя уведомления');if(TABLES[table].includes('created_by')&&Object.prototype.hasOwnProperty.call(patch,'created_by')&&String(patch.created_by)!==String(r.created_by))throw new Error('Нельзя менять автора записи');if(table==='profiles'&&String(r.id)!==user.id)throw new Error('Нет доступа к профилю');const next=Object.assign({},r,patch);if(table==='goal_contributions')affectedGoalIds.add(String(next.goal_id));if(TABLES[table].includes('updated_by'))next.updated_by=user.id;if(TABLES[table].includes('updated_at'))next.updated_at=now_();delete next.__row;if(TABLES[table].includes('created_at')&&Object.prototype.hasOwnProperty.call(patch,'created_at')&&String(patch.created_at)!==String(r.created_at))throw new Error('Нельзя менять дату создания записи');validateRelations_(table,next,user,r);if(table==='budgets')assertUniqueBudget_(all,next,r.id);if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(next.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}next.__row=r.__row;changed.push(next);}
+      }
+    });
+    if(table==='goal_contributions'&&changed.length){
+      const goalIds=changed.flatMap(row=>[row.goal_id]);
+      const replacements=mode==='delete'?[]:changed;
+      assertGoalContributionTotalsSafe_(goalIds,replacements,changed.map(row=>row.id));
+    }
+    if(mode==='delete')deleteRows_(table,changed);else updateRows_(table,changed);
+    if(table==='recurring_payments'&&mode==='delete'&&changed.length){
+      const deletedIds=new Set(changed.map(payment=>String(payment.id)));
+      const transactions=rows_('transactions'),transactionsChanged=[];
+      transactions.forEach(tx=>{
+        if(tx.parent_recurring_id&&deletedIds.has(String(tx.parent_recurring_id))){
+          tx.parent_recurring_id='';
+          transactionsChanged.push(tx);
+        }
+      });
+      if(transactionsChanged.length)updateRows_('transactions',transactionsChanged);
+    }
+    if(table==='transactions'&&mode==='delete'&&changed.length){
+      const deletedIds=new Set(changed.map(tx=>String(tx.id)));
+      const purchases=rows_('planned_purchases'),purchasesChanged=[];
+      purchases.forEach(p=>{
+        if(p.linked_transaction_id&&deletedIds.has(String(p.linked_transaction_id))){
+          p.linked_transaction_id='';
+          if(p.status==='bought')p.status='planned';
+          purchasesChanged.push(p);
+        }
+      });
+      if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
+    }
+    if(table==='goals'&&mode==='delete'&&changed.length){
+      const deletedIds=new Set(changed.map(g=>String(g.id)));
+      deleteRows_('goal_contributions',rows_('goal_contributions').filter(c=>deletedIds.has(String(c.goal_id))));
+      const purchases=rows_('planned_purchases'),purchasesChanged=[];
+      purchases.forEach(p=>{if(p.goal_id&&deletedIds.has(String(p.goal_id))){p.goal_id='';purchasesChanged.push(p);}});
+      if(purchasesChanged.length)updateRows_('planned_purchases',purchasesChanged);
+    }
+    if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
+    return req.returning?changed.map(strip_):null;
+  }
+  if(mode==='upsert'){
+    const input=Array.isArray(req.values)?req.values:[req.values], existing=rows_(table);
+    if(table==='family_members'||table==='families')throw new Error('Для этой таблицы upsert запрещён');
+    const affectedGoalIds=new Set(), updatedRows=[], insertedRows=[];
+    input.forEach(raw=>{
+      if(table==='goals'&&Object.prototype.hasOwnProperty.call(raw,'saved_kopecks'))throw new Error('Баланс цели рассчитывается по истории пополнений');
+      if(table==='notifications'&&raw.user_id&&String(raw.user_id)!==user.id)throw new Error('Нельзя создавать уведомления для другого пользователя');
+      if(table==='notifications')raw.user_id=user.id;
+      if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      if(table==='goal_contributions'){const goal=rows_('goals').find(g=>String(g.id)===String(raw.goal_id));if(!goal||!allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');}
+      else if(table!=='profiles'&&(!raw.family_id||!allowedFamilyIds_(user).includes(String(raw.family_id))))throw new Error('Нет доступа к этой семье');
+      const keys=String(req.onConflict||'id').split(',').map(s=>s.trim());
+      const found=existing.find(r=>keys.every(k=>String(r[k]??'')===String(raw[k]??''))&&canAccessRow_(table,r,user));
+      if(table==='profiles' && String(raw.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
+      if(raw.id!==undefined&&existing.some(r=>String(r.id)===String(raw.id))&&(!found||String(found.id)!==String(raw.id)))throw new Error('Запись с таким ID уже существует или недоступна');
+      if(found){
+        if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
+        if(raw.id!==undefined&&String(raw.id)!==String(found.id))throw new Error('Нельзя менять ID записи');
+        if(raw.family_id!==undefined&&String(raw.family_id)!==String(found.family_id))throw new Error('Нельзя переносить запись между семьями');
+        if(TABLES[table].includes('created_by')&&raw.created_by!==undefined&&String(raw.created_by)!==String(found.created_by))throw new Error('Нельзя менять автора записи');
+        if(TABLES[table].includes('created_at')&&raw.created_at!==undefined&&String(raw.created_at)!==String(found.created_at))throw new Error('Нельзя менять дату создания записи');
+        const next=Object.assign({},found,raw); // Validate with the authenticated user, including goal ownership.
+        validateRelations_(table,next,user,found);if(table==='budgets')assertUniqueBudget_(existing,next,found.id);Object.assign(found,raw);
+        if(table==='goal_contributions')affectedGoalIds.add(String(found.goal_id));
+        if(TABLES[table].includes('updated_by'))found.updated_by=user.id;
+        if(TABLES[table].includes('updated_at'))found.updated_at=now_();
+        updatedRows.push(found);
+      }else {
+        const r=Object.assign({id:id_()},raw);
+        if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
+        if(TABLES[table].includes('created_at'))r.created_at=now_();
+        if(TABLES[table].includes('updated_at'))r.updated_at=now_();
+        if(TABLES[table].includes('created_by'))r.created_by=user.id;
+        if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
+        if(r.family_id&&!allowedFamilyIds_(user).includes(String(r.family_id)))throw new Error('Нет доступа к этой семье');
+        validateRelations_(table,r,user);
+        if(table==='budgets')assertUniqueBudget_(existing,r);
+        existing.push(r);
+        insertedRows.push(r);
+        if(table==='goal_contributions')affectedGoalIds.add(String(r.goal_id));
+      }
+    });
+    if(table==='goal_contributions'&&(updatedRows.length||insertedRows.length)){
+      const goalIds=[...affectedGoalIds];
+      assertGoalContributionTotalsSafe_(goalIds,[...updatedRows,...insertedRows],updatedRows.map(row=>row.id));
+    }
+    updateRows_(table,updatedRows);
+    appendRows_(table,insertedRows);
+    if(table==='goal_contributions')syncGoalTotals_([...affectedGoalIds]);
+    return null;
+  }
+  throw new Error('Неизвестный режим запроса');
+}
+function rollbackFamily_(familyId){
+  const id=String(familyId), failures=[];
+  [['categories',r=>String(r.family_id)===id],['family_members',r=>String(r.family_id)===id],['families',r=>String(r.id)===id]]
+    .forEach(u=>{try{deleteRows_(u[0],rows_(u[0]).filter(u[1]));}catch(err){failures.push(u[0]+': '+(err&&err.message?err.message:String(err)));}});
+  if(failures.length)throw new Error('Не удалось полностью отменить создание семьи: '+failures.join('; '));
+}
+function strip_(r){const o=Object.assign({},r);delete o.__row;return o;}
+function seedCategories_(familyId){
+ const t=now_(),fid=String(familyId),have=rows_('categories').filter(c=>String(c.family_id)===fid),created=[];
+ DEFAULT_CATEGORIES.forEach((p,i)=>{let parent=have.find(c=>!c.parent_id&&c.name===p.name&&c.kind===p.kind);if(!parent){parent={id:id_(),family_id:familyId,parent_id:null,name:p.name,kind:p.kind,icon:p.icon,color:p.color,archived:false,sort_order:i,created_at:t};created.push(parent);have.push(parent)}(p.children||[]).forEach((c,k)=>{if(have.some(x=>String(x.parent_id)===String(parent.id)&&x.name===c.name))return;const row={id:id_(),family_id:familyId,parent_id:parent.id,name:c.name,kind:p.kind,icon:c.icon,color:c.color,archived:false,sort_order:k,created_at:t};created.push(row);have.push(row)})});appendRows_('categories',created);
+}
+function assertGoalContributionTotalsSafe_(goalIds,replacements,removedIds){
+  const ids=new Set((goalIds||[]).map(String));
+  if(!ids.size)return;
+  const removed=new Set((removedIds||[]).map(String));
+  const totals=new Map([...ids].map(id=>[id,0]));
+  const current=rows_('goal_contributions').filter(row=>ids.has(String(row.goal_id))&&!removed.has(String(row.id)));
+  [...current,...(replacements||[])].forEach(row=>{
+    const goalId=String(row.goal_id),amount=row.amount_kopecks;
+    if(!ids.has(goalId))return;
+    if(typeof amount!=='number'||!Number.isSafeInteger(amount)||amount<=0)
+      throw new Error('Сумма пополнения должна быть положительным целым числом копеек');
+    const next=totals.get(goalId)+amount;
+    if(!Number.isSafeInteger(next))
+      throw new Error('Сумма пополнений цели превышает безопасный диапазон целых копеек');
+    totals.set(goalId,next);
+  });
+}
+function syncGoalTotals_(goalIds){
+  const ids=[...new Set((goalIds||[]).filter(Boolean).map(String))];
+  if(!ids.length)return;
+  const contributions=rows_('goal_contributions'), goals=rows_('goals');
+  const totals=new Map(ids.map(id=>[id,0]));
+  contributions.forEach(c=>{const key=String(c.goal_id);if(totals.has(key)){const next=totals.get(key)+Number(c.amount_kopecks||0);if(!Number.isSafeInteger(next))throw new Error('Сумма пополнений цели превышает безопасный диапазон целых копеек');totals.set(key,next);}});
+  const changed=[];
+  goals.forEach(g=>{const key=String(g.id);if(totals.has(key)){const next=Number(totals.get(key));if(Number(g.saved_kopecks||0)!==next){g.saved_kopecks=next;changed.push(g);}}});
+  if(changed.length)updateRows_('goals',changed);
+}
+function rpc_(req,user){
+  const name=req.name, p=req.params||{};
+  if(name==='get_table_revision'){
+    const table=String(p.p_table||''),familyId=String(p.p_family_id||'');
+    if(!TABLES[table]||table==='telegram_links'||table==='telegram_link_codes'||table==='profiles')throw new Error('Таблица недоступна для отслеживания изменений');
+    if(!familyId||!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    if(table==='notifications'){
+      const userId=String(p.p_user_id||'');
+      if(!userId||userId!==user.id)throw new Error('Нет доступа к ревизии уведомлений другого пользователя');
+      return PropertiesService.getScriptProperties().getProperty(tableRevisionKey_(table,familyId,userId))||'0';
+    }
+    return PropertiesService.getScriptProperties().getProperty(tableRevisionKey_(table,familyId))||'0';
+  }
+  if(name==='ensure_supplemental_categories'){
+    const familyId=String(p.p_family_id||'');
+    if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    const definitions=[
+      {name:'Сигареты',kind:'expense',icon:'🚬',color:'#78716c',children:[]},
+      {name:'Кредиты',kind:'expense',icon:'💳',color:'#64748b',children:[
+        {name:'Погашение основного долга',icon:'💳',color:'#64748b'},
+        {name:'Проценты по кредиту',icon:'📈',color:'#64748b'},
+        {name:'Комиссии по кредиту',icon:'💸',color:'#64748b'}
+      ]}
+    ];
+    const have=rows_('categories').filter(x=>String(x.family_id)===familyId),created=[];
+    definitions.forEach(def=>{
+      let parent=have.find(x=>!x.parent_id&&x.name===def.name&&x.kind===def.kind);
+      if(!parent){
+        parent={id:id_(),family_id:familyId,parent_id:null,name:def.name,kind:def.kind,icon:def.icon,color:def.color,archived:false,sort_order:0,created_at:now_()};
+        have.push(parent);created.push(parent);
+      }
+      (def.children||[]).forEach((child,index)=>{
+        if(have.some(x=>String(x.parent_id)===String(parent.id)&&x.name===child.name))return;
+        const row={id:id_(),family_id:familyId,parent_id:parent.id,name:child.name,kind:def.kind,icon:child.icon,color:child.color,archived:false,sort_order:index,created_at:now_()};
+        have.push(row);created.push(row);
+      });
+    });
+    if(created.length)appendRows_('categories',created);
+    return {added:created.length};
+  }
+  if(name==='create_goal_with_purchase'){
+    const familyId=String(p.p_family_id||'');
+    if(!allowedFamilyIds_(user).includes(familyId))throw new Error('Нет доступа к этой семье');
+    assertKopecks_(p.p_target_kopecks,'Сумма цели',{positive:true});
+    const target=p.p_target_kopecks,priority=Number(p.p_priority);
+    const goalName=String(p.p_name||'').trim(),description=String(p.p_description||'').trim();
+    if(!goalName)throw new Error('Введите название цели');
+    if(!Number.isSafeInteger(target)||target<=0)throw new Error('Сумма цели должна быть положительным целым числом копеек');
+    if(!Number.isInteger(priority)||priority<1||priority>5)throw new Error('Приоритет должен быть от 1 до 5');
+    const targetDate=p.p_target_date?String(p.p_target_date):'';
+    if(targetDate&&!/^\d{4}-\d{2}-\d{2}$/.test(targetDate))throw new Error('Некорректная целевая дата');
+    const goal={id:id_(),family_id:familyId,name:goalName,description,target_kopecks:target,saved_kopecks:0,target_date:targetDate||null,priority,status:'active',responsible_user_id:user.id,created_at:now_()};
+    appendRows_('goals',[goal]);
+    let purchaseId=null;
+    if(p.p_create_purchase===true){
+      const purchase={id:id_(),family_id:familyId,name:goalName,category_id:null,estimated_kopecks:target,priority,desired_month:targetDate?targetDate.slice(0,7)+'-01':null,desired_date:targetDate||null,url:'',comment:description,status:'planned',responsible_user_id:user.id,goal_id:goal.id,linked_transaction_id:'',created_by:user.id,created_at:now_()};
+      try{
+        validateRelations_('planned_purchases',purchase,user);
+        appendRows_('planned_purchases',[purchase]);
+        purchaseId=purchase.id;
+      }catch(err){
+        const saved=rows_('goals').find(g=>String(g.id)===String(goal.id));
+        if(saved)deleteRows_('goals',[saved]);
+        throw new Error('Не удалось связать цель с покупкой; создание отменено: '+String(err&&err.message||err));
+      }
+    }
+    return {goal_id:goal.id,purchase_id:purchaseId};
+  }
+  if(name==='create_telegram_link_code'){
+    const members=rows_('family_members').filter(m=>String(m.user_id)===user.id);
+    if(!members.length)throw new Error('Сначала создайте семью или присоединитесь к ней');
+    const familyId=String(members[0].family_id);
+    const existing=rows_('telegram_links').find(x=>String(x.user_id)===user.id&&String(x.family_id)===familyId);
+    if(existing)throw new Error('К Telegram уже привязан аккаунт. Сначала отвяжите его.');
+    const code=code_().slice(0,12), expires=new Date(Date.now()+15*60*1000).toISOString();
+    const old=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id&&!x.used_at);
+    if(old.length)deleteRows_('telegram_link_codes',old);
+    appendRows_('telegram_link_codes',[{id:id_(),user_id:user.id,family_id:familyId,code_hash:telegramCodeHash_(code),expires_at:expires,used_at:'',created_at:now_()}]);
+    return {code,expires_at:expires};
+  }
+  if(name==='get_telegram_link_status'){
+    const link=rows_('telegram_links').find(x=>String(x.user_id)===user.id);
+    return link?{linked:true,linked_at:link.linked_at,telegram_chat_id:link.telegram_chat_id}:{linked:false};
+  }
+  if(name==='unlink_telegram'){
+    const links=rows_('telegram_links').filter(x=>String(x.user_id)===user.id);
+    if(links.length)deleteRows_('telegram_links',links);
+    const codes=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id);
+    if(codes.length)deleteRows_('telegram_link_codes',codes);
+    return true;
+  }
+  if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code,display_name:p.p_display_name},user);return true;}
+  if(name==='create_family')return route_({action:'createFamily',name:p.p_name,display_name:p.p_display_name},user);
+  if(name==='get_my_context'){
+   const profile=rows_('profiles').find(x=>x.id===user.id);
+   const ownMemberships=rows_('family_members').filter(m=>String(m.user_id)===user.id);
+   const familyIds=new Set(ownMemberships.map(m=>String(m.family_id)));
+   const members=rows_('family_members').filter(m=>familyIds.has(String(m.family_id))).map(strip_);
+   const family=ownMemberships.length?rows_('families').find(f=>String(f.id)===String(ownMemberships[0].family_id)):null;
+   const memberIds=new Set(members.map(m=>String(m.user_id)));
+   const memberProfiles=rows_('profiles').filter(x=>memberIds.has(String(x.id))).map(strip_);
+   return{profile:profile?strip_(profile):null,members,family:family?strip_(family):null,member_profiles:memberProfiles};
+  }
+  if(name==='confirm_planned_purchase'){
+    const id=String(p.p_purchase_id||'');
+    const purchases=rows_('planned_purchases');
+    const purchase=purchases.find(x=>String(x.id)===id&&canAccessRow_('planned_purchases',x,user));
+    if(!purchase)throw new Error('Планируемая покупка не найдена');
+    const transactionId='purchase_'+purchase.id;
+    const accountId=String(p.p_account_id||'');
+    if(accountId){
+      const account=rows_('accounts').find(x=>String(x.id)===accountId&&canAccessRow_('accounts',x,user));
+      if(!account||String(account.family_id)!==String(purchase.family_id))throw new Error('Выбранный счёт не найден в этой семье');
+      if(account.archived)throw new Error('Нельзя списать покупку с архивного счёта');
+    }
+    const txs=rows_('transactions');
+    let tx=txs.find(x=>String(x.id)===transactionId);
+    if(tx && (
+      String(tx.family_id)!==String(purchase.family_id) ||
+      tx.type!=='expense' ||
+      Number(tx.amount_kopecks)!==Number(purchase.estimated_kopecks) ||
+      String(tx.category_id||'')!==String(purchase.category_id||'') ||
+      String(tx.description||'')!==String(purchase.name||'') ||
+      String(tx.account_id||'')!==accountId ||
+      String(tx.parent_recurring_id||'')!==''
+    ))throw new Error('Конфликт ID операции: запись не соответствует планируемой покупке');
+    if(purchase.linked_transaction_id && String(purchase.linked_transaction_id)!==transactionId)throw new Error('Покупка уже связана с другой операцией');
+    if(!tx){
+      tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,responsible_user_id:purchase.responsible_user_id||purchase.created_by||user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
+      appendRows_('transactions',[tx]);
+    }
+    purchase.status='bought';
+    purchase.linked_transaction_id=transactionId;
+    updateRows_('planned_purchases',[purchase]);
+    return {transaction_id:transactionId};
+  }
+  if(name==='confirm_recurring_payment'){
+    const id=p.p_recurring_id, r=rows_('recurring_payments').find(x=>x.id===id&&canAccessRow_('recurring_payments',x,user));
+    if(!r)throw new Error('Регулярный платёж не найден');
+    if(r.next_due_date!==p.p_expected_due_date)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
+    if(r.end_date && r.next_due_date>r.end_date){r.active=false;updateRows_('recurring_payments',[r]);return true;}
+    const txs=rows_('transactions'), transactionId='recurring_'+r.id+'_'+r.next_due_date;
+    // Deterministic ID makes retries safe only when the existing row is the same recurring occurrence.
+    const existingTx=txs.find(t=>String(t.id)===transactionId);
+    if(existingTx && (
+      String(existingTx.family_id)!==String(r.family_id) ||
+      String(existingTx.parent_recurring_id||'')!==String(r.id) ||
+      String(existingTx.type)!==String(r.type) ||
+      Number(existingTx.amount_kopecks)!==Number(r.amount_kopecks) ||
+      String(existingTx.category_id||'')!==String(r.category_id||'') ||
+      String(existingTx.account_id||'')!==String(r.account_id||'') ||
+      String(existingTx.description||'')!==String(r.description||'')
+    ))throw new Error('Конфликт ID операции: запись не соответствует регулярному платежу');
+    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
+    r.next_due_date=nextDate_(r.next_due_date,r.frequency,r.custom_interval_days,r.start_date);
+    if(r.end_date && r.next_due_date>r.end_date)r.active=false;
+    updateRows_('recurring_payments',[r]);return true;
+  }
+  throw new Error('RPC не поддерживается: '+name);
+}
+function nextDate_(iso,freq,days,anchorIso){
+  const d=new Date(iso+'T12:00:00Z');
+  const anchor=new Date((anchorIso||iso)+'T12:00:00Z');
+  if(freq==='daily')d.setUTCDate(d.getUTCDate()+1);
+  else if(freq==='weekly')d.setUTCDate(d.getUTCDate()+7);
+  else if(freq==='custom')d.setUTCDate(d.getUTCDate()+Math.max(1,Number(days)||30));
+  else if(freq==='yearly'){
+    const year=d.getUTCFullYear()+1, month=anchor.getUTCMonth(), day=anchor.getUTCDate();
+    const last=new Date(Date.UTC(year,month+1,0)).getUTCDate();
+    return new Date(Date.UTC(year,month,Math.min(day,last),12)).toISOString().slice(0,10);
+  } else {
+    const year=d.getUTCFullYear(), month=d.getUTCMonth()+1, day=anchor.getUTCDate();
+    const nextMonth=new Date(Date.UTC(year,month,1));
+    const last=new Date(Date.UTC(nextMonth.getUTCFullYear(),nextMonth.getUTCMonth()+1,0)).getUTCDate();
+    nextMonth.setUTCHours(12,0,0,0);nextMonth.setUTCDate(Math.min(day,last));
+    return nextMonth.toISOString().slice(0,10);
+  }
+  return d.toISOString().slice(0,10);
+}
+
+
+const TELEGRAM_UPDATE_TTL_MS = 24 * 60 * 60 * 1000;
+const TELEGRAM_UPDATE_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/* ===== Telegram webhook: вход только через доверенный Vercel endpoint ===== */
+function telegramCodeHash_(code){
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(code).trim().toUpperCase(),Utilities.Charset.UTF_8);
+  return Utilities.base64Encode(digest).split('+').join('-').split('/').join('_').replace(/=+$/,'');
+}
+function telegramWebhook_(req){
+  const props=PropertiesService.getScriptProperties();
+  const expected=props.getProperty('TELEGRAM_BACKEND_SECRET');
+  if(!expected||expected.length<32||!safeEqual_(String(req.telegramSecret||''),expected))throw new Error('Webhook authentication failed');
+  const update=req.update||{}, updateId=String(update.update_id||'');
+  const savedPrune=Number(props.getProperty('telegram:last_prune')||0);
+  const lastPrune=Number.isFinite(savedPrune)?savedPrune:0;
+  if(Date.now()-lastPrune>TELEGRAM_UPDATE_PRUNE_INTERVAL_MS){
+    const all=props.getProperties();
+    Object.keys(all).forEach(key=>{if(!key.startsWith('telegram:update:'))return;try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=Date.now())props.deleteProperty(key);}catch(_){props.deleteProperty(key);}});
+    props.setProperty('telegram:last_prune',String(Date.now()));
+  }
+  const updateKey=updateId?'telegram:update:'+updateId:'';
+  if(updateKey){
+    const saved=props.getProperty(updateKey);
+    if(saved){try{const cached=JSON.parse(saved);if(cached.expires>Date.now())return cached.reply;props.deleteProperty(updateKey);}catch(_){props.deleteProperty(updateKey);}}
+  }
+  const message=update.message;
+  if(!message||!message.chat||!message.from||String(message.chat.type)!=='private')return {skip:true};
+  const chatId=String(message.chat.id), telegramUserId=String(message.from.id), text=String(message.text||'').trim();
+  if(!text)return {chat_id:chatId,text:'Отправьте текстовое сообщение или команду /help.'};
+  let reply;
+  const linkCommand=text.match(/^\/link(?:@\w+)?\s+([A-Z0-9]{6,16})$/i);
+  if(/^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)){
+    const linked=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\n\nПример записи: Проезд 45 рублей\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\n/link ВАШ_КОД\n\nКод действует 15 минут.'};
+  }else if(/^\/help(?:@\w+)?$/i.test(text)){
+    reply={chat_id:chatId,text:'Команды:\n/link КОД — привязать аккаунт приложения\n/balance — сводка за текущий месяц\n/unlink — отвязать Telegram\n/help — помощь\n\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
+  }else if(linkCommand){
+    const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
+    const codeRow=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash);
+    const existingTelegramLink=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    const alreadyCompleted=!!(codeRow&&codeRow.used_at&&existingTelegramLink&&
+      String(existingTelegramLink.user_id)===String(codeRow.user_id)&&
+      String(existingTelegramLink.family_id)===String(codeRow.family_id));
+    if(alreadyCompleted){
+      // Telegram may retry after link + used_at persisted but before update_id cache was written.
+      // The same code and same Telegram/account link are a completed replay.
+      reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
+    }else{
+      const candidate=codeRow&&!codeRow.used_at&&String(codeRow.expires_at)>now?codeRow:null;
+      if(!candidate)throw new Error('Код не найден, уже использован или истёк. Создайте новый код в приложении.');
+      const membership=rows_('family_members').find(x=>String(x.user_id)===String(candidate.user_id)&&String(x.family_id)===String(candidate.family_id));
+      if(!membership)throw new Error('Пользователь больше не состоит в этой семье.');
+      const links=rows_('telegram_links');
+      const byTelegram=links.find(x=>String(x.telegram_user_id)===telegramUserId);
+      const byUser=links.find(x=>String(x.user_id)===String(candidate.user_id));
+      if(byTelegram&&String(byTelegram.user_id)!==String(candidate.user_id))throw new Error('Этот Telegram уже привязан к другому аккаунту.');
+      if(byUser&&String(byUser.telegram_user_id)!==telegramUserId)throw new Error('К аккаунту приложения уже привязан другой Telegram. Сначала отвяжите его в приложении.');
+      if(byTelegram){
+        byTelegram.telegram_chat_id=chatId;
+        updateRows_('telegram_links',[byTelegram]);
+      }else{
+        appendRows_('telegram_links',[{id:id_(),telegram_user_id:telegramUserId,telegram_chat_id:chatId,user_id:candidate.user_id,family_id:candidate.family_id,linked_at:now_()}]);
+      }
+      candidate.used_at=now_();updateRows_('telegram_link_codes',[candidate]);
+      reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
+    }
+  }else if(/^\/unlink(?:@\w+)?$/i.test(text)){
+    const links=rows_('telegram_links').filter(x=>String(x.telegram_user_id)===telegramUserId);
+    if(links.length)deleteRows_('telegram_links',links);
+    reply={chat_id:chatId,text:links.length?'Telegram отвязан. Доступ к бюджету через бота закрыт.':'Этот Telegram не был привязан.'};
+  }else if(/^\/balance(?:@\w+)?$/i.test(text)){
+    const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    if(!link)throw new Error('Сначала привяжите аккаунт командой /link КОД.');
+    const members=rows_('family_members').filter(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
+    if(!members.length)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
+    const month=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM');
+    const txs=rows_('transactions').filter(x=>String(x.family_id)===String(link.family_id)&&String(x.operation_date||'').slice(0,7)===month&&!x.planned);
+    const income=txs.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
+    const expense=txs.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
+    const rubles=n=>(n/100).toFixed(2).replace('.',',')+' ₽';
+    reply={chat_id:chatId,text:'Семейный бюджет за '+month+':\nДоходы: '+rubles(income)+'\nРасходы: '+rubles(expense)+'\nРазница: '+rubles(income-expense)};
+  }else{
+    const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    if(!link)throw new Error('Сначала привяжите аккаунт в приложении и отправьте /link КОД.');
+    const member=rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
+    if(!member)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
+    if(/(?:^|\s)(?:перевод|перевести|перевёл|перевел|перевела|перекинул|перекинула)(?=\s|$)/i.test(text))throw new Error('Переводы через Telegram пока не поддерживаются. Создайте перевод в приложении, указав оба счёта.');
+    const amountMatch=text.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?:\s*(?:₽|руб(?:лей|ля|ль|\.?)?|р\.?))?(?=\s|$)/i);
+    if(!amountMatch)throw new Error('Не нашёл сумму. Пример: Проезд 45 рублей.');
+    const numericTokens=text.match(/\d+(?:[.,]\d{1,2})?/g)||[];
+    if(numericTokens.length!==1)throw new Error('В сообщении несколько чисел. Отправьте одну операцию одним сообщением, например: Проезд 45 рублей.');
+    const parts=amountMatch[1].replace(',','.').split('.');
+    const amountKopecks=Number(parts[0])*100+Number(((parts[1]||'')+'00').slice(0,2));
+    if(!Number.isSafeInteger(amountKopecks)||amountKopecks<=0||amountKopecks>1000000000000)throw new Error('Проверьте сумму операции.');
+    let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)\s+/i,' ').replace(/\s+/g,' ').trim();
+    const isIncome=/(?:^|\s)(?:доход|получил|получила|зарплата|поступило|премия|бонус|подработка|фриланс|возврат|компенсация|кэшбек|продал|продажа|проценты)(?=\s|$)/i.test(text);
+    const explicitExpense=/(?:^|\s)(?:расход|потратил|потратила|купил|купила|оплатил|оплатила|покупка)(?=\s|$)/i.test(text);
+    if(!description&&isIncome)description='Доход';
+    if(!description&&explicitExpense)description='Расход';
+    if(!description)throw new Error('Добавьте описание. Пример: Проезд 45 рублей.');
+    const kind=isIncome?'income':'expense';
+    const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
+    const normalizedDescription=String(description).toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    const salaryCategory=(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника';
+    // Specific phrases come before broad ones to avoid assigning a more general category.
+    const aliases=kind==='income'?[
+      [/зарплат|аванс|оклад/i,salaryCategory],
+      [/преми|бонус/i,'Премии'],
+      [/подработ|фриланс/i,'Подработки'],
+      [/возврат|компенсац|кэшбек|cashback/i,'Возвраты и компенсации'],
+      [/продал|продажа|авито/i,'Доходы от продажи вещей'],
+      [/процент|дивиденд|invest/i,'Проценты и инвестиционный доход']
+    ]:[
+      [/проезд|автобус|метро|трамва|маршрутк|транспорт/i,'Общественный транспорт'],
+      [/такси|yandex go|яндекс такси/i,'Такси'],
+      [/бензин|заправ|топлив/i,'Бензин'],
+      [/парков/i,'Парковка'],      [/шиномонтаж|то\b|ремонт авто|автосервис/i,'Обслуживание автомобиля'],
+      [/пятерочк|магнит|перекресток|лента|ашан|вкусвилл|продукт|супермаркет|магазин продукт/i,'Продукты домой'],
+      [/доставк|самокат|деливери|купер/i,'Доставка еды'],
+      [/кафе|ресторан|обед|ужин|завтрак/i,'Кафе и рестораны'],
+      [/кофе|перекус|булоч/i,'Кофе и перекусы на работе'],
+      [/аптек|лекарств|таблетк|медикамент/i,'Лекарства'],
+      [/стоматолог|зубн/i,'Стоматология'],
+      [/врач|доктор|клиник/i,'Врачи'],
+      [/аренд|квартир/i,'Аренда квартиры'],
+      [/коммунал|жкх|электричеств|водоснабж/i,'Коммунальные услуги'],
+      [/интернет|wi ?fi|вайфай/i,'Интернет'],
+      [/мобильн|связ|телефон|тариф/i,'Мобильная связь'],
+      [/бытов хим|порош|моющ/i,'Бытовая химия'],
+      [/шампун|гигиен|зубн паст/i,'Средства гигиены'],
+      [/одежд|обув|куртк|джинс/i,'Одежда и обувь'],
+      [/подписк|netflix|кинопоиск|ivi/i,'Подписки'],
+      [/игр|steam|playstation|xbox/i,'Игры'],
+      [/кино|театр|концерт/i,'Кино и мероприятия'],
+      [/подар/i,'Подарки'],
+      [/путешеств|отпуск|отел|билет/i,'Путешествия и отдых']
+    ];
+    let categoryName='';
+    for(const pair of aliases){if(pair[0].test(normalizedDescription)){categoryName=pair[1];break;}}
+    const normalizeCategoryName=value=>String(value||'').toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+    let category=categoryName?categories.find(x=>normalizeCategoryName(x.name)===normalizeCategoryName(categoryName)):null;
+    if(!category)category=categories.find(x=>normalizedDescription.includes(normalizeCategoryName(x.name)));
+    if(!isIncome&&!explicitExpense&&!categoryName&&!category)throw new Error('Не понял, это расход или доход. Уточните тип: «Расход ...» или «Доход ...».');
+    if(!category)category=categories.find(x=>x.name===(kind==='income'?'Прочие доходы':'Неопределённая категория'));
+    const accounts=rows_('accounts').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived);
+    const accountId=accounts.length===1?accounts[0].id:null;
+    const messageTimestamp=Number(message.date);
+    const operationAt=Number.isSafeInteger(messageTimestamp)&&messageTimestamp>0?new Date(messageTimestamp*1000):new Date();
+    const operationDate=Utilities.formatDate(operationAt,'Europe/Moscow','yyyy-MM-dd');
+    const operationTime=Utilities.formatDate(operationAt,'Europe/Moscow','HH:mm');
+    query_({table:'transactions',mode:'insert',returning:true,values:{id:updateId?'telegram_'+updateId:undefined,family_id:link.family_id,type:kind,amount_kopecks:amountKopecks,operation_date:operationDate,operation_time:operationTime,category_id:category?category.id:null,account_id:accountId,responsible_user_id:link.user_id,description:description,planned:false}}, {id:String(link.user_id)});
+    const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
+    reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\nКатегория: '+category.name:'\nКатегория не определена; проверьте её в приложении.')};
+  }
+  if(updateKey){
+    // The update cache is an optimization, not the only idempotency guard:
+    // transaction IDs, link replay checks and unlink deletion make side effects safe on retries.
+    try{props.setProperty(updateKey,JSON.stringify({expires:Date.now()+TELEGRAM_UPDATE_TTL_MS,reply}));}catch(_){}
+  }
+  return reply;
+}
+
+/* ===== Служебные функции: запускаются вручную в редакторе Apps Script (меню «Выполнить») ===== */
+function formatSheet_(sh,name){
+  TABLES[name].forEach((col,j)=>{if(TEXT_COLS.indexOf(col)>=0)timedSheetWrite_(()=>sh.getRange(2,j+1,Math.max(sh.getMaxRows()-1,1),1).setNumberFormat('@'));});
+}
+function formatAuth_(sh){timedSheetWrite_(()=>sh.getRange(2,1,Math.max(sh.getMaxRows()-1,1),6).setNumberFormat('@'));}
+// Один раз после установки: применяет текстовый формат к столбцам всех листов.
+// Read-only structural check for a backup/restore copy. Does not create, repair or modify sheets.
+function auditBackupStructure(){
+  const ss=ss_();
+  const expected=Object.assign({},TABLES);
+  expected[AUTH_SHEET]=['id','email','salt','password_hash','display_name','created_at'];
+  const details=Object.keys(expected).map(name=>{
+    const headers=expected[name], sh=ss.getSheetByName(name);
+    if(!sh)return {name,exists:false,headersMatch:false,hidden:null,dataRows:0};
+    const actual=sh.getRange(1,1,1,headers.length).getValues()[0].map(value=>String(value??''));
+    return {
+      name,
+      exists:true,
+      headersMatch:actual.join('|')===headers.join('|'),
+      hidden:sh.isSheetHidden(),
+      dataRows:Math.max(0,sh.getLastRow()-1)
+    };
+  });
+  const missingSheets=details.filter(item=>!item.exists).map(item=>item.name);
+  const headerMismatches=details.filter(item=>item.exists&&!item.headersMatch).map(item=>item.name);
+  const auth=details.find(item=>item.name===AUTH_SHEET);
+  const spreadsheetTimeZone=ss.getSpreadsheetTimeZone();
+  const report={
+    expectedSheetCount:details.length,
+    presentSheetCount:details.length-missingSheets.length,
+    missingSheets,
+    headerMismatches,
+    authHidden:!!(auth&&auth.hidden),
+    spreadsheetTimeZone,
+    timezoneOk:spreadsheetTimeZone==='Europe/Moscow',
+    allChecksPassed:missingSheets.length===0&&headerMismatches.length===0&&!!(auth&&auth.hidden)&&spreadsheetTimeZone==='Europe/Moscow',
+    sheets:details
+  };
+  // Report contains only sheet names, structural status and row counts; never row values or credentials.
+  console.log('BACKUP_STRUCTURE_AUDIT '+JSON.stringify(report));
+  return report;
+}
+
+function setupSheets(){
+  // Explicit maintenance always revalidates headers, even when a previous schema cache exists.
+  Object.keys(TABLES).forEach(n=>formatSheet_(sheet_(n),n));
+  const a=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AUTH_SHEET); if(a)formatAuth_(a);
+  const tz=SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  Logger.log('Готово: листы подготовлены. Часовой пояс таблицы: '+tz+(tz==='Europe/Moscow'?'':' — рекомендуется Europe/Moscow (Файл → Настройки)'));
+}
+// Когда вы с женой зарегистрировались — закройте регистрацию. openSignup() открывает обратно.
+function closeSignup(){PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED','1');Logger.log('Регистрация закрыта');}
+function openSignup(){PropertiesService.getScriptProperties().deleteProperty('SIGNUP_DISABLED');Logger.log('Регистрация открыта');}
+// Показывает в GET-ответе имя таблицы (для проверки тестовая/рабочая). Выключить: hideInfo().
+function showInfo(){PropertiesService.getScriptProperties().setProperty('DEBUG_INFO','1');Logger.log('ok');}
+function hideInfo(){PropertiesService.getScriptProperties().deleteProperty('DEBUG_INFO');Logger.log('ok');}
+// Замер времени одной проверки пароля (смотрите «Журнал выполнения»).
+function benchmarkHash(){const t=Date.now();makePasswordHash_('test-password','salt');const a=Date.now()-t;Logger.log('Новый хеш пароля: '+a+' мс ('+PW_ITERATIONS+' шагов)');const t2=Date.now();hash_('test-password','salt');Logger.log('Прежний хеш пароля: '+(Date.now()-t2)+' мс');}
+
+// Проверка поведения Google Sheets на ВАШЕЙ таблице (создаёт и удаляет временный лист). Смотрите «Журнал выполнения».
+function selfTest(){
+  const ss=ss_(), name='_selftest_tmp', out=[]; let sh=ss.getSheetByName(name); if(sh)ss.deleteSheet(sh);
+  sh=ss.insertSheet(name);
+  try{
+    sh.getRange(1,1,sh.getMaxRows(),1).setNumberFormat('@');
+    sh.getRange(1,1,3,1).setValues([[safeCell_('=1+1')],['14:30'],['2026-10-28']]);
+    const f=sh.getRange(1,1).getFormula(), v=sh.getRange(1,1,3,1).getValues().map(r=>r[0]);
+    out.push('1. Строка «=1+1» осталась текстом: '+(f===''&&v[0]==='=1+1'?'ДА':'НЕТ ('+f+' / '+v[0]+')'));
+    out.push('2. Время «14:30» осталось строкой: '+(v[1]==='14:30'?'ДА':'НЕТ ('+v[1]+')'));
+    out.push('3. Дата «2026-10-28» осталась строкой: '+(v[2]==='2026-10-28'?'ДА':'НЕТ ('+v[2]+')'));
+    const before=sh.getMaxRows(); sh.insertRowsAfter(before,50);
+    out.push('4. Добавленные строки сами получили текстовый формат: '+(sh.getRange(before+1,1).getNumberFormat()==='@'?'ДА':'НЕТ (код всё равно применяет формат заново)'));
+    out.push('Часовой пояс таблицы: '+ss.getSpreadsheetTimeZone()+'; скрипта: '+Session.getScriptTimeZone());
+  }catch(e){out.push('ОШИБКА теста: '+e.message);}
+  finally{ss.deleteSheet(sh);}
+  Logger.log(out.join('\n'));
+}
   if(String(stored.created_by||'')!==String(user.id))return false;
   const fields=['family_id','type','amount_kopecks','operation_date','operation_time','category_id','account_id','to_account_id','description','responsible_user_id','planned','parent_recurring_id'];
   return fields.every(field=>String(stored[field]??'')===String(candidate[field]??''));
