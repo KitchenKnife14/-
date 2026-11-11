@@ -117,7 +117,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         planned,
       }
       if (editing) {
-        const { error: err } = await googleSheets.from('transactions').update(payload).eq('id', editing.id)
+        const { error: err } = await googleSheets.from('transactions').update(payload).eq('id', editing.id).expect(editing as unknown as Record<string, unknown>)
         if (err) throw err
       } else {
         const insertPayload = { ...payload, created_by: userId }
