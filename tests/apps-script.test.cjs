@@ -3020,7 +3020,7 @@ test('Telegram parses fractional ruble amounts exactly and rejects unsupported p
 });
 
 
-test('Telegram link retry is idempotent if update cache write fails after the link is saved', () => {
+test('Telegram link retry remains successful if update cache write fails after the link is saved', () => {
   const h = makeHarness();
   const user = h.signup('telegram-link-retry@example.com');
   h.call({ action: 'createFamily', token: user.token, name: 'Повтор привязки' });
@@ -3032,6 +3032,7 @@ test('Telegram link retry is idempotent if update cache write fails after the li
     chat: { id: 730, type: 'private' }, from: { id: 730 }, text: '/link ' + generated.data.code
   }};
   const originalSetProperty = props.setProperty.bind(props);
+  h.context.PropertiesService.getScriptProperties = () => props;
   let failCacheWrite = true;
   props.setProperty = (key, value) => {
     if (key === 'telegram:update:7301' && failCacheWrite) {
@@ -3042,7 +3043,8 @@ test('Telegram link retry is idempotent if update cache write fails after the li
   };
 
   const first = h.call({ action: 'telegramWebhook', telegramSecret: 'test-backend-secret-0123456789abcdef01234567', update });
-  assert.match(first.error.message, /simulated update cache write failure/);
+  assert.equal(first.error, null, first.error?.message);
+  assert.match(first.data.text, /успешно привязан/);
   assert.equal(h.context.rows_('telegram_links').filter(row => row.telegram_user_id === '730').length, 1);
   assert.ok(h.context.rows_('telegram_link_codes').find(row => row.code_hash === h.context.telegramCodeHash_(generated.data.code)).used_at);
 
@@ -3050,4 +3052,44 @@ test('Telegram link retry is idempotent if update cache write fails after the li
   assert.equal(retry.error, null, retry.error?.message);
   assert.match(retry.data.text, /успешно привязан/);
   assert.equal(h.context.rows_('telegram_links').filter(row => row.telegram_user_id === '730').length, 1);
+});
+
+test('Telegram expense retry after update cache failure reuses the stable transaction ID', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-expense-retry@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Повтор расхода' });
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret-0123456789abcdef01234567');
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const link = h.call({
+    action: 'telegramWebhook',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
+    update: { update_id: 7401, message: { chat: { id: 740, type: 'private' }, from: { id: 740 }, text: '/link ' + generated.data.code } }
+  });
+  assert.equal(link.error, null, link.error?.message);
+
+  const originalSetProperty = props.setProperty.bind(props);
+  h.context.PropertiesService.getScriptProperties = () => props;
+  let failCacheWrite = true;
+  props.setProperty = (key, value) => {
+    if (key === 'telegram:update:7402' && failCacheWrite) {
+      failCacheWrite = false;
+      throw new Error('simulated update cache write failure');
+    }
+    return originalSetProperty(key, value);
+  };
+  const update = { update_id: 7402, message: {
+    chat: { id: 740, type: 'private' }, from: { id: 740 }, date: 1794380000, text: 'Проезд 45 рублей'
+  }};
+  const first = h.call({ action: 'telegramWebhook', telegramSecret: 'test-backend-secret-0123456789abcdef01234567', update });
+  assert.equal(first.error, null, first.error?.message);
+  assert.match(first.data.text, /45,00 ₽/);
+  const retry = h.call({ action: 'telegramWebhook', telegramSecret: 'test-backend-secret-0123456789abcdef01234567', update });
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.match(retry.data.text, /45,00 ₽/);
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].id, 'telegram_7402');
+  assert.equal(transactions[0].amount_kopecks, 4500);
 });

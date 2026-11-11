@@ -1324,7 +1324,11 @@ function telegramWebhook_(req){
     const amountText=(amountKopecks/100).toFixed(2).replace('.',',');
     reply={chat_id:chatId,text:'Записал '+(kind==='income'?'доход':'расход')+': '+amountText+' ₽ — '+description+(category?'\nКатегория: '+category.name:'\nКатегория не определена; проверьте её в приложении.')};
   }
-  if(updateKey)props.setProperty(updateKey,JSON.stringify({expires:Date.now()+86400000,reply}));
+  if(updateKey){
+    // The update cache is an optimization, not the only idempotency guard:
+    // transaction IDs, link replay checks and unlink deletion make side effects safe on retries.
+    try{props.setProperty(updateKey,JSON.stringify({expires:Date.now()+86400000,reply}));}catch(_){}
+  }
   return reply;
 }
 
