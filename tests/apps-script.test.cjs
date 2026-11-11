@@ -2206,6 +2206,35 @@ test('create_goal_with_purchase rejects reuse of a request ID with a different p
   assert.equal(h.context.rows_('goals').filter(row => row.id === first.data.goal_id).length, 1);
 });
 
+test('create_goal_with_purchase retries when the goal was saved but purchase insert failed before writing', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-purchase-partial@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Частичное создание цели' }).data;
+  const args = {
+    action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
+    params: { p_request_id: 'op_abcdefabcdefabcdefabcdefabcdefab', p_family_id: family.id,
+      p_name: 'Ноутбук', p_description: 'Рабочий', p_target_kopecks: 8500000,
+      p_target_date: '2027-05-01', p_priority: 1, p_create_purchase: true }
+  };
+  const originalAppend = h.context.appendRows_;
+  let failOnce = true;
+  h.context.appendRows_ = function(table, rows) {
+    if (table === 'planned_purchases' && failOnce) {
+      failOnce = false;
+      throw new Error('simulated purchase insert failure before write');
+    }
+    return originalAppend(table, rows);
+  };
+  const first = h.call(args);
+  assert.match(first.error?.message || '', /simulated purchase insert failure before write/);
+  assert.equal(h.context.rows_('goals').filter(row => row.id === 'goal_' + args.params.p_request_id).length, 1);
+  assert.equal(h.context.rows_('planned_purchases').filter(row => row.id === 'purchase_' + args.params.p_request_id).length, 0);
+  const retry = h.call(args);
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(h.context.rows_('goals').filter(row => row.id === retry.data.goal_id).length, 1);
+  assert.equal(h.context.rows_('planned_purchases').filter(row => row.id === retry.data.purchase_id).length, 1);
+});
+
 test('supplemental category provisioning is idempotent', () => {
   const h = makeHarness();
   const user = h.signup('supplemental-category-migration@example.com');
