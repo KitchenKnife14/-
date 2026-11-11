@@ -1932,6 +1932,55 @@ test('create_goal_with_purchase creates a linked goal and planned purchase', () 
   assert.equal(purchase.comment, goal.description);
 });
 
+test('create_goal_with_purchase retry reuses goal and purchase after a lost write response', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-purchase-retry@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор создания цели' }).data;
+  const args = {
+    action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
+    params: { p_request_id: 'op_0123456789abcdef0123456789abcdef', p_family_id: family.id,
+      p_name: 'Автомобиль', p_description: 'Накопление на машину', p_target_kopecks: 15000000,
+      p_target_date: '2027-12-01', p_priority: 1, p_create_purchase: true }
+  };
+  const originalAppend = h.context.appendRows_;
+  let failAfterPurchaseWrite = true;
+  h.context.appendRows_ = function(table, rows) {
+    const result = originalAppend(table, rows);
+    if (table === 'planned_purchases' && failAfterPurchaseWrite) {
+      failAfterPurchaseWrite = false;
+      throw new Error('simulated lost purchase write response');
+    }
+    return result;
+  };
+
+  const first = h.call(args);
+  assert.match(first.error?.message || '', /simulated lost purchase write response/);
+  assert.equal(h.context.rows_('goals').filter(row => row.id === 'goal_op_0123456789abcdef0123456789abcdef').length, 1);
+  assert.equal(h.context.rows_('planned_purchases').filter(row => row.id === 'purchase_op_0123456789abcdef0123456789abcdef').length, 1);
+
+  const retry = h.call(args);
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(retry.data.goal_id, 'goal_op_0123456789abcdef0123456789abcdef');
+  assert.equal(retry.data.purchase_id, 'purchase_op_0123456789abcdef0123456789abcdef');
+  assert.equal(h.context.rows_('goals').filter(row => row.id === retry.data.goal_id).length, 1);
+  assert.equal(h.context.rows_('planned_purchases').filter(row => row.id === retry.data.purchase_id).length, 1);
+});
+
+test('create_goal_with_purchase rejects reuse of a request ID with a different payload', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-purchase-conflict@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Конфликт запроса цели' }).data;
+  const args = { action: 'rpc', token: user.token, name: 'create_goal_with_purchase',
+    params: { p_request_id: 'op_fedcba9876543210fedcba9876543210', p_family_id: family.id,
+      p_name: 'Отпуск', p_description: '', p_target_kopecks: 500000, p_target_date: null,
+      p_priority: 2, p_create_purchase: false } };
+  const first = h.call(args);
+  assert.equal(first.error, null, first.error?.message);
+  const conflict = h.call({ ...args, params: { ...args.params, p_target_kopecks: 600000 } });
+  assert.match(conflict.error?.message || '', /Конфликт ID цели/);
+  assert.equal(h.context.rows_('goals').filter(row => row.id === first.data.goal_id).length, 1);
+});
+
 test('supplemental category provisioning is idempotent', () => {
   const h = makeHarness();
   const user = h.signup('supplemental-category-migration@example.com');
