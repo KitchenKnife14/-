@@ -71,8 +71,9 @@ function doPost(e) {
   const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
   const lock = LockService.getScriptLock();
   try {
-    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; READ_ONLY_REQUEST = requestLockMode_(req) === 'read-candidate'; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
+    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; READ_ONLY_REQUEST = false; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0;
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    READ_ONLY_REQUEST = requestLockMode_(req) === 'read-candidate';
     if (!req.action) throw new Error('Не указано действие');
     if (req.action === 'telegramWebhook') {
       // Serialize webhook updates so Telegram retries cannot race and insert duplicates.
