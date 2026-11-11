@@ -1166,10 +1166,11 @@ function rpc_(req,user){
     return link?{linked:true,linked_at:link.linked_at,telegram_chat_id:link.telegram_chat_id}:{linked:false};
   }
   if(name==='unlink_telegram'){
-    const links=rows_('telegram_links').filter(x=>String(x.user_id)===user.id);
-    if(links.length)deleteRows_('telegram_links',links);
+    // Revoke unused link codes first. If link deletion later fails, a retry cannot re-link via a stale code.
     const codes=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id);
     if(codes.length)deleteRows_('telegram_link_codes',codes);
+    const links=rows_('telegram_links').filter(x=>String(x.user_id)===user.id);
+    if(links.length)deleteRows_('telegram_links',links);
     return true;
   }
   if(name==='join_family_by_invite'){route_({action:'joinFamily',invite_code:p.p_invite_code,display_name:p.p_display_name},user);return true;}
