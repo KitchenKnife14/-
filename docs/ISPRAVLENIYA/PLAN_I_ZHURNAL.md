@@ -2773,3 +2773,14 @@ HEAD до:
 - Тест также проверяет отсутствие дублирования строки пополнения. Он моделирует частичный сбой в изолированном Apps Script harness, но не заменяет реальный GAS concurrency test.
 - Прогресс чек-листа не повышается до прохождения полного набора критериев; live runtime и конкурентные проверки остаются открытыми.
 - Изменения только в ispravleniya; Production, main, основная Google Sheet, GAS deployments, Vercel env и Telegram webhook не затрагивались.
+
+
+### Подготовлен отдельный live-probe для повторной доставки Telegram update (2026-11-12)
+
+- CI для исправления восстановления переносов пополнений завершился успешно: run [43201713167](https://github.com/KitchenKnife14/-/actions/runs/43201713167), build success. Коммит `15c7393e7d304bc526fbd87d35b3fbfa26af2423`.
+- Следующий незакрытый пункт выбран из существующего плана LOCK-01D / TG-04: реальная конкурентная повторная доставка одного Telegram update в изолированный Apps Script runtime.
+- Добавлен `tests/gas/TelegramUpdateConcurrencyTest.gs`. Probe отправляет два одинаковых webhook POST одновременно через `UrlFetchApp.fetchAll`, проверяет одинаковый ответ, ровно одну транзакцию с ожидаемой семьёй/участником/суммой и затем удаляет тестовую транзакцию и replay-cache key.
+- Скрипт требует отдельный TEST deployment, TEST spreadsheet, заранее связанную тестовую Telegram-учётную запись и явное `ISOLATED_TEST_ONLY`. Он отказывается работать с известным production Script ID. Telegram Bot API не вызывается: это прямой тест backend webhook.
+- Probe подготовлен, но ещё не запускался: для запуска необходимы параметры тестового Apps Script проекта. Следовательно, пункт реальной конкурентной доставки пока остаётся открытым.
+- Новая проверка не увеличивает чек-лист автоматически: `174/272 (64.0%)`, открыто `98`, макроэтапы `1/12`. Потребуется фактический PASS и проверка очистки.
+- Изменения только в ветке `ispravleniya`; Production, `main`, основная Google Sheet, GAS deployments, Vercel env и Telegram webhook не менялись.
