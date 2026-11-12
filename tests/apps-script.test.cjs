@@ -4378,3 +4378,41 @@ test('two family participants can add distinct goal contributions without losing
   assert.equal(h.context.rows_('goal_contributions').filter(row => row.goal_id === goal.id).length, 2);
   assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 40000);
 });
+
+
+test('moving a goal contribution recalculates both goals and a failed sync is repaired on retry', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-contribution-transfer@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Перенос пополнения' }).data;
+  const createGoal = (id, name) => h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id, family_id: family.id, name, target_kopecks: 500000, saved_kopecks: 0, status: 'active' }
+  }).data[0];
+  const source = createGoal('goal-transfer-source', 'Исходная');
+  const destination = createGoal('goal-transfer-destination', 'Новая');
+  const contribution = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true,
+    values: { id: 'goal-transfer-contribution', goal_id: source.id, amount_kopecks: 32500, contribution_date: '2026-11-12' }
+  });
+  assert.equal(contribution.error, null, contribution.error?.message);
+
+  const move = {
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: contribution.data[0].id }],
+    values: { goal_id: destination.id }
+  };
+
+  // The contribution row is written first; fail the following goal-total write.
+  h.failSetValuesAfter(2);
+  const interrupted = h.call(move);
+  assert.match(interrupted.error?.message || '', /Injected setValues failure/);
+  const persistedContribution = h.context.rows_('goal_contributions').find(row => row.id === contribution.data[0].id);
+  assert.equal(persistedContribution.goal_id, destination.id);
+
+  const retried = h.call(move);
+  assert.equal(retried.error, null, retried.error?.message);
+  const goals = h.context.rows_('goals');
+  assert.equal(goals.find(row => row.id === source.id).saved_kopecks, 0);
+  assert.equal(goals.find(row => row.id === destination.id).saved_kopecks, 32500);
+  assert.equal(h.context.rows_('goal_contributions').filter(row => row.id === contribution.data[0].id).length, 1);
+});
