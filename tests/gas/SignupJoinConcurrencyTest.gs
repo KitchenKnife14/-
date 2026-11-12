@@ -60,8 +60,7 @@ function runDuplicateEmailSignupConcurrencyTest() {
 function runConcurrentFamilyJoinTest() {
   var props=PropertiesService.getScriptProperties();
   var url=String(props.getProperty('JOIN_CONCURRENCY_TEST_WEB_APP_URL')||'').trim();
-  var tokenA=String(props.getProperty('JOIN_CONCURRENCY_TEST_TOKEN_A')||'').trim();
-  var tokenB=String(props.getProperty('JOIN_CONCURRENCY_TEST_TOKEN_B')||'').trim();
+  var token=String(props.getProperty('JOIN_CONCURRENCY_TEST_TOKEN')||'').trim();
   var familyId=String(props.getProperty('JOIN_CONCURRENCY_TEST_FAMILY_ID')||'').trim();
   var confirmation=String(props.getProperty('JOIN_CONCURRENCY_TEST_CONFIRM')||'');
   var productionScriptId='AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
@@ -70,40 +69,41 @@ function runConcurrentFamilyJoinTest() {
   if(!spreadsheet||!/test|тест/i.test(spreadsheet.getName()))throw new Error('Активная таблица должна иметь TEST/ТЕСТ в названии.');
   var match=url.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);
   if(!match||match[1]===productionScriptId)throw new Error('Нужен отдельный тестовый GAS Web App URL.');
-  if(!tokenA||!tokenB||tokenA===tokenB||!familyId)throw new Error('Нужны два разных тестовых токена и ID семьи.');
-  var userA=requireUser_(tokenA),userB=requireUser_(tokenB);
-  if(userA.id===userB.id)throw new Error('Тестовые токены принадлежат одному пользователю.');
+  if(!token||!familyId)throw new Error('Нужны тестовый токен и ID семьи.');
+  var user=requireUser_(token);
   var family=rows_('families').find(function(item){return String(item.id)===familyId;});
   if(!family)throw new Error('Тестовая семья не найдена.');
   var membersBefore=rows_('family_members');
-  if(membersBefore.some(function(member){return String(member.family_id)===familyId&&(String(member.user_id)===userA.id||String(member.user_id)===userB.id);}))throw new Error('Один из тестовых пользователей уже состоит в целевой семье.');
-  var requests=[tokenA,tokenB].map(function(token){return{
+  if(membersBefore.some(function(member){return String(member.user_id)===user.id;}))throw new Error('Тестовый пользователь уже состоит в семье; нужен отдельный пользователь без членства.');
+  var existingMembers=membersBefore.filter(function(member){return String(member.family_id)===familyId;});
+  if(existingMembers.length!==1)throw new Error('Тестовая семья должна содержать ровно одного владельца, иначе два участника не смогут присоединиться из-за лимита семьи.');
+  var request={
     url:url,method:'post',contentType:'application/json',muteHttpExceptions:true,
     payload:JSON.stringify({action:'joinFamily',token:token,invite_code:family.invite_code})
-  };});
-  var report={test:'two users concurrently join one family',family_id:familyId,user_ids:[userA.id,userB.id]};
+  };
+  var report={test:'same user concurrently joins one family twice',family_id:familyId,user_id:user.id};
   var cleanupError=null;
   try{
-    var responses=UrlFetchApp.fetchAll(requests);
+    var responses=UrlFetchApp.fetchAll([request,request]);
     var results=responses.map(function(response,index){return signupConcurrencyParse_(response,'join '+index);});
-    if(results.some(function(result){return result.error||!result.data;}))throw new Error('Один из участников не смог присоединиться к семье.');
+    if(results.some(function(result){return result.error||!result.data;}))throw new Error('Один из повторных join-запросов завершился ошибкой.');
     var joined=rows_('family_members').filter(function(member){
-      return String(member.family_id)===familyId&&(String(member.user_id)===userA.id||String(member.user_id)===userB.id);
+      return String(member.family_id)===familyId&&String(member.user_id)===user.id;
     });
-    if(joined.length!==2||new Set(joined.map(function(member){return String(member.user_id);})).size!==2)throw new Error('Ожидались две уникальные записи участников семьи.');
-    report.joined_members=joined.length;report.result='PASS';
+    if(joined.length!==1)throw new Error('Ожидалась ровно одна запись членства, найдено: '+joined.length);
+    report.parallel_requests=2;report.membership_rows=joined.length;report.result='PASS';
   }finally{
     try{
       var created=rows_('family_members').filter(function(member){
-        return String(member.family_id)===familyId&&(String(member.user_id)===userA.id||String(member.user_id)===userB.id);
+        return String(member.family_id)===familyId&&String(member.user_id)===user.id;
       });
       if(created.length)deleteRows_('family_members',created);
       var remaining=rows_('family_members').filter(function(member){
-        return String(member.family_id)===familyId&&(String(member.user_id)===userA.id||String(member.user_id)===userB.id);
+        return String(member.family_id)===familyId&&String(member.user_id)===user.id;
       });
-      if(remaining.length)throw new Error('Тестовые членства остались после очистки.');
+      if(remaining.length)throw new Error('Тестовое членство осталось после очистки.');
       report.cleanup='PASS';
-    }catch(error){cleanupError=String(error&&error.message||error);report.cleanup='FAILED';report.cleanup_error=cleanupError;report.manual_cleanup_user_ids=[userA.id,userB.id];}
+    }catch(error){cleanupError=String(error&&error.message||error);report.cleanup='FAILED';report.cleanup_error=cleanupError;report.manual_cleanup_user_id=user.id;}
   }
   if(cleanupError)throw new Error('Очистка не подтверждена: '+cleanupError);
   Logger.log(JSON.stringify(report));return report;
