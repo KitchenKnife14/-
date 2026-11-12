@@ -163,7 +163,7 @@ test('Apps Script request logs contain metrics only and never payload secrets or
   });
   assert.equal(inserted.error, null, inserted.error?.message);
   assert.equal(logs.length, 3);
-  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'optimisticReadMs', 'readRetry', 'reads', 'writes', 'readMs', 'writeMs', 'revisionWriteFailures', 'consistencyMarkerWriteFailures'];
+  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'optimisticReadMs', 'pbkdf2Ms', 'readRetry', 'reads', 'writes', 'readMs', 'writeMs', 'revisionWriteFailures', 'consistencyMarkerWriteFailures'];
   for (const line of logs) {
     const record = JSON.parse(line);
     assert.deepEqual(Object.keys(record).sort(), allowed.sort());
@@ -174,6 +174,20 @@ test('Apps Script request logs contain metrics only and never payload secrets or
     assert.ok(!line.includes('987654321'));
     assert.ok(!line.includes('Private family name'));
   }
+});
+
+test('request metrics isolate PBKDF2 duration without logging credentials', () => {
+  const h = makeHarness();
+  const logs = [];
+  h.context.console = { log: value => logs.push(String(value)) };
+  const response = h.call({ action: 'signup', email: 'pbkdf2-metric@example.com', password: 'private-password-not-logged' });
+  assert.equal(response.error, null, response.error?.message);
+  const record = JSON.parse(logs.at(-1));
+  assert.equal(record.act, 'signup');
+  assert.equal(typeof record.pbkdf2Ms, 'number');
+  assert.ok(record.pbkdf2Ms >= 0);
+  assert.ok(!logs.join(' ').includes('private-password-not-logged'));
+  assert.ok(!logs.join(' ').includes('pbkdf2-metric@example.com'));
 });
 
 test('request metrics never log attacker-controlled unknown action values', () => {
