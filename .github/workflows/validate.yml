@@ -26,6 +26,8 @@ jobs:
         run: npm audit --audit-level=high
       - name: TypeScript and production build
         run: npm run build
+      - name: Production preview smoke test
+        run: node tests/vite-preview-smoke.cjs
       - name: All regression tests
         run: npm test
       - name: Apps Script syntax check
