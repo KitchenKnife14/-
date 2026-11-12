@@ -549,6 +549,71 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
   assert.match(racedInsert.error?.message || '', /создана другим участником/i);
 });
 
+test('monthly plan batch upsert aborts all rows when one expected snapshot is stale', () => {
+  const h = makeHarness();
+  const owner = h.signup('monthly-plan-batch-stale-owner@example.com');
+  const partner = h.signup('monthly-plan-batch-stale-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Атомарность пакетного плана' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+  const categories = h.call({ action: 'query', token: owner.token, table: 'categories', mode: 'select' }).data
+    .filter(category => category.kind === 'expense' && !category.parent_id).slice(0, 2);
+  assert.equal(categories.length, 2);
+  const baseRows = categories.map((category, index) => ({
+    family_id: family.id, month_date: '2026-11-01', category_id: category.id,
+    type: 'expense', planned_kopecks: (index + 1) * 10000, note: 'Исходный план'
+  }));
+  const inserted = h.call({
+    action: 'query', token: owner.token, table: 'monthly_plans', mode: 'upsert',
+    onConflict: 'family_id,month_date,category_id,type', values: baseRows
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const snapshots = h.call({
+    action: 'query', token: owner.token, table: 'monthly_plans', mode: 'select',
+    filters: [{ column: 'family_id', op: 'eq', value: family.id }]
+  }).data;
+  assert.equal(snapshots.length, 2);
+
+  const partnerEdit = h.call({
+    action: 'query', token: partner.token, table: 'monthly_plans', mode: 'upsert',
+    onConflict: 'family_id,month_date,category_id,type',
+    values: { ...baseRows[1], planned_kopecks: 35000, note: 'Изменено вторым участником' }
+  });
+  assert.equal(partnerEdit.error, null, partnerEdit.error?.message);
+
+  const newCategory = h.call({ action: 'query', token: owner.token, table: 'categories', mode: 'select' }).data
+    .find(category => category.kind === 'expense' && !category.parent_id && !categories.some(existing => existing.id === category.id));
+  const newRow = newCategory ? {
+    family_id: family.id, month_date: '2026-11-01', category_id: newCategory.id,
+    type: 'expense', planned_kopecks: 5000, note: 'Новая строка'
+  } : null;
+  const attemptedRows = [
+    { ...baseRows[0], planned_kopecks: 15000, note: 'Обновление первой строки' },
+    { ...baseRows[1], planned_kopecks: 25000, note: 'Устаревшее обновление второй строки' },
+    ...(newRow ? [newRow] : [])
+  ];
+  const expectedRows = [
+    snapshots.find(row => row.category_id === categories[0].id),
+    snapshots.find(row => row.category_id === categories[1].id),
+    ...(newRow ? [null] : [])
+  ];
+  const batch = h.call({
+    action: 'query', token: owner.token, table: 'monthly_plans', mode: 'upsert',
+    onConflict: 'family_id,month_date,category_id,type', values: attemptedRows, expectedRows
+  });
+  assert.match(batch.error?.message || '', /изменён другим участником/i);
+
+  const saved = h.call({
+    action: 'query', token: owner.token, table: 'monthly_plans', mode: 'select',
+    filters: [{ column: 'family_id', op: 'eq', value: family.id }]
+  }).data;
+  assert.equal(saved.length, 2, 'batch must not append any new row before all conflicts are checked');
+  const first = saved.find(row => row.category_id === categories[0].id);
+  const second = saved.find(row => row.category_id === categories[1].id);
+  assert.equal(first.planned_kopecks, 10000, 'earlier update in a rejected batch must not be persisted');
+  assert.equal(first.note, 'Исходный план');
+  assert.equal(second.planned_kopecks, 35000, 'newer concurrent value must be preserved');
+  assert.equal(second.note, 'Изменено вторым участником');
+});
 test('goal balances stay synchronized with contribution history', () => {
   const h = makeHarness();
   const user = h.signup('goals@example.com');
