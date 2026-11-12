@@ -80,7 +80,6 @@ function readConsistencyState_(){
 }
 function isStableConsistencyState_(value){return typeof value==='string'&&/^stable:[A-Za-z0-9-]+$/.test(value);}
 function beginWriteConsistency_(){
-  const current=readConsistencyState_();
   const marker='writing:'+Utilities.getUuid();
   // The marker must be durable before any application data or session state is changed.
   PropertiesService.getScriptProperties().setProperty(READ_CONSISTENCY_PROPERTY,marker);
