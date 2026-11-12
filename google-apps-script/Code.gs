@@ -1033,10 +1033,11 @@ function query_(req,user){
       }
     }
     if(table==='goal_contributions'){
-      // A retried delete may find no contribution row because the previous request
-      // deleted it before failing to update the denormalized goal balance.
-      // Reconcile all goals in the caller's family so the retry repairs that partial commit.
-      if(mode==='delete'){
+      // A retried delete may find no contribution row, and a retried move may no
+      // longer reveal its former goal_id, if the contribution write committed but
+      // the denormalized goal-balance write failed. Reconcile every goal in the
+      // caller's family after updates/deletes so retries repair both partial cases.
+      if(mode==='delete'||mode==='update'){
         const familyIds=new Set(allowedFamilyIds_(user));
         rows_('goals').forEach(goal=>{if(familyIds.has(String(goal.family_id)))affectedGoalIds.add(String(goal.id));});
       }
