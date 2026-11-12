@@ -3663,6 +3663,34 @@ test('transaction idempotency lookup scans only the ID column, not the full ledg
 });
 
 
+test('ID lookup reads adjacent matching rows in one Sheets range call', () => {
+  const h = makeHarness();
+  const sheet = h.context.sheet_('transactions');
+  h.context.appendRows_('transactions', [
+    { id: 'lookup-a', family_id: 'family-a', type: 'expense', amount_kopecks: 100 },
+    { id: 'lookup-b', family_id: 'family-a', type: 'expense', amount_kopecks: 200 },
+    { id: 'lookup-c', family_id: 'family-a', type: 'expense', amount_kopecks: 300 },
+    { id: 'lookup-gap', family_id: 'family-a', type: 'expense', amount_kopecks: 400 },
+  ]);
+
+  let idColumnReads = 0;
+  let fullRowBlockReads = 0;
+  const originalGetRange = sheet.getRange.bind(sheet);
+  sheet.getRange = (...args) => {
+    if (args[0] >= 2 && args[1] === 1 && args[3] === 1) idColumnReads++;
+    else if (args[0] >= 2 && args[1] === 1 && args[3] > 1) fullRowBlockReads++;
+    return originalGetRange(...args);
+  };
+
+  const found = h.context.findRowsByIds_('transactions', ['lookup-a', 'lookup-b', 'lookup-c']);
+  assert.equal(found.size, 3);
+  assert.equal(found.get('lookup-a').amount_kopecks, 100);
+  assert.equal(found.get('lookup-b').amount_kopecks, 200);
+  assert.equal(found.get('lookup-c').amount_kopecks, 300);
+  assert.equal(idColumnReads, 1);
+  assert.equal(fullRowBlockReads, 1);
+});
+
 test('Telegram refuses to record transfers as expenses and accepts an income without a description', () => {
   const h = makeHarness();
   const user = h.signup('telegram-transfer-income@example.com');
