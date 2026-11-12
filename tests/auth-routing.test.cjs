@@ -115,3 +115,30 @@ test('auth and onboarding forms prevent mode/input changes during submission', (
   assert.match(onboarding, /autoComplete="name" disabled=\{loading\}/)
   assert.match(onboarding, /id="onboarding-invite-code" className="input" disabled=\{loading\}/)
 })
+
+test('React Router navigation targets are fixed internal paths, never user-controlled URLs', () => {
+  const destinations = [...layout.matchAll(/to: '(\\/[^']*)'/g)].map(match => match[1])
+  assert.equal(destinations.length, 14)
+  for (const destination of destinations) {
+    assert.match(destination, /^\\/[a-z-]*$/)
+    assert.doesNotMatch(destination, /\\\\|:|\\?|#|%/)
+  }
+  const routePaths = [...app.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1])
+  assert.ok(routePaths.length >= 14)
+  for (const routePath of routePaths) assert.match(routePath, /^(?:[a-z-]+|\\*)$/)
+  assert.match(app, /<Navigate to="\\/" replace \/>/)
+  assert.match(layout, /navigate\\('\/', \\{ replace: true \\}\\)/)
+  assert.match(onboarding, /navigate\\('\/'\\)/)
+  assert.doesNotMatch(app + layout + onboarding, /navigate\\([^)]*\\$\\{/)
+})
+
+test('React Router and Vite lockfile contain the patched dependency lines', () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'))
+  const lock = JSON.parse(fs.readFileSync(path.join(__dirname, '../package-lock.json'), 'utf8'))
+  const viteConfig = fs.readFileSync(path.join(__dirname, '../vite.config.ts'), 'utf8')
+  assert.match(packageJson.dependencies['react-router-dom'], /^\\^7\\./)
+  assert.equal(lock.packages['node_modules/react-router-dom'].version, '7.18.5')
+  assert.equal(lock.packages['node_modules/react-router'].version, '7.18.5')
+  assert.equal(lock.packages['node_modules/vite'].version, '6.4.6')
+  assert.match(viteConfig, /host: '127\\.0\\.0\\.1'/)
+})
