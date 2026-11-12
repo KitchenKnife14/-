@@ -176,3 +176,19 @@ test('React Router v7 sends hostile URL-shaped paths to the internal fallback ro
     assert.equal(matches[matches.length - 1].route.path, '*', 'hostile path must not match a named internal route: ' + pathname)
   }
 })
+
+test('React Router v7 resolves every navigation destination and unknown paths to the expected route', async () => {
+  const { matchRoutes } = await import('react-router-dom')
+  const destinations = [...layout.matchAll(/to: '([^']+)'/g)].map(match => match[1])
+  const routePaths = [...app.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(path => path !== '*')
+  const routes = [{ path: '/', children: [{ index: true }, ...routePaths.map(path => ({ path })), { path: '*' }] }]
+  for (const destination of destinations) {
+    const matches = matchRoutes(routes, destination)
+    assert.ok(matches, 'missing route for ' + destination)
+    const matched = matches[matches.length - 1].route
+    if (destination === '/') assert.equal(matched.index, true)
+    else assert.equal(matched.path, destination.slice(1))
+  }
+  const unknown = matchRoutes(routes, '/not-a-real-section')
+  assert.equal(unknown[unknown.length - 1].route.path, '*')
+})
