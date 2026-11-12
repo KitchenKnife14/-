@@ -850,13 +850,27 @@ function findRowsByIds_(table,ids){
   const values=timedSheetRead_(()=>sh.getRange(2,idColumn,last-1,1).getValues());
   const matches=[];
   values.forEach((row,index)=>{const id=String(row[0]??'');if(wanted.has(id))matches.push({id,row:index+2});});
-  matches.forEach(match=>{
+  if(!matches.length)return found;
+  // Read adjacent matches as one rectangular block instead of one Sheets call per row.
+  // This preserves the narrow ID scan while collapsing N+1 reads for clustered IDs.
+  const groups=[];
+  let start=matches[0].row,previous=start,ids=[matches[0].id];
+  for(let i=1;i<matches.length;i++){
+    const match=matches[i];
+    if(match.row===previous+1)ids.push(match.id);
+    else{groups.push({start,ids});start=match.row;ids=[match.id];}
+    previous=match.row;
+  }
+  groups.push({start,ids});
+  groups.forEach(group=>{
     SHEET_READS++;
-    const values=timedSheetRead_(()=>sh.getRange(match.row,1,1,TABLES[table].length).getValues()[0]);
-    const row={};
-    TABLES[table].forEach((column,index)=>row[column]=normal_(values[index],column));
-    row.__row=match.row;
-    found.set(match.id,row);
+    const block=timedSheetRead_(()=>sh.getRange(group.start,1,group.ids.length,TABLES[table].length).getValues());
+    block.forEach((values,index)=>{
+      const row={};
+      TABLES[table].forEach((column,columnIndex)=>row[column]=normal_(values[columnIndex],column));
+      row.__row=group.start+index;
+      found.set(group.ids[index],row);
+    });
   });
   return found;
 }
