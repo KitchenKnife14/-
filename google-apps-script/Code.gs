@@ -205,8 +205,12 @@ function rows_(name) {
 }
 function readRows_(name) {
   SHEET_READS++;
-  const sh=sheet_(name), values=timedSheetRead_(()=>sh.getDataRange().getValues()); if(values.length<2) return [];
-  return values.slice(1).map((r,i)=>({values:r,row:i+2})).filter(x=>x.values.some(v=>v!==''&&v!==null)).map(({values:r,row})=>{
+  const sh=sheet_(name), last=sh.getLastRow();
+  if(last<2)return [];
+  // Read only the schema-defined body: skip the header and ignore unrelated
+  // trailing columns that may exist in a manually edited spreadsheet.
+  const values=timedSheetRead_(()=>sh.getRange(2,1,last-1,TABLES[name].length).getValues());
+  return values.map((r,i)=>({values:r,row:i+2})).filter(x=>x.values.some(v=>v!==''&&v!==null)).map(({values:r,row})=>{
     const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j],k));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=row;return o;
   });
 }

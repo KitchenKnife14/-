@@ -4265,3 +4265,32 @@ test('read-candidate requests fail closed on incomplete headers without repairin
   assert.equal(sheet.getDataRange().getValues()[0].length, oldHeaders.length);
   assert.equal(vm.runInContext('SHEET_WRITES', h.context), 0);
 });
+
+
+test('readRows_ fetches only schema columns and skips the header row', () => {
+  const h = makeHarness();
+  const sheet = seedTable(h, 'transactions');
+  h.context.appendRows_('transactions', [
+    { id: 'bounded-read-a', family_id: 'family-a', type: 'expense', amount_kopecks: 101, operation_date: '2026-11-12' },
+    { id: 'bounded-read-b', family_id: 'family-a', type: 'income', amount_kopecks: 202, operation_date: '2026-11-12' },
+  ]);
+  const width = vm.runInContext("TABLES.transactions.length", h.context);
+  sheet.getRange(1, width + 1, 1, 1).setValues([['unrelated_extra_column']]);
+  sheet.getRange(2, width + 1, 2, 1).setValues([['ignore-a'], ['ignore-b']]);
+
+  let dataRangeCalls = 0;
+  const bodyReads = [];
+  const originalGetDataRange = sheet.getDataRange.bind(sheet);
+  const originalGetRange = sheet.getRange.bind(sheet);
+  sheet.getDataRange = (...args) => { dataRangeCalls++; return originalGetDataRange(...args); };
+  sheet.getRange = (...args) => {
+    if (args[0] >= 2) bodyReads.push(args);
+    return originalGetRange(...args);
+  };
+
+  const rows = h.context.readRows_('transactions');
+  assert.equal(dataRangeCalls, 0);
+  assert.deepEqual(rows.map(row => row.id), ['bounded-read-a', 'bounded-read-b']);
+  assert.deepEqual(rows.map(row => row.amount_kopecks), [101, 202]);
+  assert.deepEqual(bodyReads, [[2, 1, 2, width]]);
+});
