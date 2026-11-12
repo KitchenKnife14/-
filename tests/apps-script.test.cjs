@@ -4350,3 +4350,31 @@ test('goal total reconciliation reads only contribution totals and target goal r
   assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 20000);
   assert.equal(h.context.rows_('goals').find(row => row.id === 'goal-targeted-sync-unrelated').saved_kopecks, 0);
 });
+
+
+
+test('two family participants can add distinct goal contributions without losing or duplicating totals', () => {
+  const h = makeHarness();
+  const owner = h.signup('goal-two-participants-owner@example.com');
+  const partner = h.signup('goal-two-participants-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Пополнения двух участников' }).data;
+  assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
+
+  const goal = h.call({
+    action: 'query', token: owner.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id: 'goal-two-participants', family_id: family.id, name: 'Общая цель', target_kopecks: 1000000, saved_kopecks: 0, status: 'active' }
+  }).data[0];
+  const ownerContribution = { id: 'goal-two-participants-owner-entry', goal_id: goal.id, amount_kopecks: 12500, contribution_date: '2026-11-12', note: 'Взнос первого участника' };
+  const partnerContribution = { id: 'goal-two-participants-partner-entry', goal_id: goal.id, amount_kopecks: 27500, contribution_date: '2026-11-12', note: 'Взнос второго участника' };
+
+  const first = h.call({ action: 'query', token: owner.token, table: 'goal_contributions', mode: 'insert', returning: true, values: ownerContribution });
+  assert.equal(first.error, null, first.error?.message);
+  const second = h.call({ action: 'query', token: partner.token, table: 'goal_contributions', mode: 'insert', returning: true, values: partnerContribution });
+  assert.equal(second.error, null, second.error?.message);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 40000);
+
+  const retry = h.call({ action: 'query', token: partner.token, table: 'goal_contributions', mode: 'insert', returning: true, values: partnerContribution });
+  assert.equal(retry.error, null, retry.error?.message);
+  assert.equal(h.context.rows_('goal_contributions').filter(row => row.goal_id === goal.id).length, 2);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 40000);
+});
