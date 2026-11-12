@@ -130,6 +130,8 @@ function doPost(e) {
       // the entire result and retry once while holding the same lock as writers.
       lockAttempted=true;lock.waitLock(20000);lockAcquired=true;
       tLocked=Date.now();lockMs=tLocked-t0;
+      // Never reuse rows cached by the discarded optimistic attempt.
+      ROWS_CACHE={};TZ_CACHE=null;SHEET_SCHEMA_VALIDATED={};
       try{recoverConsistencyUnderLock_();return json_(postResult_(req));}
       finally{lock.releaseLock();}
     }
