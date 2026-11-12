@@ -2461,15 +2461,15 @@ test('read-only query refuses implicit schema migration and preserves legacy tra
   assert.deepEqual(sheet.getRange(2, 1, 1, oldHeaders.length).getValues()[0], preservedRow);
 });
 
-test('doPost reports lock timeout without attempting to release an unacquired lock', () => {
+test('doPost reports a write lock timeout without attempting to release an unacquired lock', () => {
   const h = makeHarness();
   const user = h.signup('lock-timeout@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Ожидание блокировки' }).data;
   h.resetLockStats();
   h.failNextLockWait();
   const response = h.call({
-    action: 'rpc', token: user.token, name: 'get_table_revision',
-    params: { p_table: 'transactions', p_family_id: family.id }
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1200, operation_date: '2026-11-12' }
   });
   assert.ok(response.error);
   assert.match(response.error.message, /Injected lock timeout/);
@@ -2809,7 +2809,7 @@ test('request lock classifier treats mixed or malformed batches as writes', () =
 });
 
 
-test('baseline: a read-only query currently acquires and releases the global ScriptLock', () => {
+test('stable read-only query bypasses the global ScriptLock', () => {
   const h = makeHarness();
   seedTable(h, 'transactions');
   const user = h.signup('lock-baseline@example.com');
@@ -2819,7 +2819,63 @@ test('baseline: a read-only query currently acquires and releases the global Scr
 
   const selected = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
   assert.equal(selected.error, null, selected.error?.message);
+  assert.deepEqual(h.lockStats(), { acquires: 0, releases: 0 });
+  assert.equal(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1').startsWith('stable:'), true);
+});
+
+test('optimistic read discards its result and retries under ScriptLock when a writer overlaps', () => {
+  const h = makeHarness();
+  seedTable(h, 'transactions');
+  const user = h.signup('read-overlap@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Пересечение чтения и записи' }).data;
+  assert.ok(family?.id);
+  h.resetLockStats();
+
+  const props = h.context.PropertiesService.getScriptProperties();
+  const originalGetProperty = props.getProperty.bind(props);
+  let markerReads = 0;
+  props.getProperty = key => {
+    if (key === 'api_read_consistency_v1') {
+      markerReads++;
+      if (markerReads === 2) {
+        originalSetProperty('api_read_consistency_v1', 'stable:simulated-writer');
+        return 'stable:simulated-writer';
+      }
+    }
+    return originalGetProperty(key);
+  };
+  const originalSetProperty = props.setProperty.bind(props);
+  const selected = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(selected.error, null, selected.error?.message);
+  assert.ok(markerReads >= 3, 'read should validate the marker again after its locked retry');
   assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+});
+
+test('read recovers a stale writing marker under ScriptLock after an interrupted writer', () => {
+  const h = makeHarness();
+  seedTable(h, 'transactions');
+  const user = h.signup('read-stale-marker@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Восстановление маркера' });
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('api_read_consistency_v1', 'writing:interrupted-execution');
+  h.resetLockStats();
+
+  const selected = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(selected.error, null, selected.error?.message);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+  assert.match(props.getProperty('api_read_consistency_v1'), /^stable:/);
+});
+
+test('failed write still finalizes its consistency marker', () => {
+  const h = makeHarness();
+  const user = h.signup('write-marker-finally@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Завершение маркера' }).data;
+  const failed = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: '1200', operation_date: '2026-11-12' }
+  });
+  assert.match(failed.error?.message || '', /целым числом копеек/);
+  assert.match(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1'), /^stable:/);
 });
 
 
