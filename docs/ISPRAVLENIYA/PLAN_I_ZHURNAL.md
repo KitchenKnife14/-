@@ -2821,7 +2821,7 @@ HEAD до:
 
 ### Контрольная фиксация прогресса и закрытие проверенных пунктов (2026-11-12)
 
-- Проверена ветка: `ispravleniya`; текущий HEAD до этой записи: `31e968bf1fed7c33e2cd1a0418eeeedcd34f4ebd8`.
+- Проверена ветка: `ispravleniya`; текущий HEAD до этой записи: `31e968bf1fed7c33e2cd1a0418eeedcd34f4ebd8`.
 - Зафиксированы последовательные коммиты без force-push/reset/rebase с потерей истории; Production и `main` не менялись.
 - CI run [43211461918](https://github.com/KitchenKnife14/-/actions/runs/43211461918) завершился успешно для коммита с новым same-row concurrency probe.
 - Проверки release semantics подтверждены CI: mixed batch с ошибкой дочерней записи и исключение write handler проверяют ровно один acquire/release и отсутствие двойного освобождения. Поэтому отмечены только пункты о добавлении concurrency tests и проверке освобождения lock.
