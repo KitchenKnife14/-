@@ -2701,3 +2701,13 @@ HEAD до:
 - Повторно просмотрен Telegram webhook: backend кэширует обработанный `update_id` на 24 часа и создание операции дополнительно защищено детерминированным transaction ID `telegram_<update_id>`. Однако Vercel отправляет ответ через Telegram `sendMessage` после backend side effect. Если Telegram принял сообщение, но HTTP-ответ потерялся, повтор webhook может отправить пользователю ту же квитанцию повторно. Тест `webhook retries an uncertain send at-least-once...` фиксирует именно такую семантику. Финансовая операция не дублируется, но текстовое подтверждение может прийти повторно.
 - Не добавлял ложную «exactly-once» гарантию: Telegram Bot API `sendMessage` не предоставляет клиентский idempotency key, а локальная отметка до отправки может потерять подтверждение при сбое. Нужен отдельный выбор между at-least-once (возможен повтор текста) и at-most-once (возможна потеря текста), либо отдельный outbox/операционный механизм с остаточным окном сбоя. До решения код не менялся.
 - Production, `main`, основная Google Sheet, Production GAS deployment, Vercel env и Telegram webhook не менялись.
+
+
+### Валидация входящих Telegram updates до вызова Apps Script (2026-11-12)
+
+- В `telegram-webhook/handler.ts` добавлена проверка формы update: корневое значение должно быть объектом, а `update_id` — неотрицательным безопасным целым числом. Некорректные update возвращают HTTP 400 до обращения к Apps Script, не расходуя время GAS и не создавая бесполезных backend-вызовов. Валидные update types без `message` по-прежнему проходят в backend, где могут быть штатно пропущены.
+- Добавлены регрессионные случаи для отсутствующего, отрицательного, дробного, строкового и превышающего safe-integer `update_id`; тест подтверждает ноль вызовов backend для каждого некорректного update.
+- Первый CI выявил ошибку только в новой фикстуре: массив ошибочно ожидал сообщение об invalid update_id, хотя парсер правильно классифицировал корневой массив как некорректное тело. Фикстура уточнена, поведение обработчика не ослаблялось.
+- Финальный CI [43194311835](https://github.com/KitchenKnife14/-/actions/runs/43194311835) на HEAD `50eced16f17327703d151b8c6f0964db1743c218` — **success**: **229/229** тестов, TypeScript/production build, Vite preview smoke, dependency audit, Apps Script syntax/diagnostics и manifest checks прошли.
+- Это укрепление webhook-входа и сокращение ненужных вызовов GAS; оно не закрывает отдельные пункты реального GAS concurrency/PBKDF2 runtime тестирования. Контрольный чек-лист остаётся 174/272 (64.0%), 98 открытых, макроэтапы 1/12.
+- Изменения только в `ispravleniya`. Production, `main`, основная Google Sheet, Production GAS deployment, Vercel env и действующий Telegram webhook не менялись.
