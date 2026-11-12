@@ -1128,14 +1128,37 @@ function assertGoalContributionTotalsSafe_(goalIds,replacements,removedIds){
     totals.set(goalId,next);
   });
 }
+function readGoalContributionTotals_(goalIds){
+  const ids=new Set((goalIds||[]).map(String)), totals=new Map([...ids].map(id=>[id,0]));
+  if(!ids.size)return totals;
+  const sh=sheet_('goal_contributions'),last=sh.getLastRow(),rowCount=last-1;
+  if(rowCount<1)return totals;
+  const goalColumn=TABLES.goal_contributions.indexOf('goal_id')+1;
+  const amountColumn=TABLES.goal_contributions.indexOf('amount_kopecks')+1;
+  if(amountColumn!==goalColumn+1)throw new Error('Схема пополнений целей изменилась: ожидаются соседние столбцы цели и суммы');
+  // Reconciliation needs only goal_id + amount_kopecks, not notes, authors or timestamps.
+  SHEET_READS++;
+  const values=timedSheetRead_(()=>sh.getRange(2,goalColumn,rowCount,2).getValues());
+  values.forEach(row=>{
+    const goalId=String(normal_(row[0],'goal_id')??'');
+    if(!totals.has(goalId))return;
+    const amount=Number(normal_(row[1],'amount_kopecks')||0),next=totals.get(goalId)+amount;
+    if(!Number.isSafeInteger(next))throw new Error('Сумма пополнений цели превышает безопасный диапазон целых копеек');
+    totals.set(goalId,next);
+  });
+  return totals;
+}
 function syncGoalTotals_(goalIds){
   const ids=[...new Set((goalIds||[]).filter(Boolean).map(String))];
   if(!ids.length)return;
-  const contributions=rows_('goal_contributions'), goals=rows_('goals');
-  const totals=new Map(ids.map(id=>[id,0]));
-  contributions.forEach(c=>{const key=String(c.goal_id);if(totals.has(key)){const next=totals.get(key)+Number(c.amount_kopecks||0);if(!Number.isSafeInteger(next))throw new Error('Сумма пополнений цели превышает безопасный диапазон целых копеек');totals.set(key,next);}});
+  const totals=readGoalContributionTotals_(ids), goals=findRowsByIds_('goals',ids);
   const changed=[];
-  goals.forEach(g=>{const key=String(g.id);if(totals.has(key)){const next=Number(totals.get(key));if(Number(g.saved_kopecks||0)!==next){g.saved_kopecks=next;changed.push(g);}}});
+  ids.forEach(id=>{
+    const goal=goals.get(id);
+    if(!goal)return;
+    const next=Number(totals.get(id)||0);
+    if(Number(goal.saved_kopecks||0)!==next){goal.saved_kopecks=next;changed.push(goal);}
+  });
   if(changed.length)updateRows_('goals',changed);
 }
 function rpc_(req,user){

@@ -4294,3 +4294,47 @@ test('readRows_ fetches only schema columns and skips the header row', () => {
   assert.deepEqual(rows.map(row => row.amount_kopecks), [101, 202]);
   assert.deepEqual(bodyReads, [[2, 1, 2, width]]);
 });
+
+
+
+test('goal total reconciliation reads only contribution totals and target goal rows', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-targeted-sync@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Адресный пересчёт целей' }).data;
+  const goal = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id: 'goal-targeted-sync', family_id: family.id, name: 'Резерв', target_kopecks: 500000, saved_kopecks: 0, status: 'active' }
+  }).data[0];
+  h.context.appendRows_('goal_contributions', [
+    { id: 'goal-targeted-sync-c1', goal_id: goal.id, amount_kopecks: 12000, contribution_date: '2026-11-10', note: 'Первый' },
+    { id: 'goal-targeted-sync-c2', goal_id: goal.id, amount_kopecks: 8000, contribution_date: '2026-11-11', note: 'Второй' },
+  ]);
+  h.context.appendRows_('goals', [
+    { id: 'goal-targeted-sync-unrelated', family_id: family.id, name: 'Другая цель', target_kopecks: 900000, saved_kopecks: 0, status: 'active' }
+  ]);
+  h.clearRowsCache();
+
+  const contributionsSheet = h.context.sheet_('goal_contributions');
+  const goalsSheet = h.context.sheet_('goals');
+  const contributionReads = [];
+  const goalReads = [];
+  let contributionDataRangeCalls = 0;
+  let goalDataRangeCalls = 0;
+  const contributionGetRange = contributionsSheet.getRange.bind(contributionsSheet);
+  const goalGetRange = goalsSheet.getRange.bind(goalsSheet);
+  const contributionGetDataRange = contributionsSheet.getDataRange.bind(contributionsSheet);
+  const goalGetDataRange = goalsSheet.getDataRange.bind(goalsSheet);
+  contributionsSheet.getRange = (...args) => { if (args[0] >= 2) contributionReads.push(args); return contributionGetRange(...args); };
+  goalsSheet.getRange = (...args) => { if (args[0] >= 2) goalReads.push(args); return goalGetRange(...args); };
+  contributionsSheet.getDataRange = (...args) => { contributionDataRangeCalls++; return contributionGetDataRange(...args); };
+  goalsSheet.getDataRange = (...args) => { goalDataRangeCalls++; return goalGetDataRange(...args); };
+
+  h.context.syncGoalTotals_([goal.id]);
+  assert.deepEqual(contributionReads, [[2, 2, 2, 2]], 'only goal_id and amount_kopecks should be read for contributions');
+  assert.deepEqual(goalReads, [[2, 1, 2, 1], [2, 1, 1, vm.runInContext("TABLES.goals.length", h.context)]],
+    'read the goal ID index and only the matching full goal row');
+  assert.equal(contributionDataRangeCalls, 0);
+  assert.equal(goalDataRangeCalls, 0);
+  assert.equal(h.context.rows_('goals').find(row => row.id === goal.id).saved_kopecks, 20000);
+  assert.equal(h.context.rows_('goals').find(row => row.id === 'goal-targeted-sync-unrelated').saved_kopecks, 0);
+});
