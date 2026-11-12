@@ -854,14 +854,14 @@ function findRowsByIds_(table,ids){
   // Read adjacent matches as one rectangular block instead of one Sheets call per row.
   // This preserves the narrow ID scan while collapsing N+1 reads for clustered IDs.
   const groups=[];
-  let start=matches[0].row,previous=start,ids=[matches[0].id];
+  let start=matches[0].row,previous=start,groupIds=[matches[0].id];
   for(let i=1;i<matches.length;i++){
     const match=matches[i];
-    if(match.row===previous+1)ids.push(match.id);
-    else{groups.push({start,ids});start=match.row;ids=[match.id];}
+    if(match.row===previous+1)groupIds.push(match.id);
+    else{groups.push({start,ids:groupIds});start=match.row;groupIds=[match.id];}
     previous=match.row;
   }
-  groups.push({start,ids});
+  groups.push({start,ids:groupIds});
   groups.forEach(group=>{
     SHEET_READS++;
     const block=timedSheetRead_(()=>sh.getRange(group.start,1,group.ids.length,TABLES[table].length).getValues());
