@@ -110,7 +110,7 @@ function postResult_(req){
   }catch(err){return {data:null,error:{message:String(err&&err.message||err)}};}
 }
 function doPost(e) {
-  const t0=Date.now();let req=null,lockMs=0,tLocked=t0,lockAcquired=false,lockAttempted=false,writeState=null;
+  const t0=Date.now();let req=null,lockMs=0,tLocked=t0,lockWaitStarted=t0,optimisticReadMs=0,readRetry=false,lockAcquired=false,lockAttempted=false,writeState=null;
   const lock=LockService.getScriptLock();
   try{
     ROWS_CACHE={};TZ_CACHE=null;SS_CACHE=null;READ_ONLY_REQUEST=false;SHEET_SCHEMA_VALIDATED={};
@@ -122,21 +122,24 @@ function doPost(e) {
       // Optimistic read: no lock wait when no writer overlaps this request.
       const before=readConsistencyState_();
       if(isStableConsistencyState_(before)){
+        const readStarted=Date.now();
         const result=postResult_(req);
+        optimisticReadMs+=Date.now()-readStarted;
         const after=readConsistencyState_();
         if(after===before)return json_(result);
       }
       // A writer overlapped the read, or the marker could not be trusted. Discard
       // the entire result and retry once while holding the same lock as writers.
-      lockAttempted=true;lock.waitLock(20000);lockAcquired=true;
-      tLocked=Date.now();lockMs=tLocked-t0;
+      readRetry=true;
+      lockAttempted=true;lockWaitStarted=Date.now();lock.waitLock(20000);lockAcquired=true;
+      tLocked=Date.now();lockMs=tLocked-lockWaitStarted;
       // Never reuse rows cached by the discarded optimistic attempt.
       ROWS_CACHE={};TZ_CACHE=null;SHEET_SCHEMA_VALIDATED={};
       try{recoverConsistencyUnderLock_();return json_(postResult_(req));}
       finally{lock.releaseLock();}
     }
-    lockAttempted=true;lock.waitLock(20000);lockAcquired=true;
-    tLocked=Date.now();lockMs=tLocked-t0;
+    lockAttempted=true;lockWaitStarted=Date.now();lock.waitLock(20000);lockAcquired=true;
+    tLocked=Date.now();lockMs=tLocked-lockWaitStarted;
     try{
       writeState=beginWriteConsistency_();
       return json_(postResult_(req));
@@ -145,7 +148,7 @@ function doPost(e) {
       lock.releaseLock();
     }
   }catch(err){
-    if(lockAttempted&&!lockAcquired)lockMs=Date.now()-t0;
+    if(lockAttempted&&!lockAcquired)lockMs=Date.now()-lockWaitStarted;
     try{if(lock.hasLock())lock.releaseLock();}catch(_){}
     return json_({data:null,error:{message:String(err&&err.message||err)}});
   }finally{
@@ -154,7 +157,7 @@ function doPost(e) {
     try{
       const action=req&&req.action;
       const loggedAction=typeof action==='string'&&['telegramWebhook','signup','signin','signout','batch','getSession','getUser','ensureProfile','createFamily','joinFamily','query','rpc'].includes(action)?action:'unknown';
-      console.log(JSON.stringify({act:loggedAction,n:req&&req.requests?req.requests.length:undefined,lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS,revisionWriteFailures:REVISION_WRITE_FAILURES,consistencyMarkerWriteFailures:CONSISTENCY_MARKER_WRITE_FAILURES}));
+      console.log(JSON.stringify({act:loggedAction,n:req&&req.requests?req.requests.length:undefined,lockMs,workMs:lockAcquired?ended-tLocked:optimisticReadMs,optimisticReadMs,readRetry,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS,revisionWriteFailures:REVISION_WRITE_FAILURES,consistencyMarkerWriteFailures:CONSISTENCY_MARKER_WRITE_FAILURES}));
     }catch(_){}
   }
 }
