@@ -2891,6 +2891,7 @@ test('failed write still finalizes its consistency marker', () => {
 
 test('write fails closed when its in-progress consistency marker cannot be stored', () => {
   const h = makeHarness();
+  seedTable(h, 'transactions');
   const user = h.signup('write-marker-start-failure@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Маркер до записи' }).data;
   const props = h.context.PropertiesService.getScriptProperties();
