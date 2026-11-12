@@ -49,10 +49,11 @@ function doGet() {
   return json_(out);
 }
 /**
- * Классификатор предназначен только для тестирования/будущей оптимизации блокировок.
- * doPost намеренно продолжает использовать общий ScriptLock: не переключать read-path
- * на read lock, пока отдельно не доказана чистота всех операций чтения.
+ * Read candidates are strictly allow-listed above. Their handlers must remain side-effect-free.
+ * All writes publish a short-lived "writing" marker while holding ScriptLock; readers accept
+ * an optimistic result only when the same stable marker surrounds the entire read.
  */
+
 function requestLockMode_(request){
   const isRead=request=>{
     if(!request||typeof request!=='object'||Array.isArray(request))return false;
@@ -69,45 +70,91 @@ function requestLockMode_(request){
   return isRead(request)?'read-candidate':'write';
 }
 
+const READ_CONSISTENCY_PROPERTY = 'api_read_consistency_v1';
+let CONSISTENCY_MARKER_WRITE_FAILURES = 0;
+function readConsistencyState_(){
+  try{
+    const value=PropertiesService.getScriptProperties().getProperty(READ_CONSISTENCY_PROPERTY);
+    return value===null?'stable:0':String(value);
+  }catch(_){return null;}
+}
+function isStableConsistencyState_(value){return typeof value==='string'&&/^stable:[A-Za-z0-9-]+$/.test(value);}
+function beginWriteConsistency_(){
+  const current=readConsistencyState_();
+  const marker='writing:'+Utilities.getUuid();
+  // The marker must be durable before any application data or session state is changed.
+  PropertiesService.getScriptProperties().setProperty(READ_CONSISTENCY_PROPERTY,marker);
+  return 'stable:'+marker.slice('writing:'.length);
+}
+function finishWriteConsistency_(stableState){
+  if(!stableState)return;
+  try{PropertiesService.getScriptProperties().setProperty(READ_CONSISTENCY_PROPERTY,stableState);}
+  catch(_){CONSISTENCY_MARKER_WRITE_FAILURES++;}
+}
+function recoverConsistencyUnderLock_(){
+  const current=readConsistencyState_();
+  if(isStableConsistencyState_(current))return;
+  // Owning ScriptLock proves that no conforming writer is still active. A leftover
+  // "writing" marker therefore represents an execution that ended before finalizing.
+  try{PropertiesService.getScriptProperties().setProperty(READ_CONSISTENCY_PROPERTY,'stable:'+Utilities.getUuid());}
+  catch(_){CONSISTENCY_MARKER_WRITE_FAILURES++;}
+}
+function postResult_(req){
+  try{
+    if(req.action==='telegramWebhook')return {data:telegramWebhook_(req),error:null};
+    if(req.action==='signup')return {data:signup_(req),error:null};
+    if(req.action==='signin')return {data:signin_(req),error:null};
+    if(req.action==='signout')return {data:signout_(req),error:null};
+    if(req.action==='batch')return {data:batch_(req),error:null};
+    const user=requireUser_(req.token);
+    return {data:route_(req,user),error:null};
+  }catch(err){return {data:null,error:{message:String(err&&err.message||err)}};}
+}
 function doPost(e) {
-  const t0 = Date.now(); let req = null, lockMs = 0, tLocked = t0, lockAcquired = false, lockAttempted = false;
-  const lock = LockService.getScriptLock();
-  try {
-    ROWS_CACHE = {}; TZ_CACHE = null; SS_CACHE = null; READ_ONLY_REQUEST = false; SHEET_SCHEMA_VALIDATED = {}; SHEET_READS = 0; SHEET_WRITES = 0; SHEET_READ_MS = 0; SHEET_WRITE_MS = 0; REVISION_WRITE_FAILURES = 0;
-    req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    READ_ONLY_REQUEST = requestLockMode_(req) === 'read-candidate';
-    if (!req.action) throw new Error('Не указано действие');
-    if (req.action === 'telegramWebhook') {
-      // Serialize webhook updates so Telegram retries cannot race and insert duplicates.
-      lockAttempted = true;
-      lock.waitLock(20000);
-      lockAcquired = true;
-      tLocked = Date.now(); lockMs = tLocked - t0;
-      try { return json_({data:telegramWebhook_(req),error:null}); }
-      finally { lock.releaseLock(); }
+  const t0=Date.now();let req=null,lockMs=0,tLocked=t0,lockAcquired=false,lockAttempted=false,writeState=null;
+  const lock=LockService.getScriptLock();
+  try{
+    ROWS_CACHE={};TZ_CACHE=null;SS_CACHE=null;READ_ONLY_REQUEST=false;SHEET_SCHEMA_VALIDATED={};
+    SHEET_READS=0;SHEET_WRITES=0;SHEET_READ_MS=0;SHEET_WRITE_MS=0;REVISION_WRITE_FAILURES=0;CONSISTENCY_MARKER_WRITE_FAILURES=0;
+    req=JSON.parse((e&&e.postData&&e.postData.contents)||'{}');
+    READ_ONLY_REQUEST=requestLockMode_(req)==='read-candidate';
+    if(!req.action)throw new Error('Не указано действие');
+    if(READ_ONLY_REQUEST){
+      // Optimistic read: no lock wait when no writer overlaps this request.
+      const before=readConsistencyState_();
+      if(isStableConsistencyState_(before)){
+        const result=postResult_(req);
+        const after=readConsistencyState_();
+        if(after===before)return json_(result);
+      }
+      // A writer overlapped the read, or the marker could not be trusted. Discard
+      // the entire result and retry once while holding the same lock as writers.
+      lockAttempted=true;lock.waitLock(20000);lockAcquired=true;
+      tLocked=Date.now();lockMs=tLocked-t0;
+      try{recoverConsistencyUnderLock_();return json_(postResult_(req));}
+      finally{lock.releaseLock();}
     }
-    // Serialize authentication too: concurrent signups must not create duplicate emails.
-    lockAttempted = true;
-    lock.waitLock(20000);
-    lockAcquired = true;
-    tLocked = Date.now(); lockMs = tLocked - t0;
-    try {
-      if (req.action === 'signup') return json_({data:signup_(req),error:null});
-      if (req.action === 'signin') return json_({data:signin_(req),error:null});
-      if (req.action === 'signout') return json_({data:signout_(req),error:null});
-      if (req.action === 'batch') return json_({data:batch_(req),error:null});
-      const user = requireUser_(req.token);
-      return json_({data: route_(req, user), error:null});
-    } finally { lock.releaseLock(); }
-  } catch (err) {
-    if (lockAttempted && !lockAcquired) lockMs = Date.now() - t0;
-    try { if (lock.hasLock()) lock.releaseLock(); } catch (_) {}
-    return json_({data:null, error:{message:String(err && err.message || err)}});
-  } finally {
-    READ_ONLY_REQUEST = false;
-    // Одна строка в журнале выполнения: только названия действий и числа, без данных пользователей.
-    const ended = Date.now();
-    try { const action=req&&req.action;const loggedAction=typeof action==='string'&&['telegramWebhook','signup','signin','signout','batch','getSession','getUser','ensureProfile','createFamily','joinFamily','query','rpc'].includes(action)?action:'unknown';console.log(JSON.stringify({act:loggedAction,n:(req&&req.requests)?req.requests.length:undefined,lockMs:lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS,revisionWriteFailures:REVISION_WRITE_FAILURES})); } catch (_) {}
+    lockAttempted=true;lock.waitLock(20000);lockAcquired=true;
+    tLocked=Date.now();lockMs=tLocked-t0;
+    try{
+      writeState=beginWriteConsistency_();
+      return json_(postResult_(req));
+    }finally{
+      finishWriteConsistency_(writeState);
+      lock.releaseLock();
+    }
+  }catch(err){
+    if(lockAttempted&&!lockAcquired)lockMs=Date.now()-t0;
+    try{if(lock.hasLock())lock.releaseLock();}catch(_){}
+    return json_({data:null,error:{message:String(err&&err.message||err)}});
+  }finally{
+    READ_ONLY_REQUEST=false;
+    const ended=Date.now();
+    try{
+      const action=req&&req.action;
+      const loggedAction=typeof action==='string'&&['telegramWebhook','signup','signin','signout','batch','getSession','getUser','ensureProfile','createFamily','joinFamily','query','rpc'].includes(action)?action:'unknown';
+      console.log(JSON.stringify({act:loggedAction,n:req&&req.requests?req.requests.length:undefined,lockMs,workMs:lockAcquired?ended-tLocked:null,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS,revisionWriteFailures:REVISION_WRITE_FAILURES,consistencyMarkerWriteFailures:CONSISTENCY_MARKER_WRITE_FAILURES}));
+    }catch(_){}
   }
 }
 function batch_(req){
