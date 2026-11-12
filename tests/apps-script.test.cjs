@@ -3442,6 +3442,36 @@ test('categories with references cannot be deleted, but can be archived', () => 
 });
 
 
+test('idempotent insert with an explicit ID does not load the whole table', () => {
+  const h = makeHarness();
+  const user = h.signup('targeted-id-insert@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Точечный поиск ID' }).data;
+  const payload = {
+    id: 'targeted-account-id-001', family_id: family.id, name: 'Наличные',
+    kind: 'cash', owner_user_id: user.user.id, starting_balance_kopecks: 12500, archived: false,
+  };
+  const first = h.call({ action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true, values: payload });
+  assert.equal(first.error, null, first.error?.message);
+
+  const sheet = h.context.sheet_('accounts');
+  let fullTableReads = 0, idColumnReads = 0, matchingRowReads = 0;
+  const originalGetDataRange = sheet.getDataRange.bind(sheet);
+  const originalGetRange = sheet.getRange.bind(sheet);
+  sheet.getDataRange = (...args) => { fullTableReads++; return originalGetDataRange(...args); };
+  sheet.getRange = (...args) => {
+    if (args[0] >= 2 && args[1] === 1 && args[3] === 1) idColumnReads++;
+    else if (args[0] >= 2 && args[1] === 1 && args[3] > 1) matchingRowReads++;
+    return originalGetRange(...args);
+  };
+
+  const repeated = h.call({ action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true, values: payload });
+  assert.equal(repeated.error, null, repeated.error?.message);
+  assert.equal(repeated.data[0].id, payload.id);
+  assert.equal(fullTableReads, 0);
+  assert.equal(idColumnReads, 1);
+  assert.equal(matchingRowReads, 1);
+});
+
 test('selected non-transaction inserts are idempotent for the same ID and exact payload', () => {
   const h = makeHarness();
   const owner = h.signup('nontransaction-idempotency-owner@example.com');
