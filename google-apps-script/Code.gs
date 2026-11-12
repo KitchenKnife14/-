@@ -893,9 +893,12 @@ function query_(req,user){
   }
   if(mode==='insert'){
     const input=Array.isArray(req.values)?req.values:[req.values];
-    const transactionIds=table==='transactions'?input.filter(raw=>raw&&raw.id).map(raw=>raw.id):[];
-    const transactionRowsById=transactionIds.length?findRowsByIds_(table,transactionIds):new Map();
-    const needsExisting=table==='budgets'||table==='profiles'||(table!=='transactions'&&input.some(raw=>raw&&raw.id));
+    const explicitIds=input.filter(raw=>raw&&raw.id).map(raw=>raw.id);
+    // For duplicate-ID checks, fetch only matching rows. Full-table reads remain
+    // where they are semantically required: budget uniqueness and profile handling.
+    const targetedRowsById=(table!=='budgets'&&table!=='profiles'&&explicitIds.length)
+      ?findRowsByIds_(table,explicitIds):new Map();
+    const needsExisting=table==='budgets'||table==='profiles';
     const existing=needsExisting?rows_(table):[];
     const createdIds_=new Set();
     const created=input.map(raw=>{
@@ -903,7 +906,7 @@ function query_(req,user){
       // Server owns identity and audit timestamps.
       if(table==='profiles' && r.id!==undefined && String(r.id)!==user.id)throw new Error('Нельзя изменять чужой профиль');
       if(table==='profiles')r.id=user.id;
-      const existingById=r.id?(table==='transactions'?transactionRowsById.get(String(r.id)):existing.find(x=>String(x.id)===String(r.id))):null;
+      const existingById=r.id?(needsExisting?existing.find(x=>String(x.id)===String(r.id)):targetedRowsById.get(String(r.id))):null;
       if(existingById&&table!=='transactions'&&!IDEMPOTENT_INSERT_FIELDS[table])throw new Error('Запись с таким ID уже существует');
       if(!r.id)r.id=id_();
       if(TABLES[table].includes('created_at'))r.created_at=now_();
