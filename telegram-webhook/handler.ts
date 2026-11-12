@@ -72,7 +72,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   let update: TelegramUpdate
   try {
     update = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as TelegramUpdate
-    if (!update || typeof update !== 'object') throw new Error('Invalid update')
+    if (!update || typeof update !== 'object' || Array.isArray(update)) throw new Error('Invalid update')
+    if (!Number.isSafeInteger(update.update_id) || (update.update_id as number) < 0) {
+      return res.status(400).json({ ok: false, error: 'Invalid Telegram update_id' })
+    }
   } catch {
     return res.status(400).json({ ok: false, error: 'Invalid JSON body' })
   }
