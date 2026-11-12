@@ -352,7 +352,7 @@ test('joinFamily retry completes profile update after membership was already sav
   };
   const args = {
     action: 'joinFamily', token: partner.token, invite_code: family.invite_code,
-    display_name: 'Участник семьи'
+    display_name: 'Новое имя после повтора'
   };
   const first = h.call(args);
   assert.match(first.error?.message || '', /simulated profile update failure/);
