@@ -146,3 +146,33 @@ test('React Router and Vite lockfile contain the patched dependency lines', () =
   assert.equal(lock.packages['node_modules/vite'].version, '6.4.6')
   assert.ok(viteConfig.includes("host: '127.0.0.1'"))
 })
+
+test('React Router v7 sends hostile URL-shaped paths to the internal fallback route', async () => {
+  const { matchRoutes } = await import('react-router-dom')
+  const routes = [{
+    path: '/',
+    children: [
+      { index: true },
+      { path: 'transactions' },
+      { path: 'accounts' },
+      { path: 'calendar' },
+      { path: 'recurring' },
+      { path: 'budgets' },
+      { path: 'goals' },
+      { path: 'purchases' },
+      { path: 'planning' },
+      { path: 'reports' },
+      { path: 'analysis' },
+      { path: 'notifications' },
+      { path: 'telegram' },
+      { path: 'categories' },
+      { path: '*' },
+    ],
+  }]
+  const hostilePaths = ['//evil.example', '/\\\\evil.example', '/https://evil.example', '/%5c%5cevil.example']
+  for (const pathname of hostilePaths) {
+    const matches = matchRoutes(routes, pathname)
+    assert.ok(matches, 'router should resolve fallback for ' + pathname)
+    assert.equal(matches[matches.length - 1].route.path, '*', 'hostile path must not match a named internal route: ' + pathname)
+  }
+})
