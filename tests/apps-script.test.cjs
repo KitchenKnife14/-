@@ -4324,8 +4324,20 @@ test('goal total reconciliation reads only contribution totals and target goal r
   const goalGetRange = goalsSheet.getRange.bind(goalsSheet);
   const contributionGetDataRange = contributionsSheet.getDataRange.bind(contributionsSheet);
   const goalGetDataRange = goalsSheet.getDataRange.bind(goalsSheet);
-  contributionsSheet.getRange = (...args) => { if (args[0] >= 2) contributionReads.push(args); return contributionGetRange(...args); };
-  goalsSheet.getRange = (...args) => { if (args[0] >= 2) goalReads.push(args); return goalGetRange(...args); };
+  contributionsSheet.getRange = (...args) => {
+    const range = contributionGetRange(...args);
+    return {
+      getValues: () => { if (args[0] >= 2) contributionReads.push(args); return range.getValues(); },
+      setValues: values => range.setValues(values),
+    };
+  };
+  goalsSheet.getRange = (...args) => {
+    const range = goalGetRange(...args);
+    return {
+      getValues: () => { if (args[0] >= 2) goalReads.push(args); return range.getValues(); },
+      setValues: values => range.setValues(values),
+    };
+  };
   contributionsSheet.getDataRange = (...args) => { contributionDataRangeCalls++; return contributionGetDataRange(...args); };
   goalsSheet.getDataRange = (...args) => { goalDataRangeCalls++; return goalGetDataRange(...args); };
 
