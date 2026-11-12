@@ -163,7 +163,7 @@ test('Apps Script request logs contain metrics only and never payload secrets or
   });
   assert.equal(inserted.error, null, inserted.error?.message);
   assert.equal(logs.length, 3);
-  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'reads', 'writes', 'readMs', 'writeMs', 'revisionWriteFailures'];
+  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'reads', 'writes', 'readMs', 'writeMs', 'revisionWriteFailures', 'consistencyMarkerWriteFailures'];
   for (const line of logs) {
     const record = JSON.parse(line);
     assert.deepEqual(Object.keys(record).sort(), allowed.sort());
@@ -2832,6 +2832,7 @@ test('optimistic read discards its result and retries under ScriptLock when a wr
   h.resetLockStats();
 
   const props = h.context.PropertiesService.getScriptProperties();
+  h.context.PropertiesService.getScriptProperties = () => props;
   const originalGetProperty = props.getProperty.bind(props);
   let markerReads = 0;
   props.getProperty = key => {
