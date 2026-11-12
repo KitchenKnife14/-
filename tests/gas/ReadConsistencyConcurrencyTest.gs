@@ -31,6 +31,9 @@ function runReadConsistencyConcurrencyTest() {
   var cleanupError = null;
 
   try {
+    // Mark the unique ID for cleanup before sending: the server may commit even
+    // if the HTTP response is lost or malformed.
+    created = true;
     var inserted = readConsistencyTestPost_(url, {
       action:'query', token:token, table:'planned_purchases', mode:'insert', returning:true,
       values:{
@@ -45,8 +48,6 @@ function runReadConsistencyConcurrencyTest() {
         String(inserted.data[0].id) !== id) {
       throw new Error('Не удалось создать изолированную тестовую покупку: ' + (inserted.error && inserted.error.message || 'неожиданный ответ'));
     }
-    created = true;
-
     var writer = {
       url:url, method:'post', contentType:'application/json', muteHttpExceptions:true,
       payload:JSON.stringify({
