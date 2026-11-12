@@ -4416,3 +4416,45 @@ test('moving a goal contribution recalculates both goals and a failed sync is re
   assert.equal(goals.find(row => row.id === destination.id).saved_kopecks, 32500);
   assert.equal(h.context.rows_('goal_contributions').filter(row => row.id === contribution.data[0].id).length, 1);
 });
+
+
+test('mixed batch keeps one ScriptLock and releases it once when a child write fails', () => {
+  const h = makeHarness();
+  const user = h.signup('lock-partial-batch@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Частичный batch' }).data;
+  h.resetLockStats();
+  const response = h.call({
+    action: 'batch', token: user.token,
+    requests: [
+      { action: 'query', table: 'transactions', mode: 'insert', values: {
+        family_id: family.id, type: 'expense', amount_kopecks: 'not-an-integer',
+        operation_date: '2026-11-12', description: 'Ожидаемая ошибка'
+      }},
+      { action: 'query', table: 'transactions', mode: 'insert', values: {
+        family_id: family.id, type: 'expense', amount_kopecks: 321,
+        operation_date: '2026-11-12', description: 'Успешная запись'
+      }}
+    ]
+  });
+  assert.equal(response.error, null);
+  assert.equal(response.data.length, 2);
+  assert.match(response.data[0].error?.message || '', /целым числом копеек/);
+  assert.equal(response.data[1].error, null);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(rows.data.length, 1);
+  assert.equal(rows.data[0].amount_kopecks, 321);
+});
+
+test('write handler exception still releases the acquired ScriptLock exactly once', () => {
+  const h = makeHarness();
+  h.context.PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED', '1');
+  h.resetLockStats();
+  const response = h.call({
+    action: 'signup', email: 'signup-disabled-lock@example.com',
+    password: 'correct-horse-battery'
+  });
+  assert.match(response.error?.message || '', /Регистрация закрыта/);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+  assert.match(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1'), /^stable:/);
+});
