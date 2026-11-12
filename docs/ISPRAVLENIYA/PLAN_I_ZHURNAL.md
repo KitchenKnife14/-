@@ -301,7 +301,7 @@
 - [x] Подготовить отдельную веточную правку с обновлением совместимого набора `react-router` / `react-router-dom` минимум до исправленной линии 7.18.0 либо более новой проверенной безопасной версии.
 - [x] Не делать слепое обновление только одного пакета; синхронизировать package.json и package-lock.json.
 - [ ] Проверить все маршруты, fallback, авторизацию, onboarding, ссылки меню, неизвестные пути, back/forward, refresh deep links.
-- [ ] Добавить тесты для внутренних и вредоносно сформированных путей (включая backslash и protocol-relative формы).
+- [x] Добавить тесты для внутренних и вредоносно сформированных путей (включая backslash и protocol-relative формы): React Router v7 `matchRoutes` проверяет, что hostile URL-shaped paths попадают только в catch-all.
 - [ ] Запустить typecheck, полный test suite, production build и ручной браузерный smoke test.
 - [x] Сравнить bundle и проверить отсутствие неожиданных изменений.
 - [x] Отдельно записать, какие advisory закрыты обновлением, а какие не применимы из-за архитектуры.
@@ -315,7 +315,7 @@
 - [x] Выбрать актуальную исправленную версию с учётом Node, TypeScript, plugin-react и Vercel build.
 - [x] Проверить `server.host: true` в `vite.config.ts`: оставить только если это действительно нужно локальной разработке; не считать dev-server настройку доказательством уязвимости Production.
 - [x] Обновить пакет и lockfile одним согласованным изменением.
-- [ ] Запустить typecheck, tests, build и локальный preview.
+- [x] Запустить typecheck, tests, build и локальный preview через CI: `npm run build` выполняет `tsc -b && vite build`, regression suite и отдельный HTTP smoke test production preview.
 - [x] Не обновлять весь стек без необходимости.
 
 ## FC-17 — тестовое покрытие и CI
@@ -2681,3 +2681,12 @@ HEAD до:
 - Добавлены два runtime regression tests в VM harness: batch из двух read-only операций (`query/select` + `get_my_context`) проходит без ScriptLock; смешанный batch (`select` + `insert`) сохраняет общий lock и публикует write marker.
 - CI run [43175494136](https://github.com/KitchenKnife14/-/actions/runs/43175494136) — **success**, 224/224 tests, build, dependency audit, Code.gs и обе GAS diagnostics syntax checks, manifest validation — success.
 - Текущая проверка остаётся синтетической: она подтверждает маршрутизацию, marker protocol, retry/cache reset и lock selection в harness, но не заменяет реальную конкуренцию двух Web App executions. Для неё подготовлен `tests/gas/ReadConsistencyConcurrencyTest.gs`.
+
+### Журнал — 2026-11-12: проверка Vite preview и React Router v7 (работа № 73)
+
+- Подтверждены точные установленные версии из `package-lock.json`: Vite `6.4.6`, `react-router` `7.18.5`, `react-router-dom` `7.18.5`. `vite.config.ts` ограничивает dev server адресом `127.0.0.1`.
+- В `tests/auth-routing.test.cjs` добавлены проверки фиксированных внутренних navigation targets, отсутствия user-controlled redirect targets, соответствия package.json/lockfile и защиты fallback-маршрута от hostile URL-shaped path values (`//evil.example`, backslash, абсолютный URL в pathname, percent-encoded backslash). Для hostile cases используется реальный `matchRoutes` из React Router v7; они попадают только в catch-all route.
+- Добавлен `tests/vite-preview-smoke.cjs`: запускает production preview на loopback, запрашивает `index.html`, находит JS bundle и проверяет успешную отдачу bundle. Workflow выполняет этот smoke test сразу после production build.
+- CI run [43176792182](https://github.com/KitchenKnife14/-/actions/runs/43176792182) на HEAD `5c742045137f41caec725dd87869d99c9c1dd578` — **success**: `227/227` regression tests, TypeScript + production build, Vite preview HTTP smoke test, dependency audit, Apps Script syntax/diagnostics и manifest checks прошли.
+- FC-16 закрыт автоматическими проверками. В FC-18 закрыт тестовый пункт для внутренних/hostile paths. Ручной браузерный smoke test (back/forward, refresh deep links, все разделы на реальном браузере) остаётся открытым; не выдавать автоматический matchRoutes test за ручную проверку.
+- Все изменения только в ветке `ispravleniya`; Production, `main`, Vercel env, основная таблица и опубликованные GAS deployment не затронуты.
