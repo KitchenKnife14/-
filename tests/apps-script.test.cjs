@@ -362,7 +362,7 @@ test('joinFamily retry completes profile update after membership was already sav
   const retry = h.call(args);
   assert.equal(retry.error, null, retry.error?.message);
   assert.equal(h.context.rows_('family_members').filter(row => row.user_id === partner.user.id).length, 1);
-  assert.equal(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, 'Участник семьи');
+  assert.equal(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, 'Новое имя после повтора');
 });
 
 test('recurring payment confirmation can retry after a partial write without duplicating the transaction', () => {
