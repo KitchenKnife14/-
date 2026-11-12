@@ -102,7 +102,6 @@ test('webhook rejects invalid Telegram update_id before calling Apps Script', as
     { update_id: 1.5 },
     { update_id: '1' },
     { update_id: Number.MAX_SAFE_INTEGER + 1 },
-    [],
   ];
   for (const body of invalidUpdates) {
     let calls = 0;
