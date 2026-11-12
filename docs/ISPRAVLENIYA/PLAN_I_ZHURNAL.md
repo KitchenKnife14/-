@@ -2789,8 +2789,8 @@ HEAD до:
 ### Подготовлен live-probe двух разных одновременных записей в одну общую цель (2026-11-12)
 
 - В `tests/gas/IdempotencyConcurrencyTest.gs` добавлена отдельная функция `runConcurrentGoalContributionWritesTest()`.
-- Probe одновременно отправляет два пополнения с разными ID и разными суммами в одну тестовую цель через `UrlFetchApp.fetchAll`; проверяет обе строки и точное увеличение `saved_kopecks) на сумму двух пополнений.
+- Probe одновременно отправляет два пополнения с разными ID и разными суммами в одну тестовую цель через `UrlFetchApp.fetchAll`; проверяет обе строки и точное увеличение `saved_kopecks` на сумму двух пополнений.
 - В `finally` удаляет обе тестовые строки, проверяет возврат баланса к исходному значению и отсутствие тестовых ID. При неудачной очистке сообщает оба ID для ручной проверки.
 - Тест использует те же защитные условия, что существующий isolated idempotency probe: отдельная таблица TEST/ТЕСТ, отдельный Web App URL, тестовый токен и явное подтверждение `ISOLATED_TEST_ONLY`; Production Script ID блокируется.
 - Это подготовленный сценарий, а не результат реальной проверки: запуск в отдельном GAS-проекте ещё не выполнен. Процент чек-листа не повышается.
-- Изменения только в `ispravleniya`; Production, `main), основная Google Sheet, Production GAS deployment, Vercel env и Telegram webhook не менялись.
+- Изменения только в `ispravleniya`; Production, `main`, основная Google Sheet, Production GAS deployment, Vercel env и Telegram webhook не менялись.
