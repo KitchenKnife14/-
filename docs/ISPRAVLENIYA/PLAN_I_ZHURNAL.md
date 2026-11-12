@@ -2692,3 +2692,12 @@ HEAD до:
 - Все изменения только в ветке `ispravleniya`; Production, `main`, Vercel env, основная таблица и опубликованные GAS deployment не затронуты.
 
 - Дополнительно расширена runtime-проверка маршрутизации: React Router v7 `matchRoutes` теперь проходит по всем 14 destinations из мобильного/desktop меню и проверяет unknown path → catch-all. CI run [43177205303](https://github.com/KitchenKnife14/-/actions/runs/43177205303) на commit `47543fc48c2fae23a6efefc7fbfad6f95d35a311` — **success**, `228/228` tests, build, production preview smoke, dependency audit и GAS syntax/manifest checks прошли.
+
+
+### Сверка контрольного прогресса и повторной доставки Telegram (2026-11-12)
+
+- Подтверждён точный прогресс по checkbox-маркерам: 174 закрытых и 98 открытых из 272 (64.0%). Синхронизация заголовка выполнена отдельным коммитом; это не новый прирост работ. Макроэтапы остаются 1/12.
+- Подтверждён последний CI run [43177335991](https://github.com/KitchenKnife14/-/actions/runs/43177335991) на HEAD `600109224727eacb1f02276c6c635d9d051cfa08`: success.
+- Повторно просмотрен Telegram webhook: backend кэширует обработанный `update_id` на 24 часа и создание операции дополнительно защищено детерминированным transaction ID `telegram_<update_id>`. Однако Vercel отправляет ответ через Telegram `sendMessage` после backend side effect. Если Telegram принял сообщение, но HTTP-ответ потерялся, повтор webhook может отправить пользователю ту же квитанцию повторно. Тест `webhook retries an uncertain send at-least-once...` фиксирует именно такую семантику. Финансовая операция не дублируется, но текстовое подтверждение может прийти повторно.
+- Не добавлял ложную «exactly-once» гарантию: Telegram Bot API `sendMessage` не предоставляет клиентский idempotency key, а локальная отметка до отправки может потерять подтверждение при сбое. Нужен отдельный выбор между at-least-once (возможен повтор текста) и at-most-once (возможна потеря текста), либо отдельный outbox/операционный механизм с остаточным окном сбоя. До решения код не менялся.
+- Production, `main`, основная Google Sheet, Production GAS deployment, Vercel env и Telegram webhook не менялись.
