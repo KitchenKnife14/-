@@ -2830,6 +2830,49 @@ test('stable read-only query bypasses the global ScriptLock', () => {
   assert.ok(metrics.optimisticReadMs >= 0);
 });
 
+test('read-only batch bypasses the global ScriptLock only when every child is read-only', () => {
+  const h = makeHarness();
+  seedTable(h, 'transactions');
+  const user = h.signup('read-only-batch@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Пакет чтения' });
+  h.resetLockStats();
+  const response = h.call({
+    action:'batch', token:user.token,
+    requests:[
+      {action:'query',table:'transactions',mode:'select'},
+      {action:'rpc',name:'get_my_context'}
+    ]
+  });
+  assert.equal(response.error, null, response.error?.message);
+  assert.equal(response.data.length, 2);
+  assert.ok(response.data.every(item => item.error === null));
+  assert.deepEqual(h.lockStats(), { acquires: 0, releases: 0 });
+});
+
+test('mixed read/write batch retains ScriptLock and publishes a write marker', () => {
+  const h = makeHarness();
+  seedTable(h, 'transactions');
+  const user = h.signup('mixed-batch-lock@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Смешанный пакет' }).data;
+  h.resetLockStats();
+  const response = h.call({
+    action:'batch', token:user.token,
+    requests:[
+      {action:'query',table:'transactions',mode:'select'},
+      {action:'query',table:'transactions',mode:'insert',values:{
+        family_id:family.id,type:'expense',amount_kopecks:700,
+        operation_date:'2026-11-12',description:'Смешанный batch'
+      }}
+    ]
+  });
+  assert.equal(response.error, null, response.error?.message);
+  assert.equal(response.data.length, 2);
+  assert.equal(response.data[0].error, null);
+  assert.equal(response.data[1].error, null);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+  assert.match(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1'), /^stable:/);
+});
+
 test('optimistic read discards cached rows and retries under ScriptLock when a writer overlaps', () => {
   const h = makeHarness();
   seedTable(h, 'transactions');
