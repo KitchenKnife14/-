@@ -163,7 +163,7 @@ test('Apps Script request logs contain metrics only and never payload secrets or
   });
   assert.equal(inserted.error, null, inserted.error?.message);
   assert.equal(logs.length, 3);
-  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'reads', 'writes', 'readMs', 'writeMs', 'revisionWriteFailures', 'consistencyMarkerWriteFailures'];
+  const allowed = ['act', 'lockMs', 'totalMs', 'workMs', 'optimisticReadMs', 'readRetry', 'reads', 'writes', 'readMs', 'writeMs', 'revisionWriteFailures', 'consistencyMarkerWriteFailures'];
   for (const line of logs) {
     const record = JSON.parse(line);
     assert.deepEqual(Object.keys(record).sort(), allowed.sort());
@@ -2816,11 +2816,18 @@ test('stable read-only query bypasses the global ScriptLock', () => {
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Baseline блокировки' }).data;
   assert.ok(family?.id);
   h.resetLockStats();
+  const logs = [];
+  h.context.console = { log: value => logs.push(String(value)) };
 
   const selected = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
   assert.equal(selected.error, null, selected.error?.message);
   assert.deepEqual(h.lockStats(), { acquires: 0, releases: 0 });
   assert.equal(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1').startsWith('stable:'), true);
+  const metrics = JSON.parse(logs[0]);
+  assert.equal(metrics.lockMs, 0);
+  assert.equal(metrics.readRetry, false);
+  assert.ok(Number.isFinite(metrics.workMs));
+  assert.ok(metrics.optimisticReadMs >= 0);
 });
 
 test('optimistic read discards cached rows and retries under ScriptLock when a writer overlaps', () => {
@@ -2836,6 +2843,8 @@ test('optimistic read discards cached rows and retries under ScriptLock when a w
   assert.equal(inserted.error, null, inserted.error?.message);
   const sheet = h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions');
   h.resetLockStats();
+  const logs = [];
+  h.context.console = { log: value => logs.push(String(value)) };
 
   const props = h.context.PropertiesService.getScriptProperties();
   h.context.PropertiesService.getScriptProperties = () => props;
@@ -2860,6 +2869,10 @@ test('optimistic read discards cached rows and retries under ScriptLock when a w
   assert.equal(selected.data[0].amount_kopecks, 200);
   assert.ok(markerReads >= 3, 'read should validate the marker again after its locked retry');
   assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+  const metrics = JSON.parse(logs[0]);
+  assert.equal(metrics.readRetry, true);
+  assert.ok(metrics.lockMs >= 0);
+  assert.ok(metrics.optimisticReadMs >= 0);
 });
 
 test('read recovers a stale writing marker under ScriptLock after an interrupted writer', () => {
