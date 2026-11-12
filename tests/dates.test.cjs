@@ -78,7 +78,6 @@ test('todayISO changes at Moscow midnight rather than device midnight', () => {
 })
 
 test('monthRange handles leap February and year boundaries without local timezone shifts', () => {
-  const result = runInTimezone('America/Los_Angeles')
   const script = String.raw`
     const fs = require('node:fs')
     const path = require('node:path')
