@@ -221,7 +221,7 @@
 - [ ] Переносить блокировки только после доказательства атомарности критических операций.
 - [x] Сохранить защиту от двойного signup, гонок Telegram и конфликтующих записей.
 - [x] Добавить concurrency tests.
-- [ ] Не удалять блокировку целиком как упрощённое исправление.
+- [x] Не удалять блокировку целиком как упрощённое исправление.
 
 ### SEC-03 — изоляция семьи и ревизии таблиц
 - [x] Проверить все RPC, query, create/update/delete и batch пути.
@@ -568,7 +568,7 @@ HEAD до:
 - [x] Сохранить общий ScriptLock для всех записей, авторизации, Telegram webhook и смешанных batch; write marker устанавливается до выполнения обработчика.
 - [ ] Отдельно сохранить атомарность signup/email uniqueness и Telegram update idempotency.
 - [ ] Проверить, можно ли использовать DocumentLock для spreadsheet-bound проекта; не считать его автоматически взаимозаменяемым без теста.
-- [ ] Не заменять ScriptLock на UserLock для семейных данных: разные участники одной семьи должны синхронизироваться при конфликтующих записях.
+- [x] Не заменять ScriptLock на UserLock для семейных данных: разные участники одной семьи должны синхронизироваться при конфликтующих записях.
 - [x] Выбран и реализован optimistic validation через ScriptProperties marker; CacheService не используется как источник согласованности.
 - [ ] Не использовать CacheService как единственное хранилище idempotency/locks.
 - [ ] Не допускать чтение/изменение строки на основании устаревшего row index после снятия блокировки без повторной проверки ID/версии.
@@ -582,7 +582,7 @@ HEAD до:
 - [ ] Проверить одновременный join одной семьи двумя запросами.
 - [ ] Проверить повтор одного Telegram update, включая одновременную доставку.
 - [ ] Проверить batch с чтением, записью и частичной ошибкой.
-- [ ] Проверить тайм-аут захвата lock и корректный API error envelope.
+- [x] Проверить тайм-аут захвата lock и корректный API error envelope.
 - [x] Проверить отсутствие двойного release и освобождение блокировки на всех исключениях.
 
 #### LOCK-01E — внедрение и контроль результата
@@ -2829,3 +2829,14 @@ HEAD до:
 - По фактическим чекбоксам закрыто 180/272 (66.2%), открыто 92. Это +6 пунктов (+2.2 процентного пункта), без зачёта неподтверждённых live-проверок.
 - Изменяемые файлы последних шагов: `tests/apps-script.test.cjs`, `tests/gas/SignupJoinConcurrencyTest.gs`, `tests/gas/ConcurrentTransactionUpdateTest.gs`, `docs/ISPRAVLENIYA/PLAN_I_ZHURNAL.md`.
 - Только рабочая ветка `ispravleniya`; Production, `main`, основная Google Sheet, GAS deployments, Vercel env и Telegram webhook не изменялись.
+
+
+### LOCK-01 — подтверждение сохранения ScriptLock и timeout error contract (2026-11-12)
+
+- Повторно проверен google-apps-script/Code.gs на HEAD до этой записи: 0ad7ee1d4615cd4c9c465fb82dbdb316ca2130f8.
+- doPost сохраняет общий LockService.getScriptLock() для write/auth/Telegram и для optimistic read, который пересекается с записью или не может подтвердить стабильный marker. Чистое чтение без пересечения выполняется optimistic-путём; при сомнении результат отбрасывается и запрос повторяется под ScriptLock.
+- Подтверждено, что блокировка не удалена целиком и не заменена на UserLock. Это сохраняет межпользовательскую синхронизацию семейных данных; реальную конкурентную безопасность ещё должны подтвердить подготовленные live probes.
+- В tests/apps-script.test.cjs уже есть тест doPost reports a write lock timeout without attempting to release an unacquired lock: он внедряет исключение из waitLock, проверяет error envelope и отсутствие release для lock, который не был захвачен. Отдельные тесты проверяют ровно один release при ошибках handler и batch.
+- Отмечены только три подтверждённых пункта: не удалять ScriptLock как упрощение; не заменять его на UserLock; проверять timeout/error envelope. Не закрыты baseline/p50/p95, реальные GAS concurrency probes, lock contention и критерий фактического снижения ожидания.
+- Прогресс по чекбоксам после записи: 183/272 (67.3%), открыто 89; макроэтапы без изменений — 1/12.
+- Все изменения только в docs/ISPRAVLENIYA/PLAN_I_ZHURNAL.md ветки ispravleniya; runtime Code.gs, Production, main, Google Sheets, GAS deployments, Vercel env и Telegram webhook не менялись.
