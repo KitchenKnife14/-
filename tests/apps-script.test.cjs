@@ -2889,6 +2889,56 @@ test('failed write still finalizes its consistency marker', () => {
   assert.match(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1'), /^stable:/);
 });
 
+test('write fails closed when its in-progress consistency marker cannot be stored', () => {
+  const h = makeHarness();
+  const user = h.signup('write-marker-start-failure@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Маркер до записи' }).data;
+  const props = h.context.PropertiesService.getScriptProperties();
+  const originalSetProperty = props.setProperty.bind(props);
+  h.context.PropertiesService.getScriptProperties = () => props;
+  props.setProperty = (key, value) => {
+    if (key === 'api_read_consistency_v1' && String(value).startsWith('writing:')) throw new Error('simulated consistency marker failure');
+    return originalSetProperty(key, value);
+  };
+  const failed = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1200, operation_date: '2026-11-12' }
+  });
+  assert.match(failed.error?.message || '', /simulated consistency marker failure/);
+  const rows = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(rows.error, null, rows.error?.message);
+  assert.equal(rows.data.length, 0);
+});
+
+test('read safely recovers when final consistency marker publication fails once', () => {
+  const h = makeHarness();
+  const user = h.signup('write-marker-finish-failure@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Сбой финального маркера' }).data;
+  const props = h.context.PropertiesService.getScriptProperties();
+  const originalSetProperty = props.setProperty.bind(props);
+  h.context.PropertiesService.getScriptProperties = () => props;
+  let failStableOnce = true;
+  props.setProperty = (key, value) => {
+    if (key === 'api_read_consistency_v1' && String(value).startsWith('stable:') && failStableOnce) {
+      failStableOnce = false;
+      throw new Error('simulated final marker failure');
+    }
+    return originalSetProperty(key, value);
+  };
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1200, operation_date: '2026-11-12' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  assert.match(props.getProperty('api_read_consistency_v1'), /^writing:/);
+  h.resetLockStats();
+  const selected = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
+  assert.equal(selected.error, null, selected.error?.message);
+  assert.equal(selected.data.length, 1);
+  assert.match(props.getProperty('api_read_consistency_v1'), /^stable:/);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+});
+
 
 test('all monetary fields reject coercible strings, booleans and fractional kopecks across insert, update and upsert', () => {
   const h = makeHarness();
