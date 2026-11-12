@@ -47,3 +47,57 @@ test('calendar dates and Moscow timestamps are stable across device timezones', 
   assert.equal(utc.months, 1)
   assert.equal(utc.invalid, null)
 })
+
+test('todayISO changes at Moscow midnight rather than device midnight', () => {
+  const script = String.raw`
+    const fs = require('node:fs')
+    const path = require('node:path')
+    const Module = require('node:module')
+    const ts = require('typescript')
+    const file = path.join(process.cwd(), 'src/lib/dates.ts')
+    const mod = new Module(file, module)
+    mod.filename = file
+    mod.paths = Module._nodeModulePaths(path.dirname(file))
+    mod._compile(ts.transpile(fs.readFileSync(file, 'utf8'), { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }), file)
+    const RealDate = Date
+    let instant = '2026-11-11T20:59:59.000Z'
+    global.Date = class FixedDate extends RealDate {
+      constructor(...args) { super(...(args.length ? args : [instant])) }
+      static now() { return new RealDate(instant).getTime() }
+    }
+    const before = mod.exports.todayISO()
+    instant = '2026-11-11T21:00:00.000Z'
+    const after = mod.exports.todayISO()
+    console.log(JSON.stringify({ before, after }))
+  `
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, TZ: 'America/Los_Angeles' },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(JSON.parse(result.stdout.trim()), { before: '2026-11-11', after: '2026-11-12' })
+})
+
+test('monthRange handles leap February and year boundaries without local timezone shifts', () => {
+  const result = runInTimezone('America/Los_Angeles')
+  const script = String.raw`
+    const fs = require('node:fs')
+    const path = require('node:path')
+    const Module = require('node:module')
+    const ts = require('typescript')
+    const file = path.join(process.cwd(), 'src/lib/dates.ts')
+    const mod = new Module(file, module)
+    mod.filename = file
+    mod.paths = Module._nodeModulePaths(path.dirname(file))
+    mod._compile(ts.transpile(fs.readFileSync(file, 'utf8'), { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }), file)
+    console.log(JSON.stringify([mod.exports.monthRange(2024, 1), mod.exports.monthRange(2026, 11), mod.exports.monthRange(2027, 0)]))
+  `
+  const child = spawnSync(process.execPath, ['-e', script], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, TZ: 'America/Los_Angeles' },
+  })
+  assert.equal(child.status, 0, child.stderr)
+  assert.deepEqual(JSON.parse(child.stdout.trim()), [
+    { start: '2024-02-01', end: '2024-02-29' },
+    { start: '2026-12-01', end: '2026-12-31' },
+    { start: '2027-01-01', end: '2027-01-31' },
+  ])
+})

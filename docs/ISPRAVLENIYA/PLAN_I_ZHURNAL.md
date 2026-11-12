@@ -2840,3 +2840,12 @@ HEAD до:
 - Отмечены только три подтверждённых пункта: не удалять ScriptLock как упрощение; не заменять его на UserLock; проверять timeout/error envelope. Не закрыты baseline/p50/p95, реальные GAS concurrency probes, lock contention и критерий фактического снижения ожидания.
 - Прогресс по чекбоксам после записи: 183/272 (67.3%), открыто 89; макроэтапы без изменений — 1/12.
 - Все изменения только в docs/ISPRAVLENIYA/PLAN_I_ZHURNAL.md ветки ispravleniya; runtime Code.gs, Production, main, Google Sheets, GAS deployments, Vercel env и Telegram webhook не менялись.
+
+
+### Дополнительные frontend date regression tests (2026-11-12)
+
+- Расширен `tests/dates.test.cjs` без изменения runtime-кода: добавлена проверка переключения `todayISO()` ровно в полночь Москвы (20:59:59Z → 21:00:00Z) при timezone устройства America/Los_Angeles.
+- Добавлены проверки `monthRange()` для високосного февраля 2024 года, декабря 2026 года и января 2027 года в timezone устройства, отличающемся от Europe/Moscow.
+- Это покрывает только frontend calendar helpers; не заменяет проверки реальной Google Sheet timezone, повторяющихся платежей, уведомлений и переходов UI.
+- Прогресс чек-листа не меняется: эти дополнительные тесты не закрывают целиком открытый пункт FC-08 о сквозной проверке дат.
+- Изменения только в tests/dates.test.cjs и этом журнале, ветка ispravleniya; runtime frontend/backend, Production, main, таблица и deployments не менялись.
