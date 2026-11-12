@@ -2675,3 +2675,9 @@ HEAD до:
 - Диагностика защищена: требует TEST/ТЕСТ в имени активной таблицы, отдельный Web App URL, токен, family ID и явное `READ_CONSISTENCY_TEST_CONFIRM=ISOLATED_TEST_ONLY`; production script ID отвергается. При потере ответа после insert cleanup всё равно пытается удалить запись по заранее созданному уникальному ID.
 - В CI добавлена отдельная синтаксическая проверка нового GAS concurrency probe. Run [43175299500](https://github.com/KitchenKnife14/-/actions/runs/43175299500) — **success**, 222/222 регрессионных теста, production build, dependency audit, обе GAS diagnostics и manifest validation прошли.
 - Сам probe пока только подготовлен и проверен синтаксически. Его запуск требует загрузить новую версию `Code.gs` и файл диагностики в отдельный TEST Apps Script project, задать тестовые Script Properties и выполнить функцию вручную. На текущем шаге пользовательские GAS проекты и таблицы не менялись.
+
+#### Дополнительная проверка batch-контрактов (2026-11-12)
+
+- Добавлены два runtime regression tests в VM harness: batch из двух read-only операций (`query/select` + `get_my_context`) проходит без ScriptLock; смешанный batch (`select` + `insert`) сохраняет общий lock и публикует write marker.
+- CI run [43175494136](https://github.com/KitchenKnife14/-/actions/runs/43175494136) — **success**, 224/224 tests, build, dependency audit, Code.gs и обе GAS diagnostics syntax checks, manifest validation — success.
+- Текущая проверка остаётся синтетической: она подтверждает маршрутизацию, marker protocol, retry/cache reset и lock selection в harness, но не заменяет реальную конкуренцию двух Web App executions. Для неё подготовлен `tests/gas/ReadConsistencyConcurrencyTest.gs`.
