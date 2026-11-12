@@ -95,6 +95,26 @@ test('webhook rejects malformed JSON without calling backend', async () => {
   assert.equal(calls, 0);
 });
 
+test('webhook rejects invalid Telegram update_id before calling Apps Script', async () => {
+  const invalidUpdates = [
+    {},
+    { update_id: -1 },
+    { update_id: 1.5 },
+    { update_id: '1' },
+    { update_id: Number.MAX_SAFE_INTEGER + 1 },
+    [],
+  ];
+  for (const body of invalidUpdates) {
+    let calls = 0;
+    const handler = setup(async () => { calls++; });
+    const res = response();
+    await handler(request({ body }), res);
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.error, 'Invalid Telegram update_id');
+    assert.equal(calls, 0);
+  }
+});
+
 test('webhook returns 502 when Apps Script responds with a non-2xx status', async () => {
   const handler = setup(async () => ({ ok: false, text: async () => '' }));
   const res = response();
