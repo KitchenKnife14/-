@@ -2823,31 +2823,41 @@ test('stable read-only query bypasses the global ScriptLock', () => {
   assert.equal(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1').startsWith('stable:'), true);
 });
 
-test('optimistic read discards its result and retries under ScriptLock when a writer overlaps', () => {
+test('optimistic read discards cached rows and retries under ScriptLock when a writer overlaps', () => {
   const h = makeHarness();
   seedTable(h, 'transactions');
   const user = h.signup('read-overlap@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Пересечение чтения и записи' }).data;
   assert.ok(family?.id);
+  const inserted = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 100, operation_date: '2026-11-12', description: 'До параллельной записи' }
+  });
+  assert.equal(inserted.error, null, inserted.error?.message);
+  const sheet = h.context.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('transactions');
   h.resetLockStats();
 
   const props = h.context.PropertiesService.getScriptProperties();
   h.context.PropertiesService.getScriptProperties = () => props;
   const originalGetProperty = props.getProperty.bind(props);
+  const originalSetProperty = props.setProperty.bind(props);
   let markerReads = 0;
   props.getProperty = key => {
     if (key === 'api_read_consistency_v1') {
       markerReads++;
       if (markerReads === 2) {
+        // Simulate a writer completing after the optimistic route read but before
+        // its final marker check. The retry must reload, not reuse ROWS_CACHE.
+        sheet.getRange(2, 4, 1, 1).setValue(200);
         originalSetProperty('api_read_consistency_v1', 'stable:simulated-writer');
         return 'stable:simulated-writer';
       }
     }
     return originalGetProperty(key);
   };
-  const originalSetProperty = props.setProperty.bind(props);
   const selected = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' });
   assert.equal(selected.error, null, selected.error?.message);
+  assert.equal(selected.data[0].amount_kopecks, 200);
   assert.ok(markerReads >= 3, 'read should validate the marker again after its locked retry');
   assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
 });
