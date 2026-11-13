@@ -563,6 +563,19 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
   assert.match(racedInsert.error?.message || '', /создана другим участником/i);
 });
 
+test('isolated GAS goal contribution concurrency probe checks two participants and cleanup', () => {
+  const source = fs.readFileSync('tests/gas/GoalContributionConcurrencyTest.gs', 'utf8');
+  assert.match(source, /runGoalContributionConcurrencyTest/);
+  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /GOAL_TEST_WEB_APP_URL/);
+  assert.match(source, /GOAL_TEST_TOKEN_A/);
+  assert.match(source, /GOAL_TEST_TOKEN_B/);
+  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /saved_kopecks\) !== 40000/);
+  assert.match(source, /report\.cleanup = 'PASS'/);
+  assert.match(source, /productionScriptId/);
+});
+
 test('isolated GAS monthly-plan concurrency probe is TEST-only and verifies cleanup', () => {
   const source = fs.readFileSync('tests/gas/MonthlyPlanConcurrencyTest.gs', 'utf8');
   assert.match(source, /runMonthlyPlanConcurrencyTest/);
