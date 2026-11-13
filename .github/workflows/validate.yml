@@ -46,6 +46,8 @@ jobs:
         run: node --check < tests/gas/GoalContributionConcurrencyTest.gs
       - name: Apps Script transaction concurrency test syntax check
         run: node --check < tests/gas/TransactionConcurrencyTest.gs
+      - name: Apps Script concurrent transaction update test syntax check
+        run: node --check < tests/gas/ConcurrentTransactionUpdateTest.gs
       - name: Apps Script isolated test guard syntax check
         run: node --check < tests/gas/IsolatedTestGuard.gs
       - name: Apps Script signup/join concurrency test syntax check
