@@ -2884,7 +2884,9 @@ test('write lock wait duration is included in request diagnostics', () => {
   h.context.console = { log: value => logs.push(String(value)) };
 
   let clock = 1000;
-  h.context.Date.now = () => clock;
+  const vmDate = vm.runInContext('Date', h.context);
+  const originalNow = vmDate.now;
+  vmDate.now = () => clock;
   const lock = h.context.LockService.getScriptLock();
   const originalWaitLock = lock.waitLock;
   h.context.LockService.getScriptLock = () => ({
@@ -2893,16 +2895,20 @@ test('write lock wait duration is included in request diagnostics', () => {
     hasLock: () => lock.hasLock()
   });
 
-  const response = h.call({
-    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
-    values: { family_id: family.id, type: 'expense', amount_kopecks: 1200, operation_date: '2026-11-12' }
-  });
-  assert.equal(response.error, null, response.error?.message);
-  const metrics = JSON.parse(logs.at(-1));
-  assert.equal(metrics.lockMs, 37);
-  assert.ok(metrics.totalMs >= metrics.lockMs);
-  assert.ok(metrics.workMs >= 0);
-  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+  try {
+    const response = h.call({
+      action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+      values: { family_id: family.id, type: 'expense', amount_kopecks: 1200, operation_date: '2026-11-12' }
+    });
+    assert.equal(response.error, null, response.error?.message);
+    const metrics = JSON.parse(logs.at(-1));
+    assert.equal(metrics.lockMs, 37);
+    assert.ok(metrics.totalMs >= metrics.lockMs);
+    assert.ok(metrics.workMs >= 0);
+    assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+  } finally {
+    vmDate.now = originalNow;
+  }
 });
 
 test('stable read-only query bypasses the global ScriptLock', () => {
