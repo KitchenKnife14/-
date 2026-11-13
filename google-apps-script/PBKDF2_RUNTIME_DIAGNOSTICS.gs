@@ -1,21 +1,31 @@
 /**
  * Test-only PBKDF2 runtime benchmark.
  * Run manually from the isolated TEST Apps Script project only.
- * Uses synthetic credentials and never reads or writes Sheets or Properties.
+ * Uses synthetic credentials and performs no spreadsheet reads/writes.
  */
 function runPbkdf2RuntimeDiagnostics() {
   var props = PropertiesService.getScriptProperties();
   if (String(props.getProperty('PBKDF2_DIAGNOSTICS_CONFIRM') || '') !== 'ISOLATED_TEST_ONLY') {
-    throw new Error('Тест остановлен: установите PBKDF2_DIAGNOSTICS_CONFIRM=ISOLATED_TEST_ONLY только в отдельном TEST-проекте.');
+    throw new Error('Тест остановлен: требуется PBKDF2_DIAGNOSTICS_CONFIRM=ISOLATED_TEST_ONLY.');
   }
+
+  // Script ID and deployment ID are different identifiers. Allow only the exact
+  // Apps Script project explicitly allow-listed in this project's own properties.
+  var currentScriptId = ScriptApp.getScriptId();
+  var allowedScriptId = String(props.getProperty('PBKDF2_ALLOWED_SCRIPT_ID') || '');
+  if (!allowedScriptId || currentScriptId !== allowedScriptId) {
+    throw new Error('Тест остановлен: Script ID проекта не совпадает с PBKDF2_ALLOWED_SCRIPT_ID.');
+  }
+
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (!spreadsheet || !/test|тест/i.test(spreadsheet.getName())) {
     throw new Error('Тест остановлен: требуется отдельная таблица TEST/ТЕСТ.');
   }
-  var productionScriptId = 'AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
-  if (ScriptApp.getScriptId() === productionScriptId) {
-    throw new Error('Тест остановлен: Production Apps Script запрещён.');
+  var allowedSpreadsheetId = String(props.getProperty('PBKDF2_ALLOWED_SPREADSHEET_ID') || '');
+  if (!allowedSpreadsheetId || spreadsheet.getId() !== allowedSpreadsheetId) {
+    throw new Error('Тест остановлен: ID таблицы не совпадает с PBKDF2_ALLOWED_SPREADSHEET_ID.');
   }
+
   const password = 'synthetic-runtime-benchmark-password';
   const salt = 'synthetic-runtime-benchmark-salt';
 
@@ -42,9 +52,10 @@ function runPbkdf2RuntimeDiagnostics() {
   // Warm up the JS path with synthetic input before collecting measurements.
   pbkdf2Hex_(password, salt, 1000);
   const result = {
-    benchmark: 'PBKDF2-HMAC-SHA256 synthetic credentials; no spreadsheet access',
+    benchmark: 'PBKDF2-HMAC-SHA256 synthetic credentials; no spreadsheet data access',
     runtime: 'Google Apps Script V8',
     timestamp: new Date().toISOString(),
+    scriptIdSuffix: currentScriptId.slice(-6),
     pbkdf2_30000: samples(30000, 5),
     pbkdf2_600000: samples(600000, 3)
   };
