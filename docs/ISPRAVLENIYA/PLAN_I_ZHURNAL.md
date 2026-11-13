@@ -3127,3 +3127,14 @@ HEAD до:
 - В run `43425870672` шаг `All regression tests` завершился `success`; также успешно прошли TypeScript/production build, preview smoke, Apps Script syntax checks и manifest validation. Это подтверждает тестовый harness, но не заменяет живой GAS-тест двух аккаунтов.
 - Проверка combined status выявила отдельные Vercel checks со статусом `failure` и причиной build-rate-limit. Они не отменяют успешный GitHub Actions job и не подтверждают Production deployment.
 - Код и процент плана не менялись; пункты реестра не закрываются повторно. Production, `main`, Apps Script deployments и таблицы не затронуты.
+
+
+### SEC-02-TRANSACTION-CONCURRENCY-PROBE — подготовлена проверка двух одновременных записей (2026-11-13)
+
+- Добавлен `tests/gas/TransactionConcurrencyTest.gs`: два участника одной тестовой семьи одновременно отправляют независимые insert-запросы в один лист `transactions` через `UrlFetchApp.fetchAll`.
+- Проверяются сохранение обеих строк, точные ID/суммы/family_id и отсутствие потери одной из записей. После теста обе строки удаляются и повторно проверяется их отсутствие.
+- Предохранители требуют `ISOLATED_TEST_ONLY`, точного `ScriptApp.getScriptId()`, точного Spreadsheet ID, таблицы с TEST/ТЕСТ в названии и отдельного Web App deployment (Production deployment ID запрещён). Используются только тестовые токены двух участников.
+- В `tests/apps-script.test.cjs` добавлена проверка наличия сценария и защитных условий; в `.github/workflows/validate.yml` добавлен отдельный `node --check` для файла теста.
+- Коммиты: `512004bc73ee42255516deb35d88071145b59f44` (GAS probe), `11808563abd68560a3fc2ee179aee26172e1f98e` (регрессионная проверка), `13dc81b8cda3743f128a552be232cb9c41e77825` (CI syntax step). Все три файла повторно прочитаны из `ispravleniya`; новый probe присутствует в ветке.
+- Это подготовка реального теста, не доказательство фактической конкуренции: запуск в отдельном GAS-проекте ожидает ручного выполнения. Пункт SEC-02 о двух одновременных записях остаётся открытым до результата PASS. Процент этапа и общий процент не изменены.
+- Ручное действие добавлено в общий список: задать Script Properties `TRANSACTION_CONCURRENCY_TEST_CONFIRM`, `TRANSACTION_CONCURRENCY_ALLOWED_SCRIPT_ID`, `TRANSACTION_CONCURRENCY_ALLOWED_SPREADSHEET_ID`, `TRANSACTION_CONCURRENCY_TEST_WEB_APP_URL`, `TRANSACTION_CONCURRENCY_TEST_TOKEN_A`, `TRANSACTION_CONCURRENCY_TEST_TOKEN_B`, `TRANSACTION_CONCURRENCY_TEST_FAMILY_ID`; затем запустить `runTransactionConcurrencyTest` в TEST GAS и сохранить JSON-отчёт. Секреты и токены не передавать в чат/репозиторий.
