@@ -4272,7 +4272,13 @@ test('isolated Apps Script PBKDF2 runtime diagnostic measures 30000 and 600000 i
   assert.match(source, /samples\(600000, 3\)/)
   assert.match(source, /synthetic-runtime-benchmark-password/)
   assert.match(source, /synthetic-runtime-benchmark-salt/)
-  assert.doesNotMatch(source, /authRows_|PropertiesService|SpreadsheetApp|appendRow|setValue|deleteRow/)
+  assert.match(source, /PBKDF2_DIAGNOSTICS_CONFIRM/);
+  assert.match(source, /PBKDF2_ALLOWED_SCRIPT_ID/);
+  assert.match(source, /PBKDF2_ALLOWED_SPREADSHEET_ID/);
+  assert.match(source, /ScriptApp\\.getScriptId\\(\\)/);
+  assert.match(source, /spreadsheet\\.getId\\(\\)/);
+  assert.doesNotMatch(source, /productionScriptId|AKfycb/);
+  assert.doesNotMatch(source, /authRows_|getSheetByName|getRange|appendRow|setValue|deleteRow/);
 })
 
 
