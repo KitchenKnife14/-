@@ -461,7 +461,7 @@ test('recurring payment confirmation replay returns success after the full commi
     values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-10-31', next_due_date: '2026-10-31', frequency: 'monthly', active: true }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = created.data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const args = { action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
     p_recurring_id: recurring.id, p_expected_due_date: '2026-10-31', p_operation_date: '2026-11-01', p_expected_recurring: recurring
   }};
@@ -980,7 +980,7 @@ test('purchase confirmation can retry after a partial write without duplicating 
     values: { family_id: family.id, name: 'Тестовый товар', estimated_kopecks: 125000, status: 'planned' }
   });
   assert.equal(created.error, null, created.error?.message);
-  const purchase = created.data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const originalUpdate = h.context.updateRows_;
   let failOnce = true;
   h.context.updateRows_ = function(name, rows) {
@@ -1052,7 +1052,7 @@ test('recurring payments deactivate after the configured end date', () => {
     values: { family_id: family.id, type: 'expense', amount_kopecks: 5000, description: 'Разовый последний платёж', start_date: '2026-10-28', end_date: '2026-10-28', next_due_date: '2026-10-28', frequency: 'monthly', active: true }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = created.data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const result = h.call({ action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
     p_recurring_id: recurring.id, p_expected_due_date: '2026-10-28', p_operation_date: '2026-10-28'
   }});
@@ -2854,7 +2854,7 @@ test('recurring payments preserve the selected family participant when confirmed
     values: { family_id: family.id, type: 'expense', amount_kopecks: 150000, category_id: null, account_id: null, description: 'Аренда', start_date: '2026-11-03', next_due_date: '2026-11-03', frequency: 'monthly', remind: true, active: true, responsible_user_id: partner.user.id }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = created.data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-03' }
