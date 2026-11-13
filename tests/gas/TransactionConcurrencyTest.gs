@@ -55,7 +55,10 @@ function runTransactionConcurrencyTest() {
       };
     });
 
-    var results = UrlFetchApp.fetchAll(requests).map(function(response, index) {
+    var fetchAllStarted = Date.now();
+    var parallelResponses = UrlFetchApp.fetchAll(requests);
+    report.concurrentFetchAllMs = Date.now() - fetchAllStarted;
+    var results = parallelResponses.map(function(response, index) {
       return transactionConcurrencyParse_(response, 'parallel insert ' + index);
     });
     if (results.some(function(result) {
