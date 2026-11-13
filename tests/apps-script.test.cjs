@@ -878,7 +878,7 @@ test('retrying transaction delete repairs a failed planned-purchase unlink', () 
     values: { family_id: family.id, name: 'Покупка', estimated_kopecks: 25000, status: 'planned' }
   }).data[0];
   const confirmed = h.call({ action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
-    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-11' } });
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-11' , p_expected_purchase: purchase} });
   assert.equal(confirmed.error, null, confirmed.error?.message);
   const transactionId = confirmed.data.transaction_id;
   const originalUpdate = h.context.updateRows_;
@@ -914,7 +914,7 @@ test('retrying recurring-payment delete repairs failed transaction detachment', 
       start_date: '2026-11-01', frequency: 'monthly', next_due_date: '2026-11-11', active: true }
   }).data[0];
   const confirmed = h.call({ action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
-    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-11' } });
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-11' , p_expected_recurring: recurring} });
   assert.equal(confirmed.error, null, confirmed.error?.message);
   const transactionId = 'recurring_' + recurring.id + '_' + recurring.next_due_date;
   const originalUpdate = h.context.updateRows_;
@@ -1055,7 +1055,7 @@ test('recurring payments deactivate after the configured end date', () => {
   const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const result = h.call({ action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
     p_recurring_id: recurring.id, p_expected_due_date: '2026-10-28', p_operation_date: '2026-10-28'
-  }});
+  , p_expected_recurring: recurring}});
   assert.equal(result.error, null, result.error?.message);
   const saved = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
   assert.equal(saved.active, false);
@@ -1509,7 +1509,7 @@ test('planned purchase confirmation rejects a deterministic ID collision', () =>
     action: 'query', token: user.token, table: 'transactions', mode: 'insert',
     values: { id: 'purchase_' + purchase.id, family_id: family.id, type: 'expense', amount_kopecks: 1, operation_date: '2026-10-31', description: 'Посторонняя операция' }
   });
-  const result = h.call({ action: 'rpc', token: user.token, name: 'confirm_planned_purchase', params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' } });
+  const result = h.call({ action: 'rpc', token: user.token, name: 'confirm_planned_purchase', params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' , p_expected_purchase: purchase} });
   assert.match(result.error.message, /не соответствует планируемой покупке/);
   const unchanged = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
   assert.notEqual(unchanged.status, 'bought');
@@ -1530,7 +1530,7 @@ test('recurring payment confirmation rejects a deterministic ID collision', () =
   });
   const result = h.call({
     action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
-    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' }
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' , p_expected_recurring: recurring}
   });
   assert.match(result.error.message, /не соответствует .*регулярному платежу/);
   const unchanged = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
@@ -1582,7 +1582,7 @@ test('deleting a purchase transaction unlinks the purchase and restores planned 
   }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
-    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' }
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' , p_expected_purchase: purchase}
   });
   assert.equal(confirmed.error, null, confirmed.error?.message);
   const transactionId = confirmed.data.transaction_id;
@@ -1657,7 +1657,7 @@ test('deleting a recurring payment preserves history and detaches its transactio
   }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
-    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' }
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' , p_expected_recurring: recurring}
   });
   assert.equal(confirmed.error, null, confirmed.error?.message);
   const transactionId = 'recurring_' + recurring.id + '_' + recurring.next_due_date;
@@ -1866,14 +1866,14 @@ test('confirming a planned purchase can debit a selected active family account',
 
   const rejected = h.call({
     action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
-    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31', p_account_id: foreignAccount.id }
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31', p_account_id: foreignAccount.id , p_expected_purchase: purchase}
   });
   assert.match(rejected.error.message, /счёт не найден в этой семье/);
   assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
 
   const confirmed = h.call({
     action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
-    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31', p_account_id: account.id }
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31', p_account_id: account.id , p_expected_purchase: purchase}
   });
   assert.equal(confirmed.error, null, confirmed.error?.message);
   const tx = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data[0];
@@ -2023,7 +2023,7 @@ test('planned purchase confirmation updates only its row', () => {
   };
   const result = h.call({
     action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
-    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' }
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' , p_expected_purchase: purchase}
   });
   assert.equal(result.error, null, result.error?.message);
   assert.equal(fullRewrites, 0);
@@ -2857,7 +2857,7 @@ test('recurring payments preserve the selected family participant when confirmed
   const recurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
-    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-03' }
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-03' , p_expected_recurring: recurring}
   });
   assert.equal(confirmed.error, null, confirmed.error?.message);
   const transaction = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data[0];
@@ -4162,7 +4162,7 @@ test('family-scoped RPCs reject foreign family IDs and foreign purchase or recur
   }).data[0];
   const purchaseConfirmation = h.call({
     action: 'rpc', token: outsider.token, name: 'confirm_planned_purchase',
-    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-10' },
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-10' , p_expected_purchase: purchase},
   });
   assert.match(purchaseConfirmation.error?.message || '', /не найдена/);
 
@@ -4172,7 +4172,7 @@ test('family-scoped RPCs reject foreign family IDs and foreign purchase or recur
   }).data[0];
   const recurringConfirmation = h.call({
     action: 'rpc', token: outsider.token, name: 'confirm_recurring_payment',
-    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-10' },
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-10' , p_expected_recurring: recurring},
   });
   assert.match(recurringConfirmation.error?.message || '', /не найден/);
 
