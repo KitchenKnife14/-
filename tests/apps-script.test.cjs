@@ -2880,6 +2880,7 @@ test('write lock wait duration is included in request diagnostics', () => {
   const h = makeHarness();
   const user = h.signup('lock-wait-metrics@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Метрики ожидания блокировки' }).data;
+  h.resetLockStats();
   const logs = [];
   h.context.console = { log: value => logs.push(String(value)) };
 
