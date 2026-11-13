@@ -3007,6 +3007,8 @@ HEAD до:
 ### Apps Script — TEST окружение
 - [ ] Убедиться, что отдельный TEST Apps Script привязан только к тестовой Google-таблице; проверить Script ID и Spreadsheet ID.
 - [ ] Для PBKDF2 benchmark задать в Script Properties TEST-проекта: `PBKDF2_DIAGNOSTICS_CONFIRM=ISOLATED_TEST_ONLY`, `PBKDF2_ALLOWED_SCRIPT_ID` (точный Script ID TEST-проекта), `PBKDF2_ALLOWED_SPREADSHEET_ID` (точный ID TEST-таблицы); запустить benchmark и сохранить время для 30 000 и 600 000 итераций.
+- [ ] Запустить `runTransactionConcurrencyTest()` в TEST GAS с отдельным TEST Web App deployment и двумя тестовыми участниками; сохранить `concurrentFetchAllMs`, `transactions_saved=2`, `cleanup=PASS`, затем сопоставить execution logs `lockMs`, `workMs`, `totalMs`, `readRetry`.
+- [ ] Запустить `runBackendSecurityDiagnostics()` с `BACKEND_DIAGNOSTICS_CONFIRM=ISOLATED_TEST_ONLY`, `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID`, `BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID`; сохранить только безопасный JSON-отчёт без секретов и персональных данных.
 - [ ] Запустить `runReadConsistencyConcurrencyTest()` в TEST-проекте; проверить результат PASS, 16 параллельных чтений и `cleanup: PASS`; при ошибке сверить manual cleanup IDs из отчёта.
 - [ ] Провести реальный замер ScriptLock по журналам TEST-проекта: ожидание блокировки, длительность работы, общее время и число повторных чтений.
 - [ ] Проверить фактическое значение `SIGNUP_DISABLED` в свойствах Production-проекта, не копируя значение секретов в чат; убедиться, что регистрация соответствует частному режиму. Не менять настройку без согласования.
