@@ -42,10 +42,10 @@ async function main() {
     // smoke test cannot silently miss a page added to App.tsx later.
     const fs = require('node:fs')
     const appSource = fs.readFileSync(path.join(process.cwd(), 'src/App.tsx'), 'utf8')
-    const routes = [...appSource.matchAll(/<Route\\s+path="([^"]+)"/g)]
+    const routes = [...appSource.matchAll(/<Route path="([^"]+)"/g)]
       .map(match => match[1])
       .filter(route => route !== '*')
-      .map(route => '/' + route.replace(/^\\//, ''))
+      .map(route => '/' + route)
     assert.ok(routes.length >= 10, 'expected to discover all registered application routes')
     assert.ok(routes.includes('/transactions'), 'transactions route must be covered')
     assert.equal(new Set(routes).size, routes.length, 'route declarations must be unique')
