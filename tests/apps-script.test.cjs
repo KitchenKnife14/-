@@ -426,7 +426,8 @@ test('recurring payment confirmation can retry after a partial write without dup
     values: { family_id: family.id, type: 'expense', amount_kopecks: 9900, description: 'Тестовая подписка', start_date: '2026-10-28', next_due_date: '2026-10-28', frequency: 'monthly', active: true }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
+  const recurringSeed0 = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed0.id }] }).data[0];
   const originalUpdate = h.context.updateRows_;
   let failOnce = true;
   h.context.updateRows_ = function(name, rows) {
@@ -461,7 +462,8 @@ test('recurring payment confirmation replay returns success after the full commi
     values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-10-31', next_due_date: '2026-10-31', frequency: 'monthly', active: true }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const recurringSeed1 = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed1.id }] }).data[0];
   const args = { action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
     p_recurring_id: recurring.id, p_expected_due_date: '2026-10-31', p_operation_date: '2026-11-01', p_expected_recurring: recurring
   }};
@@ -488,10 +490,11 @@ test('recurring confirmation rejects a stale snapshot after another family membe
   const partner = h.signup('recurring-stale-partner@example.com');
   const family = h.call({ action: 'createFamily', token: owner.token, name: 'Устаревший регулярный платёж' }).data;
   assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
-  const recurring = h.call({
+  const recurringSeed2 = h.call({
     action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
     values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-11-01', next_due_date: '2026-11-11', frequency: 'monthly', active: true }
   }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed2.id }] }).data[0];
   const changed = h.call({
     action: 'query', token: partner.token, table: 'recurring_payments', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: recurring.id }], values: { amount_kopecks: 15000 }
@@ -873,10 +876,11 @@ test('retrying transaction delete repairs a failed planned-purchase unlink', () 
   const h = makeHarness();
   const user = h.signup('transaction-delete-cascade-retry@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор удаления операции' }).data;
-  const purchase = h.call({
+  const purchaseSeed0 = h.call({
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Покупка', estimated_kopecks: 25000, status: 'planned' }
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed0.id }] }).data[0];
   const confirmed = h.call({ action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
     params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-11' , p_expected_purchase: purchase} });
   assert.equal(confirmed.error, null, confirmed.error?.message);
@@ -908,11 +912,12 @@ test('retrying recurring-payment delete repairs failed transaction detachment', 
   const h = makeHarness();
   const user = h.signup('recurring-delete-cascade-retry@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Повтор удаления регулярного' }).data;
-  const recurring = h.call({
+  const recurringSeed3 = h.call({
     action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
     values: { family_id: family.id, type: 'expense', amount_kopecks: 9900, description: 'Подписка',
       start_date: '2026-11-01', frequency: 'monthly', next_due_date: '2026-11-11', active: true }
   }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed3.id }] }).data[0];
   const confirmed = h.call({ action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-11' , p_expected_recurring: recurring} });
   assert.equal(confirmed.error, null, confirmed.error?.message);
@@ -980,7 +985,8 @@ test('purchase confirmation can retry after a partial write without duplicating 
     values: { family_id: family.id, name: 'Тестовый товар', estimated_kopecks: 125000, status: 'planned' }
   });
   assert.equal(created.error, null, created.error?.message);
-  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const purchaseSeed1 = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed1.id }] }).data[0];
   const originalUpdate = h.context.updateRows_;
   let failOnce = true;
   h.context.updateRows_ = function(name, rows) {
@@ -1052,7 +1058,8 @@ test('recurring payments deactivate after the configured end date', () => {
     values: { family_id: family.id, type: 'expense', amount_kopecks: 5000, description: 'Разовый последний платёж', start_date: '2026-10-28', end_date: '2026-10-28', next_due_date: '2026-10-28', frequency: 'monthly', active: true }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const recurringSeed4 = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed4.id }] }).data[0];
   const result = h.call({ action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
     p_recurring_id: recurring.id, p_expected_due_date: '2026-10-28', p_operation_date: '2026-10-28'
   , p_expected_recurring: recurring}});
@@ -1072,10 +1079,11 @@ test('goal deletion keeps the parent available when unlinking a purchase fails',
   }).data[0];
   h.call({ action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert',
     values: { goal_id: goal.id, amount_kopecks: 5000, contribution_date: '2026-11-11' } });
-  const purchase = h.call({
+  const purchaseSeed2 = h.call({
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Покупка из цели', estimated_kopecks: 25000, goal_id: goal.id, status: 'planned' }
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed2.id }] }).data[0];
 
   const originalUpdate = h.context.updateRows_;
   let failOnce = true;
@@ -1120,7 +1128,8 @@ test('deleting a goal removes its contribution history and unlinks planned purch
   assert.equal(deleted.error, null, deleted.error?.message);
   assert.equal(h.context.rows_('goals').some(row => row.id === goal.id), false);
   assert.equal(h.context.rows_('goal_contributions').length, 0);
-  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  const purchaseSeed3 = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed3.id }] }).data[0];
   assert.equal(purchase.goal_id, '');
 });
 
@@ -1475,10 +1484,11 @@ test('planned purchase confirmation rejects a stale UI snapshot before creating 
   const partner = h.signup('purchase-stale-partner@example.com');
   const family = h.call({ action: 'createFamily', token: owner.token, name: 'Устаревшее подтверждение покупки' }).data;
   assert.equal(h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code }).error, null);
-  const purchase = h.call({
+  const purchaseSeed4 = h.call({
     action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Телевизор', estimated_kopecks: 5500000, status: 'planned' }
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed4.id }] }).data[0];
   const changed = h.call({
     action: 'query', token: partner.token, table: 'planned_purchases', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: purchase.id }],
@@ -1501,10 +1511,11 @@ test('planned purchase confirmation rejects a deterministic ID collision', () =>
   const h = makeHarness();
   const user = h.signup('purchase-collision@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Покупки' }).data;
-  const purchase = h.call({
+  const purchaseSeed5 = h.call({
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Велосипед', estimated_kopecks: 2000000, status: 'planned' }
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed5.id }] }).data[0];
   h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'insert',
     values: { id: 'purchase_' + purchase.id, family_id: family.id, type: 'expense', amount_kopecks: 1, operation_date: '2026-10-31', description: 'Посторонняя операция' }
@@ -1519,10 +1530,11 @@ test('recurring payment confirmation rejects a deterministic ID collision', () =
   const h = makeHarness();
   const user = h.signup('recurring-collision@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Регулярные платежи' }).data;
-  const recurring = h.call({
+  const recurringSeed5 = h.call({
     action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
     values: { family_id: family.id, type: 'expense', amount_kopecks: 99000, description: 'Интернет', start_date: '2026-10-01', frequency: 'monthly', next_due_date: '2026-11-01', active: true }
   }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed5.id }] }).data[0];
   const transactionId = 'recurring_' + recurring.id + '_' + recurring.next_due_date;
   h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'insert',
@@ -1576,10 +1588,11 @@ test('deleting a purchase transaction unlinks the purchase and restores planned 
   const h = makeHarness();
   const user = h.signup('purchase-delete-link@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Связь покупки' }).data;
-  const purchase = h.call({
+  const purchaseSeed6 = h.call({
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Телевизор', estimated_kopecks: 5500000, status: 'planned' }
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed6.id }] }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
     params: { p_purchase_id: purchase.id, p_operation_date: '2026-10-31' , p_expected_purchase: purchase}
@@ -1651,10 +1664,11 @@ test('deleting a recurring payment preserves history and detaches its transactio
   const h = makeHarness();
   const user = h.signup('recurring-delete@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'История регулярных платежей' }).data;
-  const recurring = h.call({
+  const recurringSeed6 = h.call({
     action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
     values: { family_id: family.id, type: 'expense', amount_kopecks: 129900, description: 'Домашний интернет', start_date: '2026-10-01', frequency: 'monthly', next_due_date: '2026-11-01', active: true }
   }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed6.id }] }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-01' , p_expected_recurring: recurring}
@@ -1859,10 +1873,11 @@ test('confirming a planned purchase can debit a selected active family account',
     action: 'query', token: outsider.token, table: 'accounts', mode: 'insert', returning: true,
     values: { family_id: foreignFamily.id, name: 'Чужой счёт', kind: 'bank', starting_balance_kopecks: 0 }
   }).data[0];
-  const purchase = h.call({
+  const purchaseSeed7 = h.call({
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Наушники', estimated_kopecks: 25000, status: 'planned' }
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed7.id }] }).data[0];
 
   const rejected = h.call({
     action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
@@ -2005,10 +2020,11 @@ test('planned purchase confirmation updates only its row', () => {
   const h = makeHarness();
   const user = h.signup('purchase-targeted-update@example.com');
   const family = h.call({ action: 'createFamily', token: user.token, name: 'Точечное подтверждение' }).data;
-  const purchase = h.call({
+  const purchaseSeed8 = h.call({
     action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Велосипед', estimated_kopecks: 2000000, status: 'planned' }
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed8.id }] }).data[0];
   let fullRewrites = 0;
   let targetedUpdates = 0;
   const originalWriteRows = h.context.writeRows_;
@@ -2491,7 +2507,7 @@ test('create_goal_with_purchase creates a linked goal and planned purchase', () 
   });
   assert.equal(result.error, null, result.error?.message);
   const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data.find(g => g.id === result.data.goal_id);
-  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data.find(p => p.id === result.data.purchase_id);
+  const purchaseSeed9 = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data.find(p => p.id === result.data.purchase_id);
   assert.equal(goal.name, 'Телевизор');
   assert.equal(purchase.goal_id, goal.id);
   assert.equal(purchase.name, goal.name);
@@ -2809,6 +2825,7 @@ test('goal contribution writes refresh the owning family goals revision', () => 
   assert.equal(after.error, null, after.error?.message);
   assert.notEqual(after.data, before.data);
   const saved = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed9.id }] }).data[0];
   assert.equal(saved.saved_kopecks, 2500);
 });
 
@@ -2854,7 +2871,8 @@ test('recurring payments preserve the selected family participant when confirmed
     values: { family_id: family.id, type: 'expense', amount_kopecks: 150000, category_id: null, account_id: null, description: 'Аренда', start_date: '2026-11-03', next_due_date: '2026-11-03', frequency: 'monthly', remind: true, active: true, responsible_user_id: partner.user.id }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const recurringSeed7 = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed7.id }] }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-03' , p_expected_recurring: recurring}
@@ -4156,20 +4174,22 @@ test('family-scoped RPCs reject foreign family IDs and foreign purchase or recur
   });
   assert.match(foreignGoalCreation.error?.message || '', /Нет доступа к этой семье/);
 
-  const purchase = h.call({
+  const purchaseSeed10 = h.call({
     action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Чужая покупка', estimated_kopecks: 200000, status: 'planned' },
   }).data[0];
+  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed10.id }] }).data[0];
   const purchaseConfirmation = h.call({
     action: 'rpc', token: outsider.token, name: 'confirm_planned_purchase',
     params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-10' , p_expected_purchase: purchase},
   });
   assert.match(purchaseConfirmation.error?.message || '', /не найдена/);
 
-  const recurring = h.call({
+  const recurringSeed8 = h.call({
     action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
     values: { family_id: family.id, type: 'expense', amount_kopecks: 9900, description: 'Чужая подписка', start_date: '2026-11-01', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
   }).data[0];
+  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed8.id }] }).data[0];
   const recurringConfirmation = h.call({
     action: 'rpc', token: outsider.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-10' , p_expected_recurring: recurring},
