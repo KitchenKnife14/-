@@ -3138,3 +3138,15 @@ HEAD до:
 - Коммиты: `512004bc73ee42255516deb35d88071145b59f44` (GAS probe), `11808563abd68560a3fc2ee179aee26172e1f98e` (регрессионная проверка), `13dc81b8cda3743f128a552be232cb9c41e77825` (CI syntax step). Все три файла повторно прочитаны из `ispravleniya`; новый probe присутствует в ветке.
 - Это подготовка реального теста, не доказательство фактической конкуренции: запуск в отдельном GAS-проекте ожидает ручного выполнения. Пункт SEC-02 о двух одновременных записях остаётся открытым до результата PASS. Процент этапа и общий процент не изменены.
 - Ручное действие добавлено в общий список: задать Script Properties `TRANSACTION_CONCURRENCY_TEST_CONFIRM`, `TRANSACTION_CONCURRENCY_ALLOWED_SCRIPT_ID`, `TRANSACTION_CONCURRENCY_ALLOWED_SPREADSHEET_ID`, `TRANSACTION_CONCURRENCY_TEST_WEB_APP_URL`, `TRANSACTION_CONCURRENCY_TEST_TOKEN_A`, `TRANSACTION_CONCURRENCY_TEST_TOKEN_B`, `TRANSACTION_CONCURRENCY_TEST_FAMILY_ID`; затем запустить `runTransactionConcurrencyTest` в TEST GAS и сохранить JSON-отчёт. Секреты и токены не передавать в чат/репозиторий.
+
+
+### 2026-11-13 — исправление аргументов SEC-02 concurrency probe
+- Повторно проверены вызовы `transactionConcurrencyPost_`: в тесте токен передавался вторым аргументом, а helper ошибочно ожидал там тело запроса. Это делало проверки после параллельной вставки и cleanup некорректными.
+- Исправлена сигнатура helper на `transactionConcurrencyPost_(url, token, body)`; все места вызова теперь согласованы.
+- В `tests/apps-script.test.cjs` добавлена проверка точной сигнатуры helper, чтобы ловить повтор такого дефекта.
+- Подтверждено по `Code.gs`: фильтр `in` поддерживается; тестовые выборки по двум ID допустимы.
+- Изменены только тестовый probe и его статический regression test. Production, `main`, Apps Script deployment и таблицы не затронуты.
+- Коммиты: `26613086ada033146e1cad0c6b422465512382cf`, `9c1ab3a402f8946fd71d401a749c2a62b291195a`, `aad5b82e954fddacb932908f1b4abbffa3c06f17`.
+- GitHub Actions для последнего commit пока не подтверждён; combined status вернул пустой список checks. Vercel build-rate-limit из предыдущей проверки не является результатом GitHub Actions.
+- SEC-02 остаётся открытым до фактического запуска в TEST GAS и проверки lock wait/total execution logs.
+- Прогресс чек-листа не меняется.
