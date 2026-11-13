@@ -599,10 +599,14 @@ const ACCESS_SNAPSHOT_=new WeakMap();
 function accessSnapshot_(user){
   let snapshot=ACCESS_SNAPSHOT_.get(user);
   if(!snapshot){
-    const members=rows_('family_members').filter(m=>String(m.user_id)===String(user.id));
-    snapshot={familyIds:members.map(m=>String(m.family_id)),membersByFamily:new Map(),goalsById:null};
-    members.forEach(m=>{
+    const allMembers=rows_('family_members');
+    const members=allMembers.filter(m=>String(m.user_id)===String(user.id));
+    const familyIds=members.map(m=>String(m.family_id));
+    const allowedFamilies=new Set(familyIds);
+    snapshot={familyIds,membersByFamily:new Map(),goalsById:null};
+    allMembers.forEach(m=>{
       const familyId=String(m.family_id);
+      if(!allowedFamilies.has(familyId))return;
       if(!snapshot.membersByFamily.has(familyId))snapshot.membersByFamily.set(familyId,new Set());
       snapshot.membersByFamily.get(familyId).add(String(m.user_id));
     });
