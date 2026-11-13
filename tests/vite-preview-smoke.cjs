@@ -40,7 +40,7 @@ async function main() {
     // for direct navigation to nested routes, not a server-side 404.
     const nestedResponse = await fetch(new URL('/transactions', origin))
     assert.equal(nestedResponse.status, 200, 'nested transaction route must resolve to the SPA shell')
-    assert.match(nestedResponse.headers.get('content-type') || '', /text\\/html/)
+    assert.ok((nestedResponse.headers.get('content-type') || '').includes('text/html'), 'nested route must return HTML')
     const nestedHtml = await nestedResponse.text()
     assert.ok(nestedHtml.includes('<div id="root"></div>'), 'nested route must serve the React root')
     assert.ok(nestedHtml.includes(scriptMatch[1]), 'nested route must reference the production app bundle')
