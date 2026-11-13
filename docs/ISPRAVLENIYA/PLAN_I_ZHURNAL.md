@@ -3050,4 +3050,13 @@ HEAD до:
 - В `.github/workflows/validate.yml` удалён дублирующий шаг синтаксической проверки `PBKDF2_RUNTIME_DIAGNOSTICS.gs`; оставлена одна проверка этого файла. Функциональное покрытие CI не сокращено.
 - Изменены: `tests/vite-preview-smoke.cjs`, `.github/workflows/validate.yml`. Изменения последовательно сохранены в `ispravleniya`; Production, `main`, GAS deployments и таблицы не затронуты.
 - Коммиты: `2f754d785974596bd22c9421c0b0e7c3f2127cb6` (CI cleanup), `aa3f6a8cf52a900a4c9b16fea21970abebc908d9` (nested-route smoke).
-- Первый CI выявил синтаксическую ошибку в regex проверки `text/html` (экранирование `/` было удвоено в JavaScript-файле). Исправлено на явную проверку `content-type.includes('text/html')` в коммите `7da5617d7639f5a430b409d1b62c8538f49d3f73`; CI run `43407434469` выполняется. До его успеха тест не считать подтверждённым. Процент чек-листа не менять: добавлено дополнительное автоматическое покрытие, но соответствующий пункт E2E требует полноценного browser-run и ручной проверки на iPhone.
+- Первый CI выявил синтаксическую ошибку в regex проверки `text/html` (экранирование `/` было удвоено в JavaScript-файле). Исправлено на явную проверку `content-type.includes('text/html')` в коммите `7da5617d7639f5a430b409d1b62c8538f49d3f73`; CI run `43407434469` завершился `success`; последующий коммит журнала `cd26eef1b18dca543f7b50a0cc72ea6acec82c2d` также прошёл CI (run `43407469412`, `success`). Процент чек-листа не менять: добавлено дополнительное автоматическое покрытие, но соответствующий пункт E2E требует полноценного browser-run и ручной проверки на iPhone.
+
+
+### TEST-01-SPA-ROUTE-SMOKE-02 — прямое открытие всех зарегистрированных страниц (2026-11-13)
+
+- Расширен `tests/vite-preview-smoke.cjs`: вместо единственного `/transactions` теперь проверяются все 13 вложенных маршрутов, объявленных в `src/App.tsx`: transactions, accounts, calendar, recurring, budgets, goals, purchases, planning, reports, analysis, notifications, telegram, categories.
+- Для каждого маршрута проверяются HTTP 200, HTML content-type, наличие React root и production bundle. Это проверяет fallback хостинга для всех существующих страниц и снижает риск 404 при прямом открытии/обновлении URL.
+- Маршруты сверены с текущим `src/App.tsx`; логика маршрутизации и пользовательский код приложения не изменялись.
+- Изменён `tests/vite-preview-smoke.cjs`, коммит `977d93f7eb4deacdb3d70ca5d7f2f8b0245ff66b`. Production и `main` не затронуты. Ожидается CI для нового HEAD.
+- Прогресс чек-листа не повышать до успешного CI; полноценный browser E2E с авторизацией и взаимодействием остаётся отдельной задачей.
