@@ -4531,7 +4531,7 @@ test('SIGNUP_DISABLED rejects registration before creating an auth row or profil
   });
 
   assert.match(response.error?.message || '', /Регистрация закрыта/);
-  assert.equal(h.context.rows_('auth').some(row => row.email === email), false);
+  assert.equal(h.context.authRows_().some(row => row.email === email), false);
   assert.equal(h.context.rows_('profiles').some(row => row.email === email), false);
 });
 
