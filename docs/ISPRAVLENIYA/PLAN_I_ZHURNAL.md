@@ -3229,3 +3229,10 @@ HEAD до:
 - Коммит теста: 3fc6c3405fb854d85f9cdefb1e7d0f8ec5f328ef.
 - Vercel временно на паузе по просьбе пользователя из-за дневного лимита. Не запускать Vercel builds/deployments и не менять Vercel settings/env до отдельной команды; вернуться к ним позже.
 - Чекбоксы и проценты не менялись.
+
+### 2026-11-13 — исправление падения CI в date/time harness
+- Последний CI run `43432909375` падал не на коде upsert/конкурентных изменений, а на существующем regression test `date and time normalization uses the spreadsheet timezone at the month boundary`: тест создавал `new h.context.Date(...)`, но глобальный Date не был передан в VM context `makeHarness()`.
+- В `makeHarness()` добавлен стандартный `Date` в контекст VM. Это исправляет окружение теста и не меняет Apps Script production-код или поведение сайта.
+- Коммит: `4af57689accc8be452fdbe6fa49b92f631747743`. Требуется дождаться нового CI на этом HEAD; до успешного завершения не считать suite зелёным.
+- Аудит upsert: `Code.gs` уже содержит `expectedRows` с проверкой совпадающих ключей, stale snapshot, insert race; QueryBuilder уже имеет `.expectUpsert()`. `PlanningPage.tsx` передаёт expected snapshot и при одиночном сохранении, и при копировании прошлого месяца. В тестах уже есть проверки stale update, race insert и атомарного отказа пакетного upsert.
+- Следующая проверка: CI после исправления harness; затем полный аудит RPC mutation endpoints и оставшихся bulk writes. Реальный GAS runtime остаётся отдельным шагом.
