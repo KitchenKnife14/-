@@ -523,6 +523,12 @@ test('optimistic update rejects stale snapshots and preserves the newer row', ()
     filters: [{ column: 'id', op: 'eq', value: created.data[0].id }], values: { description: 'Изменено вторым участником' }
   });
   assert.equal(newer.error, null, newer.error?.message);
+  const partialWrite = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: created.data[0].id }], expected: { id: created.data[0].id },
+    values: { amount_kopecks: 18000 }
+  });
+  assert.match(partialWrite.error?.message || '', /неполный снимок/i);
   const staleWrite = h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: created.data[0].id }], expected: staleSnapshot,
@@ -556,6 +562,11 @@ test('delete rejects a stale row snapshot and reports an already removed row', (
   });
   assert.equal(changed.error, null, changed.error?.message);
 
+  const partialDelete = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'delete',
+    filters: [{ column: 'id', op: 'eq', value: snapshot.id }], expected: { id: snapshot.id }
+  });
+  assert.match(partialDelete.error?.message || '', /неполный снимок/i);
   const staleDelete = h.call({
     action: 'query', token: owner.token, table: 'transactions', mode: 'delete',
     filters: [{ column: 'id', op: 'eq', value: snapshot.id }], expected: snapshot
@@ -589,6 +600,8 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
   const snapshot = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'select', filters: [{ column: 'family_id', op: 'eq', value: family.id }, { column: 'month_date', op: 'eq', value: key.month_date }, { column: 'type', op: 'eq', value: key.type }, { column: 'category_id', op: 'is', value: null }] }).data[0];
   const newer = h.call({ action: 'query', token: partner.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'family_id,month_date,category_id,type', values: { ...key, planned_kopecks: 15000, note: 'Изменение второго участника' } });
   assert.equal(newer.error, null, newer.error?.message);
+  const partial = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'family_id,month_date,category_id,type', expectedRows: [{ ...key }], values: { ...key, planned_kopecks: 19000 } });
+  assert.match(partial.error?.message || '', /неполный снимок/i);
   const stale = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'upsert', onConflict: 'family_id,month_date,category_id,type', expectedRows: [snapshot], values: { ...key, planned_kopecks: 20000, note: 'Устаревший план' } });
   assert.match(stale.error?.message || '', /изменён другим участником/i);
   const saved = h.call({ action: 'query', token: owner.token, table: 'monthly_plans', mode: 'select', filters: [{ column: 'family_id', op: 'eq', value: family.id }] }).data[0];
