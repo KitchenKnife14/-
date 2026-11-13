@@ -4674,3 +4674,20 @@ test('request authorization snapshot reuses family and goal indexes while exposi
   assert.equal(reads.family_members, 1, 'family membership index must be built from one sheet read per request');
   assert.equal(reads.goals, 1, 'goal ownership index must be built from one sheet read per request');
 });
+
+
+test('isolated GAS transaction concurrency probe checks simultaneous inserts by both family members and cleanup', () => {
+  const source = fs.readFileSync('tests/gas/TransactionConcurrencyTest.gs', 'utf8');
+  assert.match(source, /runTransactionConcurrencyTest/);
+  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /TRANSACTION_CONCURRENCY_ALLOWED_SCRIPT_ID/);
+  assert.match(source, /ScriptApp\.getScriptId\(\)/);
+  assert.match(source, /TRANSACTION_CONCURRENCY_ALLOWED_SPREADSHEET_ID/);
+  assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_A/);
+  assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_B/);
+  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /table:'transactions', mode:'insert'/);
+  assert.match(source, /report\.transactions_saved = 2/);
+  assert.match(source, /report\.cleanup = cleanupErrors\.length \? 'FAILED' : 'PASS'/);
+  assert.match(source, /productionDeploymentId/);
+});
