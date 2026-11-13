@@ -4626,3 +4626,51 @@ test('write handler exception still releases the acquired ScriptLock exactly onc
   assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
   assert.match(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1'), /^stable:/);
 });
+
+test('request authorization snapshot reuses family and goal indexes while exposing both member profiles only', () => {
+  const h = makeHarness();
+  const owner = h.signup('snapshot-owner@example.com');
+  const partner = h.signup('snapshot-partner@example.com');
+  const outsider = h.signup('snapshot-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Snapshot family' }).data;
+  h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  const foreignFamily = h.call({ action: 'createFamily', token: outsider.token, name: 'Foreign snapshot family' }).data;
+
+  const ownGoal = h.call({
+    action: 'query', token: owner.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id: 'snapshot-own-goal', family_id: family.id, name: 'Own goal', target_kopecks: 10000, saved_kopecks: 1000, status: 'active' }
+  }).data[0];
+  const foreignGoal = h.call({
+    action: 'query', token: outsider.token, table: 'goals', mode: 'insert', returning: true,
+    values: { id: 'snapshot-foreign-goal', family_id: foreignFamily.id, name: 'Foreign goal', target_kopecks: 10000, saved_kopecks: 2000, status: 'active' }
+  }).data[0];
+  h.context.appendRows_('goal_contributions', [
+    { id: 'snapshot-own-contribution', goal_id: ownGoal.id, amount_kopecks: 1000, contribution_date: '2026-11-13' },
+    { id: 'snapshot-foreign-contribution', goal_id: foreignGoal.id, amount_kopecks: 2000, contribution_date: '2026-11-13' }
+  ]);
+
+  const reads = { family_members: 0, goals: 0 };
+  const originalRows = h.context.rows_;
+  h.context.rows_ = function(table) {
+    if (Object.prototype.hasOwnProperty.call(reads, table)) reads[table]++;
+    return originalRows(table);
+  };
+
+  const result = h.call({
+    action: 'batch',
+    token: owner.token,
+    requests: [
+      { action: 'query', table: 'profiles', mode: 'select' },
+      { action: 'query', table: 'goal_contributions', mode: 'select' },
+      { action: 'query', table: 'goal_contributions', mode: 'select' }
+    ]
+  });
+  assert.equal(result.error, null, result.error?.message);
+  const profileIds = result.data[0].data.map(row => row.id).sort();
+  assert.deepEqual(profileIds, [owner.user.id, partner.user.id].sort());
+  assert.equal(result.data[1].data.length, 1);
+  assert.equal(result.data[1].data[0].id, 'snapshot-own-contribution');
+  assert.equal(result.data[2].data.length, 1);
+  assert.equal(reads.family_members, 1, 'family membership index must be built from one sheet read per request');
+  assert.equal(reads.goals, 1, 'goal ownership index must be built from one sheet read per request');
+});
