@@ -3118,3 +3118,12 @@ HEAD до:
 - Тесты выполнялись в Node harness; реальный GAS runtime, две реальные учётные записи и Google Sheets не задействовались. Поэтому реальная конкурентная нагрузка и фактические Script Properties остаются непроверенными.
 - Процент чек-листа не увеличивать: дополнительное регрессионное покрытие не закрывает ручные пункты SEC-01/SEC-02/SEC-04/SEC-05/FC-07/FC-08/FC-09.
 - Production, `main`, Apps Script deployments и финансовые данные не затронуты. Новых ручных действий не добавлено; существующий список TEST GAS остаётся актуальным.
+
+
+### AUTH-SNAPSHOT-REGRESSION-VERIFY — подтверждён доступ обоих участников и изоляция семей (2026-11-13)
+
+- Проверен фактический checkout GitHub Actions: run `43425870672` собрал именно branch `ispravleniya` и HEAD `fb150325a57af2339eae43667998ebe01bb3c666`.
+- В `tests/apps-script.test.cjs` уже присутствует регрессионный сценарий `request authorization snapshot reuses family and goal indexes while exposing both member profiles only`: владелец получает профили обоих участников своей семьи; профиль посторонней семьи и чужое пополнение цели не раскрываются; `family_members` читается один раз, `goals` — один раз на batch-запрос.
+- В run `43425870672` шаг `All regression tests` завершился `success`; также успешно прошли TypeScript/production build, preview smoke, Apps Script syntax checks и manifest validation. Это подтверждает тестовый harness, но не заменяет живой GAS-тест двух аккаунтов.
+- Проверка combined status выявила отдельные Vercel checks со статусом `failure` и причиной build-rate-limit. Они не отменяют успешный GitHub Actions job и не подтверждают Production deployment.
+- Код и процент плана не менялись; пункты реестра не закрываются повторно. Production, `main`, Apps Script deployments и таблицы не затронуты.
