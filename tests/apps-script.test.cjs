@@ -494,7 +494,7 @@ test('recurring confirmation rejects a stale snapshot after another family membe
     action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
     values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-11-01', next_due_date: '2026-11-11', frequency: 'monthly', active: true }
   }).data[0];
-  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed2.id }] }).data[0];
+  const recurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed2.id }] }).data[0];
   const changed = h.call({
     action: 'query', token: partner.token, table: 'recurring_payments', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: recurring.id }], values: { amount_kopecks: 15000 }
@@ -1488,7 +1488,7 @@ test('planned purchase confirmation rejects a stale UI snapshot before creating 
     action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Телевизор', estimated_kopecks: 5500000, status: 'planned' }
   }).data[0];
-  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed4.id }] }).data[0];
+  const purchase = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed4.id }] }).data[0];
   const changed = h.call({
     action: 'query', token: partner.token, table: 'planned_purchases', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: purchase.id }],
@@ -2872,7 +2872,7 @@ test('recurring payments preserve the selected family participant when confirmed
   });
   assert.equal(created.error, null, created.error?.message);
   const recurringSeed7 = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
-  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed7.id }] }).data[0];
+  const recurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed7.id }] }).data[0];
   const confirmed = h.call({
     action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-03' , p_expected_recurring: recurring}
@@ -4178,7 +4178,7 @@ test('family-scoped RPCs reject foreign family IDs and foreign purchase or recur
     action: 'query', token: owner.token, table: 'planned_purchases', mode: 'insert', returning: true,
     values: { family_id: family.id, name: 'Чужая покупка', estimated_kopecks: 200000, status: 'planned' },
   }).data[0];
-  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed10.id }] }).data[0];
+  const purchase = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed10.id }] }).data[0];
   const purchaseConfirmation = h.call({
     action: 'rpc', token: outsider.token, name: 'confirm_planned_purchase',
     params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-10' , p_expected_purchase: purchase},
@@ -4189,7 +4189,7 @@ test('family-scoped RPCs reject foreign family IDs and foreign purchase or recur
     action: 'query', token: owner.token, table: 'recurring_payments', mode: 'insert', returning: true,
     values: { family_id: family.id, type: 'expense', amount_kopecks: 9900, description: 'Чужая подписка', start_date: '2026-11-01', next_due_date: '2026-11-10', frequency: 'monthly', active: true },
   }).data[0];
-  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed8.id }] }).data[0];
+  const recurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed8.id }] }).data[0];
   const recurringConfirmation = h.call({
     action: 'rpc', token: outsider.token, name: 'confirm_recurring_payment',
     params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-10' , p_expected_recurring: recurring},
