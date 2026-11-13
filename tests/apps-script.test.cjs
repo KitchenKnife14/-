@@ -4519,6 +4519,22 @@ test('mixed batch keeps one ScriptLock and releases it once when a child write f
   assert.equal(rows.data[0].amount_kopecks, 321);
 });
 
+test('SIGNUP_DISABLED rejects registration before creating an auth row or profile', () => {
+  const h = makeHarness();
+  const email = 'signup-disabled-no-write@example.com';
+  h.context.PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED', '1');
+
+  const response = h.call({
+    action: 'signup', email,
+    password: 'correct-horse-battery',
+    name: 'Не должен создаться'
+  });
+
+  assert.match(response.error?.message || '', /Регистрация закрыта/);
+  assert.equal(h.context.rows_('auth').some(row => row.email === email), false);
+  assert.equal(h.context.rows_('profiles').some(row => row.email === email), false);
+});
+
 test('write handler exception still releases the acquired ScriptLock exactly once', () => {
   const h = makeHarness();
   h.context.PropertiesService.getScriptProperties().setProperty('SIGNUP_DISABLED', '1');
