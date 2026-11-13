@@ -4,8 +4,6 @@
  *
  * Script Properties:
  * TRANSACTION_CONCURRENCY_TEST_CONFIRM=ISOLATED_TEST_ONLY
- * TRANSACTION_CONCURRENCY_ALLOWED_SCRIPT_ID=<ScriptApp.getScriptId()>
- * TRANSACTION_CONCURRENCY_ALLOWED_SPREADSHEET_ID=<test spreadsheet ID>
  * TRANSACTION_CONCURRENCY_TEST_WEB_APP_URL=<test deployment /exec URL>
  * TRANSACTION_CONCURRENCY_TEST_TOKEN_A=<test user A session token>
  * TRANSACTION_CONCURRENCY_TEST_TOKEN_B=<test user B session token>
@@ -18,17 +16,7 @@ function runTransactionConcurrencyTest() {
   var tokenB = String(props.getProperty('TRANSACTION_CONCURRENCY_TEST_TOKEN_B') || '').trim();
   var familyId = String(props.getProperty('TRANSACTION_CONCURRENCY_TEST_FAMILY_ID') || '').trim();
   var confirmation = String(props.getProperty('TRANSACTION_CONCURRENCY_TEST_CONFIRM') || '');
-  var allowedScriptId = String(props.getProperty('TRANSACTION_CONCURRENCY_ALLOWED_SCRIPT_ID') || '').trim();
-  var allowedSpreadsheetId = String(props.getProperty('TRANSACTION_CONCURRENCY_ALLOWED_SPREADSHEET_ID') || '').trim();
-  var productionDeploymentId = 'AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
-
-  if (confirmation !== 'ISOLATED_TEST_ONLY') throw new Error('Тест не разрешён: подтвердите изолированную среду.');
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  if (!spreadsheet || !/test|тест/i.test(spreadsheet.getName())) throw new Error('Остановлено: нужна таблица TEST/ТЕСТ.');
-  if (!allowedScriptId || ScriptApp.getScriptId() !== allowedScriptId) throw new Error('Остановлено: Script ID не совпадает с разрешённым тестовым проектом.');
-  if (!allowedSpreadsheetId || spreadsheet.getId() !== allowedSpreadsheetId) throw new Error('Остановлено: Spreadsheet ID не совпадает с разрешённой тестовой таблицей.');
-  var match = url.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);
-  if (!match || match[1] === productionDeploymentId) throw new Error('Остановлено: нужен отдельный TEST Web App deployment URL.');
+  assertIsolatedGasTestEnvironment_(props, confirmation, url);
   if (!tokenA || !tokenB || !familyId) throw new Error('Не заданы два тестовых токена и ID тестовой семьи.');
 
   var suffix = Utilities.getUuid().replace(/-/g, '').toLowerCase();

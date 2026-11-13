@@ -4834,10 +4834,7 @@ test('backend diagnostics do not create a missing profiles sheet', () => {
 test('isolated GAS transaction concurrency probe checks simultaneous inserts by both family members and cleanup', () => {
   const source = fs.readFileSync('tests/gas/TransactionConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTransactionConcurrencyTest/);
-  assert.match(source, /ISOLATED_TEST_ONLY/);
-  assert.match(source, /TRANSACTION_CONCURRENCY_ALLOWED_SCRIPT_ID/);
-  assert.match(source, /ScriptApp\.getScriptId\(\)/);
-  assert.match(source, /TRANSACTION_CONCURRENCY_ALLOWED_SPREADSHEET_ID/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
   assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_A/);
   assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_B/);
   assert.match(source, /fetchAll\(requests\)/);
@@ -4845,7 +4842,7 @@ test('isolated GAS transaction concurrency probe checks simultaneous inserts by 
   assert.match(source, /table:'transactions', mode:'insert'/);
   assert.match(source, /report\.transactions_saved = 2/);
   assert.match(source, /report\.cleanup = cleanupErrors\.length \? 'FAILED' : 'PASS'/);
-  assert.match(source, /productionDeploymentId/);
+  assert.match(source, /TRANSACTION_CONCURRENCY_TEST_WEB_APP_URL/);
   assert.match(source, /function transactionConcurrencyPost_\(url, token, body\)/);
 });
 
