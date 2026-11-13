@@ -3179,3 +3179,13 @@ HEAD до:
 - Тест вызывает фактическую реализацию `pbkdf2Hex_` из `Code.gs` в существующем Apps Script harness; не меняет парольные хеши, настройки и данные.
 - Коммит: `e555aaa61f226e886a4cc137984e15c802202382`.
 - Это проверка корректности алгоритма на фиксированном векторе, а не замер скорости Google Apps Script. SEC-01 runtime measurement остаётся открытым.
+
+
+### 2026-11-13 — дополнительные регрессионные проверки FC-07/FC-08
+- Добавлена проверка фактического tracked manifest: `runtimeVersion=V8`, `timeZone=Europe/Moscow`, `exceptionLogging=STACKDRIVER`, отсутствие сторонних dependencies.
+- Добавлена проверка нормализации даты и времени по timezone таблицы на границе месяца: `2026-10-31T21:30:00Z` в Europe/Moscow даёт `2026-11-01` и `00:30`; ISO timestamp `created_at` остаётся UTC.
+- Это подтверждает поведение кода/harness и tracked manifest, но не фактические настройки таблицы, редактора Apps Script и опубликованного Web App.
+- SEC-04: regression tests закрытия регистрации и отсутствия auth/profile side effects уже присутствуют; реальный Script Property Production остаётся непроверенным.
+- SEC-05/FC-09: тест точного флага DEBUG_INFO и его отключения через `hideInfo()` уже присутствует; реальный статус Production остаётся непроверенным.
+- Коммит: `7975c3e0a5bb0d065a6117ceeacee4477536d851`.
+- Процент и чекбоксы не изменены.
