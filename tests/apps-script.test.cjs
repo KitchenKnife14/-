@@ -4790,3 +4790,40 @@ test('isolated GAS transaction concurrency probe checks simultaneous inserts by 
   assert.match(source, /productionDeploymentId/);
   assert.match(source, /function transactionConcurrencyPost_\(url, token, body\)/);
 });
+
+
+test('backend diagnostics report INCOMPLETE when profile timezone metadata cannot be read', () => {
+  const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
+  const properties = new Map([
+    ['BACKEND_DIAGNOSTICS_CONFIRM', 'ISOLATED_TEST_ONLY'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID'],
+  ]);
+  const context = {
+    PropertiesService: { getScriptProperties: () => ({
+      getProperty: key => properties.get(key) ?? null,
+    }) },
+    ScriptApp: {
+      getScriptId: () => 'TEST_SCRIPT_ID',
+      getService: () => ({ getUrl: () => '' }),
+    },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({
+      getName: () => 'TEST Семейный бюджет',
+      getId: () => 'TEST_SPREADSHEET_ID',
+      getSpreadsheetTimeZone: () => 'Europe/Moscow',
+      getSheetByName: () => { throw new Error('simulated sheet read failure'); },
+    }) },
+    Session: { getScriptTimeZone: () => 'Europe/Moscow' },
+    API_VERSION: 11,
+    PW_ITERATIONS: 30000,
+    Logger: { log: () => {} },
+  };
+  vm.createContext(context);
+  vm.runInContext(source, context);
+
+  const report = context.runBackendSecurityDiagnostics();
+  assert.equal(report.result, 'DIAGNOSTIC_INCOMPLETE');
+  assert.equal(report.profilesSheetPresent, false);
+  assert.equal(report.profileTimezoneReadOk, false);
+  assert.deepEqual(Array.from(report.profileTimezoneValues), ['READ_ERROR']);
+});
