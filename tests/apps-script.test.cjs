@@ -461,7 +461,7 @@ test('recurring payment confirmation replay returns success after the full commi
     values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-10-31', next_due_date: '2026-10-31', frequency: 'monthly', active: true }
   });
   assert.equal(created.error, null, created.error?.message);
-  const recurring = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
+  const recurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const args = { action: 'rpc', token: user.token, name: 'confirm_recurring_payment', params: {
     p_recurring_id: recurring.id, p_expected_due_date: '2026-10-31', p_operation_date: '2026-11-01', p_expected_recurring: recurring
   }};
