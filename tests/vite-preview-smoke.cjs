@@ -38,11 +38,17 @@ async function main() {
     assert.ok(script.length > 1000, 'production JavaScript bundle must not be empty')
     // BrowserRouter uses history URLs: every registered page must be directly
     // reachable after refresh, not only after client-side navigation from "/".
-    const routes = [
-      '/transactions', '/accounts', '/calendar', '/recurring', '/budgets',
-      '/goals', '/purchases', '/planning', '/reports', '/analysis',
-      '/notifications', '/telegram', '/categories',
-    ]
+    // Derive the route list from the actual React route declarations so the
+    // smoke test cannot silently miss a page added to App.tsx later.
+    const fs = require('node:fs')
+    const appSource = fs.readFileSync(path.join(process.cwd(), 'src/App.tsx'), 'utf8')
+    const routes = [...appSource.matchAll(/<Route\\s+path="([^"]+)"/g)]
+      .map(match => match[1])
+      .filter(route => route !== '*')
+      .map(route => '/' + route.replace(/^\\//, ''))
+    assert.ok(routes.length >= 10, 'expected to discover all registered application routes')
+    assert.ok(routes.includes('/transactions'), 'transactions route must be covered')
+    assert.equal(new Set(routes).size, routes.length, 'route declarations must be unique')
     for (const route of routes) {
       const routeResponse = await fetch(new URL(route, origin))
       assert.equal(routeResponse.status, 200, route + ' must resolve to the SPA shell')
