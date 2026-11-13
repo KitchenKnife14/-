@@ -517,7 +517,7 @@ test('optimistic update rejects stale snapshots and preserves the newer row', ()
     values: { family_id: family.id, type: 'expense', amount_kopecks: 15000, operation_date: '2026-11-11', description: 'Исходное описание' }
   });
   assert.equal(created.error, null, created.error?.message);
-  const staleSnapshot = { ...created.data[0] };
+  const staleSnapshot = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select', filters: [{ column: 'id', op: 'eq', value: created.data[0].id }] }).data[0];
   const newer = h.call({
     action: 'query', token: user.token, table: 'transactions', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: created.data[0].id }], values: { description: 'Изменено вторым участником' }
