@@ -4676,6 +4676,20 @@ test('request authorization snapshot reuses family and goal indexes while exposi
 });
 
 
+test('isolated backend security diagnostics are read-only and restricted to the TEST project', () => {
+  const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
+  assert.match(source, /runBackendSecurityDiagnostics/);
+  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID/);
+  assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID/);
+  assert.match(source, /ScriptApp\\.getScriptId\\(\\)/);
+  assert.match(source, /getSpreadsheetTimeZone/);
+  assert.match(source, /getScriptTimeZone/);
+  assert.match(source, /SIGNUP_DISABLED/);
+  assert.match(source, /DEBUG_INFO/);
+  assert.doesNotMatch(source, /setProperty|deleteProperty|appendRow|setValue|deleteRow/);
+});
+
 test('isolated GAS transaction concurrency probe checks simultaneous inserts by both family members and cleanup', () => {
   const source = fs.readFileSync('tests/gas/TransactionConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTransactionConcurrencyTest/);
