@@ -1332,7 +1332,7 @@ function rpc_(req,user){
     // Only a new confirmation is compared with the purchase snapshot shown in the UI.
     if(!tx){
       const expected=p.p_expected_purchase;
-      if(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id||Object.keys(purchase).some(column=>!Object.prototype.hasOwnProperty.call(expected,column)))throw new Error('Требуется полный снимок планируемой покупки. Обновите список и повторите действие.');
+      if(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id||TABLES.planned_purchases.some(column=>!Object.prototype.hasOwnProperty.call(expected,column)))throw new Error('Требуется полный снимок планируемой покупки. Обновите список и повторите действие.');
       const stale=TABLES.planned_purchases.some(column=>JSON.stringify(expected[column]??null)!==JSON.stringify(purchase[column]??null));
       if(stale)throw new Error('Планируемая покупка была изменена другим участником. Обновите список и повторите подтверждение.');
     }
@@ -1352,7 +1352,7 @@ function rpc_(req,user){
     const nextExpectedDate=nextDate_(expectedDueDate,r.frequency,r.custom_interval_days,r.start_date);
     if(!nextExpectedDate)throw new Error('Не удалось вычислить следующую дату регулярного платежа');
     const expected=p.p_expected_recurring;
-    if(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id||Object.keys(r).filter(column=>column!=='next_due_date').some(column=>!Object.prototype.hasOwnProperty.call(expected,column)))throw new Error('Требуется полный снимок регулярного платежа. Обновите страницу и повторите действие.');
+    if(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id||TABLES.recurring_payments.filter(column=>column!=='next_due_date').some(column=>!Object.prototype.hasOwnProperty.call(expected,column)))throw new Error('Требуется полный снимок регулярного платежа. Обновите страницу и повторите действие.');
     const transactionId='recurring_'+r.id+'_'+expectedDueDate;
     const existingTx=rows_('transactions').find(t=>String(t.id)===transactionId);
     const source=expected||r;
