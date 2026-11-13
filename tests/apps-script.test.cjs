@@ -571,6 +571,14 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
   assert.match(racedInsert.error?.message || '', /создана другим участником/i);
 });
 
+test('PBKDF2-HMAC-SHA256 matches the standard one-iteration test vector', () => {
+  const h = makeHarness();
+  assert.equal(
+    h.context.pbkdf2Hex_('password', 'salt', 1),
+    '120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b'
+  );
+});
+
 test('PBKDF2 runtime benchmark is guarded against accidental production execution', () => {
   const source = fs.readFileSync('google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs', 'utf8');
   assert.match(source, /PBKDF2_DIAGNOSTICS_CONFIRM/);
