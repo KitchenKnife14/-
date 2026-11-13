@@ -53,7 +53,28 @@ function runBackendSecurityDiagnostics() {
   }
 
   var deploymentUrl = '';
-  try { deploymentUrl = String(ScriptApp.getService().getUrl() || ''); } catch (_) {}
+  try { deploymentUrl = String(ScriptApp.getService().getUrl() || '').trim(); } catch (_) {}
+  var deploymentUrlHost = '';
+  var deploymentUrlShape = 'empty';
+  var deploymentParts = deploymentUrl.match(/^https:\/\/([^/?#]+)(\/[^?#]*)?(?:[?#].*)?$/i);
+  if (deploymentParts) {
+    deploymentUrlHost = deploymentParts[1].toLowerCase();
+    var deploymentPath = deploymentParts[2] || '/';
+    if (deploymentUrlHost === 'script.google.com' &&
+        /^\/macros\/s\/[A-Za-z0-9_-]+\/exec\/?$/i.test(deploymentPath)) {
+      deploymentUrlShape = 'standard_exec';
+    } else if (deploymentUrlHost === 'script.google.com' &&
+        /^\/a\/macros\/[^/]+\/s\/[A-Za-z0-9_-]+\/exec\/?$/i.test(deploymentPath)) {
+      deploymentUrlShape = 'account_exec';
+    } else if (deploymentUrlHost === 'script.google.com' &&
+        /^\/macros\/s\/[A-Za-z0-9_-]+\/dev\/?$/i.test(deploymentPath)) {
+      deploymentUrlShape = 'development_url';
+    } else {
+      deploymentUrlShape = 'other_url_shape';
+    }
+  } else if (deploymentUrl) {
+    deploymentUrlShape = 'unrecognized_url';
+  }
   var deploymentMatch = deploymentUrl.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec\/?(?:[?#].*)?$/i);
   var report = {
     diagnostic: 'read-only backend security and timezone metadata',
@@ -73,7 +94,10 @@ function runBackendSecurityDiagnostics() {
     signupDisabledPropertyPresent: props.getProperty('SIGNUP_DISABLED') !== null,
     debugInfoEnabled: String(props.getProperty('DEBUG_INFO') || '') === '1',
     debugInfoPropertyPresent: props.getProperty('DEBUG_INFO') !== null,
-    webAppDeploymentPresent: !!deploymentMatch,
+    deploymentUrlPresent: !!deploymentUrl,
+    deploymentUrlHost: deploymentUrlHost || null,
+    deploymentUrlShape: deploymentUrlShape,
+    webAppDeploymentPresent: deploymentUrlShape === 'standard_exec' || deploymentUrlShape === 'account_exec',
     webAppDeploymentIdSuffix: deploymentMatch ? deploymentMatch[1].slice(-6) : null,
     result: profileTimezoneReadOk ? 'DIAGNOSTIC_COMPLETE' : 'DIAGNOSTIC_INCOMPLETE'
   };
