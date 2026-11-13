@@ -4774,7 +4774,7 @@ test('request authorization snapshot reuses family and goal indexes while exposi
 test('isolated backend security diagnostics are read-only and restricted to the TEST project', () => {
   const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
   assert.match(source, /runBackendSecurityDiagnostics/);
-  assert.match(source, /assertIsolatedGasTestEnvironment_/);
+  assert.match(source, /ISOLATED_TEST_ONLY/);
   assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID/);
   assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID/);
   assert.match(source, /ScriptApp\.getScriptId\(\)/);
