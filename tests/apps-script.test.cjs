@@ -133,6 +133,7 @@ function seedTable(h, name) {
 
 test('DEBUG_INFO is enabled only by the exact flag and hideInfo removes the diagnostic field', () => {
   const h = makeHarness();
+  h.context.Logger = { log: () => {} };
   const parse = output => JSON.parse(output.getContent());
   const props = h.context.PropertiesService.getScriptProperties();
 
