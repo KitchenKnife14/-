@@ -36,14 +36,21 @@ async function main() {
     assert.match(scriptResponse.headers.get('content-type') || '', /javascript/)
     const script = await scriptResponse.text()
     assert.ok(script.length > 1000, 'production JavaScript bundle must not be empty')
-    // BrowserRouter uses history URLs: production hosting must return the app shell
-    // for direct navigation to nested routes, not a server-side 404.
-    const nestedResponse = await fetch(new URL('/transactions', origin))
-    assert.equal(nestedResponse.status, 200, 'nested transaction route must resolve to the SPA shell')
-    assert.ok((nestedResponse.headers.get('content-type') || '').includes('text/html'), 'nested route must return HTML')
-    const nestedHtml = await nestedResponse.text()
-    assert.ok(nestedHtml.includes('<div id="root"></div>'), 'nested route must serve the React root')
-    assert.ok(nestedHtml.includes(scriptMatch[1]), 'nested route must reference the production app bundle')
+    // BrowserRouter uses history URLs: every registered page must be directly
+    // reachable after refresh, not only after client-side navigation from "/".
+    const routes = [
+      '/transactions', '/accounts', '/calendar', '/recurring', '/budgets',
+      '/goals', '/purchases', '/planning', '/reports', '/analysis',
+      '/notifications', '/telegram', '/categories',
+    ]
+    for (const route of routes) {
+      const routeResponse = await fetch(new URL(route, origin))
+      assert.equal(routeResponse.status, 200, route + ' must resolve to the SPA shell')
+      assert.ok((routeResponse.headers.get('content-type') || '').includes('text/html'), route + ' must return HTML')
+      const routeHtml = await routeResponse.text()
+      assert.ok(routeHtml.includes('<div id="root"></div>'), route + ' must serve the React root')
+      assert.ok(routeHtml.includes(scriptMatch[1]), route + ' must reference the production app bundle')
+    }
     console.log('Vite preview smoke test passed')
   } finally { child.kill('SIGTERM') }
 }
