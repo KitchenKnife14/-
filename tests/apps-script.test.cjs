@@ -564,7 +564,7 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
 });
 
 test('isolated GAS monthly-plan concurrency probe is TEST-only and verifies cleanup', () => {
-  const source = fs.readFileSync(new URL('../tests/gas/MonthlyPlanConcurrencyTest.gs', import.meta.url), 'utf8');
+  const source = fs.readFileSync('tests/gas/MonthlyPlanConcurrencyTest.gs', 'utf8');
   assert.match(source, /runMonthlyPlanConcurrencyTest/);
   assert.match(source, /ISOLATED_TEST_ONLY/);
   assert.match(source, /MONTHLY_PLAN_TEST_WEB_APP_URL/);
