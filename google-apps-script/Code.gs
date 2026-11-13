@@ -594,19 +594,35 @@ function route_(req,user){
   if(req.action==='rpc')return rpc_(req,user);
   throw new Error('Неизвестное действие: '+req.action);
 }
-function allowedFamilyIds_(user){return rows_('family_members').filter(m=>m.user_id===user.id).map(m=>String(m.family_id));}
+// Per-request authorization snapshot: avoid repeated Sheets reads inside row filters.
+const ACCESS_SNAPSHOT_=new WeakMap();
+function accessSnapshot_(user){
+  let snapshot=ACCESS_SNAPSHOT_.get(user);
+  if(!snapshot){
+    const members=rows_('family_members').filter(m=>String(m.user_id)===String(user.id));
+    snapshot={familyIds:members.map(m=>String(m.family_id)),membersByFamily:new Map(),goalsById:null};
+    members.forEach(m=>{
+      const familyId=String(m.family_id);
+      if(!snapshot.membersByFamily.has(familyId))snapshot.membersByFamily.set(familyId,new Set());
+      snapshot.membersByFamily.get(familyId).add(String(m.user_id));
+    });
+    ACCESS_SNAPSHOT_.set(user,snapshot);
+  }
+  return snapshot;
+}
+function allowedFamilyIds_(user){return accessSnapshot_(user).familyIds;}
 function canAccessRow_(table,row,user){
-  const fams=allowedFamilyIds_(user);
+  const snapshot=accessSnapshot_(user),fams=snapshot.familyIds;
   if(table==='notifications'){
     if(!row.family_id || !fams.includes(String(row.family_id)))return false;
     return String(row.user_id||'')===user.id;
   }
   if(table==='telegram_links'||table==='telegram_link_codes')return String(row.user_id||'')===user.id&&fams.includes(String(row.family_id));
   if(row.family_id!==undefined && row.family_id!=='') return fams.includes(String(row.family_id));
-  if(table==='profiles') return String(row.id)===user.id || fams.some(fid=>rows_('family_members').some(m=>m.family_id===fid&&m.user_id===row.id));
+  if(table==='profiles') return String(row.id)===String(user.id) || fams.some(fid=>(snapshot.membersByFamily.get(fid)||new Set()).has(String(row.id)));
   if(table==='families') return String(row.created_by)===user.id || fams.includes(String(row.id));
   if(table==='family_members') return fams.includes(String(row.family_id));
-  if(table==='goal_contributions'){const g=rows_('goals').find(g=>g.id===row.goal_id);return !!g&&fams.includes(String(g.family_id));}
+  if(table==='goal_contributions'){if(!snapshot.goalsById)snapshot.goalsById=new Map(rows_('goals').map(g=>[String(g.id),g]));const g=snapshot.goalsById.get(String(row.goal_id));return !!g&&fams.includes(String(g.family_id));}
   return false;
 }
 function assertUniqueBudget_(rows,row,excludeId){
