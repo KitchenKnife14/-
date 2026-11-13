@@ -584,6 +584,41 @@ test('PBKDF2 runtime benchmark is guarded against accidental production executio
   assert.match(source, /pbkdf2_600000: samples\(600000, 3\)/);
 });
 
+test('PBKDF2 benchmark runtime guard rejects wrong project and spreadsheet before hashing', () => {
+  const source = fs.readFileSync('google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs', 'utf8');
+  const properties = new Map();
+  let hashCalls = 0;
+  const logs = [];
+  const context = {
+    PropertiesService: { getScriptProperties: () => ({ getProperty: key => properties.get(key) ?? null }) },
+    ScriptApp: { getScriptId: () => 'TEST_SCRIPT_ID' },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getName: () => 'TEST Семейный бюджет', getId: () => 'TEST_SPREADSHEET_ID' }) },
+    pbkdf2Hex_: () => { hashCalls++; return 'a'.repeat(64); },
+    Logger: { log: value => logs.push(String(value)) },
+  };
+  vm.createContext(context);
+  vm.runInContext(source, context);
+
+  assert.throws(() => context.runPbkdf2RuntimeDiagnostics(), /ISOLATED_TEST_ONLY/);
+  assert.equal(hashCalls, 0);
+  properties.set('PBKDF2_DIAGNOSTICS_CONFIRM', 'ISOLATED_TEST_ONLY');
+  properties.set('PBKDF2_ALLOWED_SCRIPT_ID', 'WRONG_SCRIPT_ID');
+  properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  assert.throws(() => context.runPbkdf2RuntimeDiagnostics(), /Script ID/);
+  assert.equal(hashCalls, 0);
+  properties.set('PBKDF2_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
+  properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', 'WRONG_SPREADSHEET_ID');
+  assert.throws(() => context.runPbkdf2RuntimeDiagnostics(), /ID таблицы/);
+  assert.equal(hashCalls, 0);
+  properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+
+  const report = context.runPbkdf2RuntimeDiagnostics();
+  assert.equal(report.pbkdf2_30000.samplesMs.length, 5);
+  assert.equal(report.pbkdf2_600000.samplesMs.length, 3);
+  assert.equal(hashCalls, 9);
+  assert.equal(logs.length, 1);
+});
+
 test('isolated GAS Telegram update concurrency probe verifies duplicate delivery and cleanup', () => {
   const source = fs.readFileSync('tests/gas/TelegramUpdateConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTelegramUpdateConcurrencyTest/);
