@@ -563,6 +563,16 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
   assert.match(racedInsert.error?.message || '', /создана другим участником/i);
 });
 
+test('PBKDF2 runtime benchmark is guarded against accidental production execution', () => {
+  const source = fs.readFileSync('google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs', 'utf8');
+  assert.match(source, /PBKDF2_DIAGNOSTICS_CONFIRM/);
+  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /SpreadsheetApp\.getActiveSpreadsheet\(\)/);
+  assert.match(source, /test\|тест/i);
+  assert.match(source, /ScriptApp\.getScriptId\(\) === productionScriptId/);
+  assert.match(source, /pbkdf2_600000: samples\(600000, 3\)/);
+});
+
 test('isolated GAS Telegram update concurrency probe verifies duplicate delivery and cleanup', () => {
   const source = fs.readFileSync('tests/gas/TelegramUpdateConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTelegramUpdateConcurrencyTest/);

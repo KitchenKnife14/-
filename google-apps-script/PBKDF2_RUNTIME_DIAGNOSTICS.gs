@@ -4,6 +4,18 @@
  * Uses synthetic credentials and never reads or writes Sheets or Properties.
  */
 function runPbkdf2RuntimeDiagnostics() {
+  var props = PropertiesService.getScriptProperties();
+  if (String(props.getProperty('PBKDF2_DIAGNOSTICS_CONFIRM') || '') !== 'ISOLATED_TEST_ONLY') {
+    throw new Error('Тест остановлен: установите PBKDF2_DIAGNOSTICS_CONFIRM=ISOLATED_TEST_ONLY только в отдельном TEST-проекте.');
+  }
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet || !/test|тест/i.test(spreadsheet.getName())) {
+    throw new Error('Тест остановлен: требуется отдельная таблица TEST/ТЕСТ.');
+  }
+  var productionScriptId = 'AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
+  if (ScriptApp.getScriptId() === productionScriptId) {
+    throw new Error('Тест остановлен: Production Apps Script запрещён.');
+  }
   const password = 'synthetic-runtime-benchmark-password';
   const salt = 'synthetic-runtime-benchmark-salt';
 
