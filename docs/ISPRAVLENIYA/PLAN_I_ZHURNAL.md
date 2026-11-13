@@ -3161,3 +3161,12 @@ HEAD до:
 - Диагностика подготовлена, но не запускалась в GAS. Она не может прочитать deployment access/executeAs из редактора и не заменяет ручную сверку manifest/deployment settings.
 - SEC-04, SEC-05, FC-08 и часть FC-09 остаются открытыми до проверки реальной тестовой конфигурации; FC-07 остаётся открытым до сверки manifest и UI. Чекбоксы и процент не менялись.
 - Для единого ручного запуска в TEST GAS: задать `BACKEND_DIAGNOSTICS_CONFIRM=ISOLATED_TEST_ONLY`, `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID`, `BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID`; выполнить `runBackendSecurityDiagnostics`. Секреты в чат не передавать.
+
+
+### 2026-11-13 — метрика времени параллельного SEC-02 запроса
+- В `TransactionConcurrencyTest.gs` добавлен замер wall-clock времени `UrlFetchApp.fetchAll` (`concurrentFetchAllMs`) для двух одновременных POST.
+- Серверные значения `lockMs`, `workMs`, `totalMs`, `readRetry` по-прежнему берутся из execution logs `doPost`; клиентский замер не подменяет их.
+- В regression test добавлена проверка наличия метрики.
+- Текущая суммарная разница относительно контрольного HEAD `fb150325...`: 5 файлов, тестовый файл +81 строка, concurrency probe 135 строк, diagnostics 60 строк, workflow +4 строки, журнал +53 строки. Нет массового дублирования тестового файла.
+- SEC-02 не закрывается до ручного запуска двух параллельных записей и сопоставления execution logs.
+- Процент этапа и общего плана не менялся.
