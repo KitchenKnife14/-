@@ -75,6 +75,7 @@ function makeHarness() {
   };
   const context = {
     console,
+    Date,
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, },
     CacheService: { getScriptCache: () => ({ get: key => scriptCache.get(key) ?? null, put: (key, value) => scriptCache.set(key, value), remove: key => scriptCache.delete(key) }) },
     ContentService: {
