@@ -4719,15 +4719,15 @@ test('isolated backend security diagnostics are read-only and restricted to the 
   assert.match(source, /ISOLATED_TEST_ONLY/);
   assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID/);
   assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID/);
-  assert.match(source, /ScriptApp\\.getScriptId\\(\\)/);
+  assert.match(source, /ScriptApp\.getScriptId\(\)/);
   assert.match(source, /getSpreadsheetTimeZone/);
   assert.match(source, /getScriptTimeZone/);
   assert.match(source, /SIGNUP_DISABLED/);
   assert.match(source, /DEBUG_INFO/);
-  assert.match(source, /spreadsheet\\.getSheetByName\\('profiles'\\)/);
+  assert.match(source, /spreadsheet\.getSheetByName\('profiles'\)/);
   assert.match(source, /profileTimezoneReadOk/);
   assert.match(source, /DIAGNOSTIC_COMPLETE/);
-  assert.doesNotMatch(source, /rows_\\('profiles'\\)/);
+  assert.doesNotMatch(source, /rows_\('profiles'\)/);
   assert.doesNotMatch(source, /result: 'PASS'/);
   assert.doesNotMatch(source, /setProperty|deleteProperty|appendRow|setValue|deleteRow/);
 });
