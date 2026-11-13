@@ -563,6 +563,20 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
   assert.match(racedInsert.error?.message || '', /создана другим участником/i);
 });
 
+test('isolated GAS Telegram update concurrency probe verifies duplicate delivery and cleanup', () => {
+  const source = fs.readFileSync('tests/gas/TelegramUpdateConcurrencyTest.gs', 'utf8');
+  assert.match(source, /runTelegramUpdateConcurrencyTest/);
+  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /TELEGRAM_CONCURRENCY_TEST_WEB_APP_URL/);
+  assert.match(source, /TELEGRAM_BACKEND_SECRET/);
+  assert.match(source, /fetchAll\(\[requestOptions, requestOptions\]\)/);
+  assert.match(source, /results\[0\]\.data\.text !== results\[1\]\.data\.text/);
+  assert.match(source, /rows\.data\.length !== 1/);
+  assert.match(source, /deleteProperty\('telegram:update:'/);
+  assert.match(source, /report\.cleanup = 'PASS'/);
+  assert.match(source, /productionScriptId/);
+});
+
 test('isolated GAS goal contribution concurrency probe checks two participants and cleanup', () => {
   const source = fs.readFileSync('tests/gas/GoalContributionConcurrencyTest.gs', 'utf8');
   assert.match(source, /runGoalContributionConcurrencyTest/);

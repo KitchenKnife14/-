@@ -36,6 +36,8 @@ jobs:
         run: node --check < google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs
       - name: Isolated Apps Script idempotency test syntax check
         run: node --check < tests/gas/IdempotencyConcurrencyTest.gs
+      - name: Apps Script Telegram update concurrency test syntax check
+        run: node --check < tests/gas/TelegramUpdateConcurrencyTest.gs
       - name: Apps Script read consistency concurrency test syntax check
         run: node --check < tests/gas/ReadConsistencyConcurrencyTest.gs
       - name: Apps Script monthly plan concurrency test syntax check
