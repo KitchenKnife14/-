@@ -4732,6 +4732,47 @@ test('isolated backend security diagnostics are read-only and restricted to the 
   assert.doesNotMatch(source, /setProperty|deleteProperty|appendRow|setValue|deleteRow/);
 });
 
+test('backend diagnostics do not create a missing profiles sheet', () => {
+  const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
+  const properties = new Map([
+    ['BACKEND_DIAGNOSTICS_CONFIRM', 'ISOLATED_TEST_ONLY'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID'],
+  ]);
+  let insertSheetCalls = 0;
+  const logs = [];
+  const context = {
+    PropertiesService: { getScriptProperties: () => ({
+      getProperty: key => properties.get(key) ?? null,
+    }) },
+    ScriptApp: {
+      getScriptId: () => 'TEST_SCRIPT_ID',
+      getService: () => ({ getUrl: () => '' }),
+    },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({
+      getName: () => 'TEST Семейный бюджет',
+      getId: () => 'TEST_SPREADSHEET_ID',
+      getSpreadsheetTimeZone: () => 'Europe/Moscow',
+      getSheetByName: () => null,
+      insertSheet: () => { insertSheetCalls++; throw new Error('must not create sheets'); },
+    }) },
+    Session: { getScriptTimeZone: () => 'Europe/Moscow' },
+    API_VERSION: 11,
+    PW_ITERATIONS: 30000,
+    Logger: { log: value => logs.push(String(value)) },
+  };
+  vm.createContext(context);
+  vm.runInContext(source, context);
+
+  const report = context.runBackendSecurityDiagnostics();
+  assert.equal(report.result, 'DIAGNOSTIC_COMPLETE');
+  assert.equal(report.profilesSheetPresent, false);
+  assert.equal(report.profileTimezoneReadOk, true);
+  assert.deepEqual(Array.from(report.profileTimezoneValues), []);
+  assert.equal(insertSheetCalls, 0);
+  assert.equal(logs.length, 1);
+});
+
 test('isolated GAS transaction concurrency probe checks simultaneous inserts by both family members and cleanup', () => {
   const source = fs.readFileSync('tests/gas/TransactionConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTransactionConcurrencyTest/);
