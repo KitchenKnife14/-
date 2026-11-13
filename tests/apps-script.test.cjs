@@ -4690,4 +4690,5 @@ test('isolated GAS transaction concurrency probe checks simultaneous inserts by 
   assert.match(source, /report\.transactions_saved = 2/);
   assert.match(source, /report\.cleanup = cleanupErrors\.length \? 'FAILED' : 'PASS'/);
   assert.match(source, /productionDeploymentId/);
+  assert.match(source, /function transactionConcurrencyPost_\\(url, token, body\\)/);
 });
