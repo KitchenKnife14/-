@@ -54,7 +54,7 @@ function runBackendSecurityDiagnostics() {
 
   var deploymentUrl = '';
   try { deploymentUrl = String(ScriptApp.getService().getUrl() || ''); } catch (_) {}
-  var deploymentMatch = deploymentUrl.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);
+  var deploymentMatch = deploymentUrl.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec\/?(?:[?#].*)?$/i);
   var report = {
     diagnostic: 'read-only backend security and timezone metadata',
     timestamp: new Date().toISOString(),
