@@ -24,12 +24,31 @@ function runBackendSecurityDiagnostics() {
     throw new Error('Диагностика остановлена: требуется разрешённая TEST/ТЕСТ таблица.');
   }
 
+  // Read the existing sheet directly. rows_() can create a missing sheet outside
+  // a request context, so it is deliberately not used by this read-only diagnostic.
   var profileTimezones = [];
+  var profilesSheetPresent = false;
+  var profileTimezoneReadOk = true;
   try {
-    profileTimezones = Array.from(new Set(rows_('profiles')
-      .map(function(row) { return String(row.timezone || '').trim(); })
-      .filter(Boolean))).sort();
+    var profilesSheet = spreadsheet.getSheetByName('profiles');
+    profilesSheetPresent = !!profilesSheet;
+    if (profilesSheet) {
+      var lastRow = profilesSheet.getLastRow();
+      var lastColumn = profilesSheet.getLastColumn();
+      if (lastRow > 1 && lastColumn > 0) {
+        var headers = profilesSheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+        var timezoneColumn = headers.indexOf('timezone');
+        if (timezoneColumn >= 0) {
+          profileTimezones = Array.from(new Set(
+            profilesSheet.getRange(2, timezoneColumn + 1, lastRow - 1, 1).getValues()
+              .map(function(row) { return String(row[0] || '').trim(); })
+              .filter(Boolean)
+          )).sort();
+        }
+      }
+    }
   } catch (error) {
+    profileTimezoneReadOk = false;
     profileTimezones = ['READ_ERROR'];
   }
 
@@ -44,7 +63,10 @@ function runBackendSecurityDiagnostics() {
     spreadsheetNameIsTest: /test|тест/i.test(spreadsheet.getName()),
     scriptTimezone: Session.getScriptTimeZone(),
     spreadsheetTimezone: spreadsheet.getSpreadsheetTimeZone(),
+    profilesSheetPresent: profilesSheetPresent,
+    profileTimezoneReadOk: profileTimezoneReadOk,
     profileTimezoneValues: profileTimezones,
+    timezoneOk: Session.getScriptTimeZone() === 'Europe/Moscow' && spreadsheet.getSpreadsheetTimeZone() === 'Europe/Moscow',
     apiVersion: API_VERSION,
     pbkdf2Iterations: PW_ITERATIONS,
     signupDisabled: String(props.getProperty('SIGNUP_DISABLED') || '') === '1',
@@ -53,7 +75,7 @@ function runBackendSecurityDiagnostics() {
     debugInfoPropertyPresent: props.getProperty('DEBUG_INFO') !== null,
     webAppDeploymentPresent: !!deploymentMatch,
     webAppDeploymentIdSuffix: deploymentMatch ? deploymentMatch[1].slice(-6) : null,
-    result: 'PASS'
+    result: profileTimezoneReadOk ? 'DIAGNOSTIC_COMPLETE' : 'DIAGNOSTIC_INCOMPLETE'
   };
   Logger.log(JSON.stringify(report));
   return report;
