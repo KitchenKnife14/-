@@ -32,7 +32,17 @@ function runConcurrentTransactionUpdateTest() {
     });
     if (inserted.error || !Array.isArray(inserted.data) || inserted.data.length !== 1 ||
         String(inserted.data[0].id) !== id) throw new Error('Не удалось создать тестовую операцию: ' + (inserted.error && inserted.error.message || 'неожиданный ответ'));
-    var snapshot = inserted.data[0];
+    // Read the persisted row to obtain a complete schema snapshot. Insert
+    // returning may omit blank optional columns, while the backend requires
+    // every table column in expected for optimistic concurrency.
+    var selected = concurrentRowTestPost_(url, {
+      action:'query', token:token, table:'transactions', mode:'select',
+      filters:[{column:'id', op:'eq', value:id}], limit:1
+    });
+    if (selected.error || !Array.isArray(selected.data) || selected.data.length !== 1) {
+      throw new Error('Не удалось получить полный снимок тестовой операции.');
+    }
+    var snapshot = selected.data[0];
     var values = ['Конкурентное изменение A', 'Конкурентное изменение B'];
     var requests = values.map(function(description) {
       return {
