@@ -12,12 +12,7 @@ function runConcurrentTransactionUpdateTest() {
   var familyId = String(props.getProperty('CONCURRENT_ROW_TEST_FAMILY_ID') || '').trim();
   var accountId = String(props.getProperty('CONCURRENT_ROW_TEST_ACCOUNT_ID') || '').trim();
   var confirmation = String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM') || '');
-  var productionScriptId = 'AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
-  if (confirmation !== 'ISOLATED_TEST_ONLY') throw new Error('Тест не разрешён: подтвердите изолированную среду.');
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  if (!spreadsheet || !/test|тест/i.test(spreadsheet.getName())) throw new Error('Остановлено: нужна таблица TEST/ТЕСТ.');
-  var match = url.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);
-  if (!match || match[1] === productionScriptId) throw new Error('Остановлено: нужен отдельный TEST Web App URL.');
+  assertIsolatedGasTestEnvironment_(props, confirmation, url);
   if (!token || !familyId || !accountId) throw new Error('Не заданы тестовые token, family ID или account ID.');
 
   var id = 'rowrace_' + Utilities.getUuid().replace(/-/g, '').toLowerCase();
