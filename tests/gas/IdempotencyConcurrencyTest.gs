@@ -11,7 +11,7 @@ function runIdempotencyConcurrencyTest() {
   var confirmation = String(props.getProperty('IDEMPOTENCY_TEST_CONFIRM') || '');
   var productionScriptId = 'AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
 
-  if (confirmation !== 'ISOLATED_TEST_ONLY') throw new Error('Тест не разрешён: подтвердите изолированную среду в Script Properties.');
+  assertIsolatedGasTestEnvironment_(props, confirmation, url);
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (!spreadsheet || !/test|тест/i.test(spreadsheet.getName())) {
     throw new Error('Остановлено: активная таблица должна иметь TEST/ТЕСТ в названии.');
@@ -132,7 +132,7 @@ function runConcurrentGoalContributionWritesTest() {
   var confirmation = String(props.getProperty('IDEMPOTENCY_TEST_CONFIRM') || '');
   var productionScriptId = 'AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
 
-  if (confirmation !== 'ISOLATED_TEST_ONLY') throw new Error('Тест не разрешён: подтвердите изолированную среду в Script Properties.');
+  assertIsolatedGasTestEnvironment_(props, confirmation, url);
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (!spreadsheet || !/test|тест/i.test(spreadsheet.getName())) throw new Error('Остановлено: активная таблица должна иметь TEST/ТЕСТ в названии.');
   var match = url.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);

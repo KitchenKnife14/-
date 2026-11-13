@@ -7,7 +7,7 @@ function runDuplicateEmailSignupConcurrencyTest() {
   var url=String(props.getProperty('SIGNUP_CONCURRENCY_TEST_WEB_APP_URL')||'').trim();
   var confirmation=String(props.getProperty('SIGNUP_CONCURRENCY_TEST_CONFIRM')||'');
   var productionScriptId='AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
-  if(confirmation!=='ISOLATED_TEST_ONLY')throw new Error('Тест не разрешён: подтвердите изолированную среду.');
+  assertIsolatedGasTestEnvironment_(props, confirmation, url);
   var spreadsheet=SpreadsheetApp.getActiveSpreadsheet();
   if(!spreadsheet||!/test|тест/i.test(spreadsheet.getName()))throw new Error('Активная таблица должна иметь TEST/ТЕСТ в названии.');
   var match=url.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);
@@ -64,7 +64,7 @@ function runConcurrentFamilyJoinTest() {
   var familyId=String(props.getProperty('JOIN_CONCURRENCY_TEST_FAMILY_ID')||'').trim();
   var confirmation=String(props.getProperty('JOIN_CONCURRENCY_TEST_CONFIRM')||'');
   var productionScriptId='AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
-  if(confirmation!=='ISOLATED_TEST_ONLY')throw new Error('Тест не разрешён: подтвердите изолированную среду.');
+  assertIsolatedGasTestEnvironment_(props, confirmation, url);
   var spreadsheet=SpreadsheetApp.getActiveSpreadsheet();
   if(!spreadsheet||!/test|тест/i.test(spreadsheet.getName()))throw new Error('Активная таблица должна иметь TEST/ТЕСТ в названии.');
   var match=url.match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);
