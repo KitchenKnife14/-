@@ -1332,8 +1332,8 @@ function rpc_(req,user){
     // Only a new confirmation is compared with the purchase snapshot shown in the UI.
     if(!tx && p.p_expected_purchase!==undefined){
       const expected=p.p_expected_purchase;
-      if(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id||TABLES.planned_purchases.some(column=>!Object.prototype.hasOwnProperty.call(expected,column)))throw new Error('Некорректный или неполный снимок планируемой покупки');
-      const stale=TABLES.planned_purchases.some(column=>JSON.stringify(expected[column]??null)!==JSON.stringify(purchase[column]??null));
+      if(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id)throw new Error('Некорректный снимок планируемой покупки');
+      const stale=TABLES.planned_purchases.some(column=>Object.prototype.hasOwnProperty.call(expected,column)&&JSON.stringify(expected[column]??null)!==JSON.stringify(purchase[column]??null));
       if(stale)throw new Error('Планируемая покупка была изменена другим участником. Обновите список и повторите подтверждение.');
     }
     if(!tx){
@@ -1352,7 +1352,7 @@ function rpc_(req,user){
     const nextExpectedDate=nextDate_(expectedDueDate,r.frequency,r.custom_interval_days,r.start_date);
     if(!nextExpectedDate)throw new Error('Не удалось вычислить следующую дату регулярного платежа');
     const expected=p.p_expected_recurring;
-    if(expected!==undefined&&(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id||TABLES.recurring_payments.filter(column=>column!=='next_due_date').some(column=>!Object.prototype.hasOwnProperty.call(expected,column))))throw new Error('Некорректный или неполный снимок регулярного платежа');
+    if(expected!==undefined&&(!expected||typeof expected!=='object'||Array.isArray(expected)||String(expected.id||'')!==id))throw new Error('Некорректный снимок регулярного платежа');
     const transactionId='recurring_'+r.id+'_'+expectedDueDate;
     const existingTx=rows_('transactions').find(t=>String(t.id)===transactionId);
     const source=expected||r;
@@ -1375,7 +1375,7 @@ function rpc_(req,user){
     // For a partial commit, ignore only next_due_date: it must still be the occurrence being confirmed.
     if(expected!==undefined){
       const columns=TABLES.recurring_payments.filter(column=>column!=='next_due_date');
-      const stale=columns.some(column=>JSON.stringify(expected[column]??null)!==JSON.stringify(r[column]??null));
+      const stale=columns.some(column=>Object.prototype.hasOwnProperty.call(expected,column)&&JSON.stringify(expected[column]??null)!==JSON.stringify(r[column]??null));
       if(stale)throw new Error('Регулярный платёж был изменён другим участником. Обновите страницу и повторите подтверждение.');
     }
     if(r.next_due_date!==expectedDueDate)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
