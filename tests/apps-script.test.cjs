@@ -2876,6 +2876,35 @@ test('request lock classifier treats mixed or malformed batches as writes', () =
 });
 
 
+test('write lock wait duration is included in request diagnostics', () => {
+  const h = makeHarness();
+  const user = h.signup('lock-wait-metrics@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Метрики ожидания блокировки' }).data;
+  const logs = [];
+  h.context.console = { log: value => logs.push(String(value)) };
+
+  let clock = 1000;
+  h.context.Date.now = () => clock;
+  const lock = h.context.LockService.getScriptLock();
+  const originalWaitLock = lock.waitLock;
+  h.context.LockService.getScriptLock = () => ({
+    waitLock(timeout) { clock += 37; return originalWaitLock.call(lock, timeout); },
+    releaseLock: () => lock.releaseLock(),
+    hasLock: () => lock.hasLock()
+  });
+
+  const response = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'insert',
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 1200, operation_date: '2026-11-12' }
+  });
+  assert.equal(response.error, null, response.error?.message);
+  const metrics = JSON.parse(logs.at(-1));
+  assert.equal(metrics.lockMs, 37);
+  assert.ok(metrics.totalMs >= metrics.lockMs);
+  assert.ok(metrics.workMs >= 0);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+});
+
 test('stable read-only query bypasses the global ScriptLock', () => {
   const h = makeHarness();
   seedTable(h, 'transactions');
