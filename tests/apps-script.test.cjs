@@ -563,6 +563,19 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
   assert.match(racedInsert.error?.message || '', /создана другим участником/i);
 });
 
+test('isolated GAS monthly-plan concurrency probe is TEST-only and verifies cleanup', () => {
+  const source = fs.readFileSync(new URL('../tests/gas/MonthlyPlanConcurrencyTest.gs', import.meta.url), 'utf8');
+  assert.match(source, /runMonthlyPlanConcurrencyTest/);
+  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /MONTHLY_PLAN_TEST_WEB_APP_URL/);
+  assert.match(source, /MONTHLY_PLAN_TEST_TOKEN_A/);
+  assert.match(source, /MONTHLY_PLAN_TEST_TOKEN_B/);
+  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /stale_updates_rejected/);
+  assert.match(source, /report\.cleanup = 'PASS'/);
+  assert.match(source, /productionScriptId/);
+});
+
 test('monthly plan batch upsert aborts all rows when one expected snapshot is stale', () => {
   const h = makeHarness();
   const owner = h.signup('monthly-plan-batch-stale-owner@example.com');
