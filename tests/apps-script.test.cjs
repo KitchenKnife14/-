@@ -131,16 +131,23 @@ function seedTable(h, name) {
   return sheet;
 }
 
-test('doGet omits spreadsheet diagnostics unless DEBUG_INFO is explicitly enabled', () => {
+test('DEBUG_INFO is enabled only by the exact flag and hideInfo removes the diagnostic field', () => {
   const h = makeHarness();
   const parse = output => JSON.parse(output.getContent());
+  const props = h.context.PropertiesService.getScriptProperties();
+
+  props.setProperty('DEBUG_INFO', 'true');
+  assert.equal(Object.hasOwn(parse(h.context.doGet()), 'spreadsheet'), false);
+
+  h.context.showInfo();
+  const debug = parse(h.context.doGet());
+  assert.deepEqual(Object.keys(debug).sort(), ['message', 'spreadsheet', 'status', 'version']);
+  assert.equal(debug.spreadsheet, 'Семейный бюджет');
+
+  h.context.hideInfo();
   const normal = parse(h.context.doGet());
   assert.deepEqual(Object.keys(normal).sort(), ['message', 'status', 'version']);
   assert.equal(normal.status, 'ok');
-  const props = h.context.PropertiesService.getScriptProperties();
-  props.setProperty('DEBUG_INFO', '1');
-  const debug = parse(h.context.doGet());
-  assert.equal(debug.spreadsheet, 'Семейный бюджет');
 });
 
 test('Apps Script request logs contain metrics only and never payload secrets or financial values', () => {
