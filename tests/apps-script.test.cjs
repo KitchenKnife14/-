@@ -673,10 +673,35 @@ test('PBKDF2 benchmark runtime guard rejects wrong project and spreadsheet befor
   assert.equal(logs.length, 1);
 });
 
+test('shared GAS concurrency guard rejects missing and mismatched TEST allowlists', () => {
+  const source = fs.readFileSync('tests/gas/IsolatedTestGuard.gs', 'utf8');
+  const properties = new Map();
+  const spreadsheet = { getName: () => 'TEST Семейный бюджет', getId: () => 'TEST_SHEET' };
+  const context = {
+    ScriptApp: { getScriptId: () => 'TEST_SCRIPT' },
+    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet },
+  };
+  context.PropertiesService = { getScriptProperties: () => ({ getProperty: key => properties.get(key) ?? null }) };
+  vm.createContext(context);
+  vm.runInContext(source, context);
+  const url = 'https://script.google.com/macros/s/TEST_DEPLOYMENT/exec';
+
+  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), '', url), /ISOLATED_TEST_ONLY/);
+  properties.set('GAS_TEST_ALLOWED_SCRIPT_ID', 'WRONG_SCRIPT');
+  properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SHEET');
+  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url), /Script ID/);
+  properties.set('GAS_TEST_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT');
+  properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'WRONG_SHEET');
+  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url), /TEST-таблицей/);
+  properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SHEET');
+  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', 'https://script.google.com/macros/s/AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg/exec'), /TEST Web App/);
+  assert.equal(context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url).getId(), 'TEST_SHEET');
+});
+
 test('isolated GAS Telegram update concurrency probe verifies duplicate delivery and cleanup', () => {
   const source = fs.readFileSync('tests/gas/TelegramUpdateConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTelegramUpdateConcurrencyTest/);
-  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
   assert.match(source, /TELEGRAM_CONCURRENCY_TEST_WEB_APP_URL/);
   assert.match(source, /TELEGRAM_BACKEND_SECRET/);
   assert.match(source, /fetchAll\(\[requestOptions, requestOptions\]\)/);
@@ -690,7 +715,7 @@ test('isolated GAS Telegram update concurrency probe verifies duplicate delivery
 test('isolated GAS goal contribution concurrency probe checks two participants and cleanup', () => {
   const source = fs.readFileSync('tests/gas/GoalContributionConcurrencyTest.gs', 'utf8');
   assert.match(source, /runGoalContributionConcurrencyTest/);
-  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
   assert.match(source, /GOAL_TEST_WEB_APP_URL/);
   assert.match(source, /GOAL_TEST_TOKEN_A/);
   assert.match(source, /GOAL_TEST_TOKEN_B/);
@@ -703,7 +728,7 @@ test('isolated GAS goal contribution concurrency probe checks two participants a
 test('isolated GAS monthly-plan concurrency probe is TEST-only and verifies cleanup', () => {
   const source = fs.readFileSync('tests/gas/MonthlyPlanConcurrencyTest.gs', 'utf8');
   assert.match(source, /runMonthlyPlanConcurrencyTest/);
-  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
   assert.match(source, /MONTHLY_PLAN_TEST_WEB_APP_URL/);
   assert.match(source, /MONTHLY_PLAN_TEST_TOKEN_A/);
   assert.match(source, /MONTHLY_PLAN_TEST_TOKEN_B/);
@@ -4749,7 +4774,7 @@ test('request authorization snapshot reuses family and goal indexes while exposi
 test('isolated backend security diagnostics are read-only and restricted to the TEST project', () => {
   const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
   assert.match(source, /runBackendSecurityDiagnostics/);
-  assert.match(source, /ISOLATED_TEST_ONLY/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
   assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID/);
   assert.match(source, /BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID/);
   assert.match(source, /ScriptApp\.getScriptId\(\)/);
