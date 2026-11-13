@@ -1496,7 +1496,7 @@ function telegramWebhook_(req){
     const kind=isIncome?'income':'expense';
     const categories=rows_('categories').filter(x=>String(x.family_id)===String(link.family_id)&&!x.archived&&String(x.kind)===kind);
     const normalizedDescription=String(description).toLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-    const salaryCategory=(rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id))||{}).role==='owner'?'Зарплата первого участника':'Зарплата второго участника';
+    const salaryCategory=member.role==='owner'?'Зарплата первого участника':'Зарплата второго участника';
     // Specific phrases come before broad ones to avoid assigning a more general category.
     const aliases=kind==='income'?[
       [/зарплат|аванс|оклад/i,salaryCategory],
