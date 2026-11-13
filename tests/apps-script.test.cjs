@@ -566,10 +566,13 @@ test('monthly plan upsert rejects stale snapshots and concurrent inserts', () =>
 test('PBKDF2 runtime benchmark is guarded against accidental production execution', () => {
   const source = fs.readFileSync('google-apps-script/PBKDF2_RUNTIME_DIAGNOSTICS.gs', 'utf8');
   assert.match(source, /PBKDF2_DIAGNOSTICS_CONFIRM/);
-  assert.match(source, /ISOLATED_TEST_ONLY/);
-  assert.match(source, /SpreadsheetApp\.getActiveSpreadsheet\(\)/);
+  assert.match(source, /PBKDF2_ALLOWED_SCRIPT_ID/);
+  assert.match(source, /PBKDF2_ALLOWED_SPREADSHEET_ID/);
+  assert.match(source, /ScriptApp\.getScriptId\(\)/);
+  assert.match(source, /spreadsheet\.getId\(\)/);
   assert.match(source, /test\|тест/i);
-  assert.match(source, /ScriptApp\.getScriptId\(\) === productionScriptId/);
+  assert.doesNotMatch(source, /productionScriptId|AKfycb/);
+  assert.doesNotMatch(source, /getSheetByName|getRange|appendRow|setValue|deleteRow/);
   assert.match(source, /pbkdf2_600000: samples\(600000, 3\)/);
 });
 
@@ -4275,8 +4278,8 @@ test('isolated Apps Script PBKDF2 runtime diagnostic measures 30000 and 600000 i
   assert.match(source, /PBKDF2_DIAGNOSTICS_CONFIRM/);
   assert.match(source, /PBKDF2_ALLOWED_SCRIPT_ID/);
   assert.match(source, /PBKDF2_ALLOWED_SPREADSHEET_ID/);
-  assert.match(source, /ScriptApp\\.getScriptId\\(\\)/);
-  assert.match(source, /spreadsheet\\.getId\\(\\)/);
+  assert.match(source, /ScriptApp\.getScriptId\(\)/);
+  assert.match(source, /spreadsheet\.getId\(\)/);
   assert.doesNotMatch(source, /productionScriptId|AKfycb/);
   assert.doesNotMatch(source, /authRows_|getSheetByName|getRange|appendRow|setValue|deleteRow/);
 })
