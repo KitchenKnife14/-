@@ -131,6 +131,35 @@ function seedTable(h, name) {
   return sheet;
 }
 
+test('Apps Script manifest pins the server runtime and Moscow timezone', () => {
+  const manifest = JSON.parse(fs.readFileSync('google-apps-script/appsscript.json', 'utf8'));
+  assert.equal(manifest.runtimeVersion, 'V8');
+  assert.equal(manifest.timeZone, 'Europe/Moscow');
+  assert.equal(manifest.exceptionLogging, 'STACKDRIVER');
+  assert.deepEqual(manifest.dependencies, {});
+});
+
+test('date and time normalization uses the spreadsheet timezone at the month boundary', () => {
+  const h = makeHarness();
+  const originalFormatDate = h.context.Utilities.formatDate;
+  h.context.Utilities.formatDate = (date, timezone, pattern) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(date));
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    if (pattern === 'yyyy-MM-dd') return values.year + '-' + values.month + '-' + values.day;
+    if (pattern === 'HH:mm') return values.hour + ':' + values.minute;
+    return originalFormatDate(date, timezone, pattern);
+  };
+
+  const instant = new h.context.Date('2026-10-31T21:30:00.000Z');
+  assert.equal(h.context.normal_(instant, 'operation_date'), '2026-11-01');
+  assert.equal(h.context.normal_(instant, 'operation_time'), '00:30');
+  assert.equal(h.context.normal_(instant, 'created_at'), '2026-10-31T21:30:00.000Z');
+});
+
 test('DEBUG_INFO is enabled only by the exact flag and hideInfo removes the diagnostic field', () => {
   const h = makeHarness();
   h.context.Logger = { log: () => {} };
