@@ -2509,10 +2509,10 @@ test('create_goal_with_purchase creates a linked goal and planned purchase', () 
   const goal = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data.find(g => g.id === result.data.goal_id);
   const purchaseSeed9 = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data.find(p => p.id === result.data.purchase_id);
   assert.equal(goal.name, 'Телевизор');
-  assert.equal(purchase.goal_id, goal.id);
-  assert.equal(purchase.name, goal.name);
-  assert.equal(purchase.estimated_kopecks, goal.target_kopecks);
-  assert.equal(purchase.comment, goal.description);
+  assert.equal(purchaseSeed9.goal_id, goal.id);
+  assert.equal(purchaseSeed9.name, goal.name);
+  assert.equal(purchaseSeed9.estimated_kopecks, goal.target_kopecks);
+  assert.equal(purchaseSeed9.comment, goal.description);
 });
 
 test('create_goal_with_purchase retry reuses goal and purchase after a lost write response', () => {
@@ -2825,7 +2825,6 @@ test('goal contribution writes refresh the owning family goals revision', () => 
   assert.equal(after.error, null, after.error?.message);
   assert.notEqual(after.data, before.data);
   const saved = h.call({ action: 'query', token: user.token, table: 'goals', mode: 'select' }).data[0];
-  const purchase = h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed9.id }] }).data[0];
   assert.equal(saved.saved_kopecks, 2500);
 });
 
