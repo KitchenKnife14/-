@@ -3150,3 +3150,14 @@ HEAD до:
 - GitHub Actions для последнего commit пока не подтверждён; combined status вернул пустой список checks. Vercel build-rate-limit из предыдущей проверки не является результатом GitHub Actions.
 - SEC-02 остаётся открытым до фактического запуска в TEST GAS и проверки lock wait/total execution logs.
 - Прогресс чек-листа не меняется.
+
+
+### 2026-11-13 — единая read-only диагностика настроек этапа 3
+- Добавлен `tests/gas/BackendSecurityDiagnostics.gs` для изолированного TEST GAS проекта.
+- Диагностика проверяет Script ID и Spreadsheet ID по allow-list, имя тестовой таблицы, часовой пояс Apps Script/таблицы, набор часовых поясов профилей, API_VERSION, PBKDF2 iterations, состояния `SIGNUP_DISABLED` и `DEBUG_INFO), наличие Web App deployment URL.
+- Отчёт не выводит email, токены, секреты, названия профилей или финансовые данные; функция не изменяет Script Properties и Sheets.
+- Добавлены статический regression test и CI syntax check.
+- Коммиты: `d834c7c67db9c39f2c58135c2e36ae68483a42d5`, `6ad9dec3832175b8c5e1d57689739ccaccabcd6b`, `eef2abe664008f9a7fb36ed2636efc3490cc9454`.
+- Диагностика подготовлена, но не запускалась в GAS. Она не может прочитать deployment access/executeAs из редактора и не заменяет ручную сверку manifest/deployment settings.
+- SEC-04, SEC-05, FC-08 и часть FC-09 остаются открытыми до проверки реальной тестовой конфигурации; FC-07 остаётся открытым до сверки manifest и UI. Чекбоксы и процент не менялись.
+- Для единого ручного запуска в TEST GAS: задать `BACKEND_DIAGNOSTICS_CONFIRM=ISOLATED_TEST_ONLY`, `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID`, `BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID`; выполнить `runBackendSecurityDiagnostics`. Секреты в чат не передавать.
