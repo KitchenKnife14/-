@@ -36,6 +36,14 @@ async function main() {
     assert.match(scriptResponse.headers.get('content-type') || '', /javascript/)
     const script = await scriptResponse.text()
     assert.ok(script.length > 1000, 'production JavaScript bundle must not be empty')
+    // BrowserRouter uses history URLs: production hosting must return the app shell
+    // for direct navigation to nested routes, not a server-side 404.
+    const nestedResponse = await fetch(new URL('/transactions', origin))
+    assert.equal(nestedResponse.status, 200, 'nested transaction route must resolve to the SPA shell')
+    assert.match(nestedResponse.headers.get('content-type') || '', /text\\/html/)
+    const nestedHtml = await nestedResponse.text()
+    assert.ok(nestedHtml.includes('<div id="root"></div>'), 'nested route must serve the React root')
+    assert.ok(nestedHtml.includes(scriptMatch[1]), 'nested route must reference the production app bundle')
     console.log('Vite preview smoke test passed')
   } finally { child.kill('SIGTERM') }
 }
