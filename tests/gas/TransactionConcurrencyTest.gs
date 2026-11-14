@@ -27,40 +27,40 @@ function runTransactionConcurrencyTest() {
   var report={test:'concurrent transaction inserts by two synthetic family members',fixture:'synthetic TEST-only'};
   var cleanupErrors=[];
 
-  function post(body,label) {
+  function transactionConcurrencyPost_(body,label) {
     return transactionConcurrencyParse_(UrlFetchApp.fetch(url,{
       method:'post',contentType:'application/json',
       payload:JSON.stringify(body),muteHttpExceptions:true
     }),label||'request');
   }
-  function removeRows(table,predicate) {
+  function transactionConcurrencyRemoveRows_(table,predicate) {
     var matches=rows_(table).filter(predicate);
     if(matches.length)deleteRows_(table,matches);
   }
 
   try {
     fixtureAttempted=true;
-    var signupA=post({action:'signup',email:emailA,password:passwordA,name:'TEST участник A'},'signup A');
+    var signupA=transactionConcurrencyPost_({action:'signup',email:emailA,password:passwordA,name:'TEST участник A'},'signup A');
     if(signupA.error||!signupA.data||!signupA.data.token||!signupA.data.user||!signupA.data.user.id) {
       throw new Error('Не удалось создать TEST участника A: '+(signupA.error&&signupA.error.message||'неожиданный ответ'));
     }
     tokenA=String(signupA.data.token);
     userA=String(signupA.data.user.id);
 
-    var family=post({action:'createFamily',token:tokenA,name:familyName},'create family');
+    var family=transactionConcurrencyPost_({action:'createFamily',token:tokenA,name:familyName},'create family');
     if(family.error||!family.data||!family.data.id||!family.data.invite_code) {
       throw new Error('Не удалось создать TEST-семью: '+(family.error&&family.error.message||'неожиданный ответ'));
     }
     familyId=String(family.data.id);
 
-    var signupB=post({action:'signup',email:emailB,password:passwordB,name:'TEST участник B'},'signup B');
+    var signupB=transactionConcurrencyPost_({action:'signup',email:emailB,password:passwordB,name:'TEST участник B'},'signup B');
     if(signupB.error||!signupB.data||!signupB.data.token||!signupB.data.user||!signupB.data.user.id) {
       throw new Error('Не удалось создать TEST участника B: '+(signupB.error&&signupB.error.message||'неожиданный ответ'));
     }
     tokenB=String(signupB.data.token);
     userB=String(signupB.data.user.id);
 
-    var joined=post({
+    var joined=transactionConcurrencyPost_({
       action:'joinFamily',token:tokenB,invite_code:family.data.invite_code,
       display_name:'TEST участник B'
     },'join family');
@@ -97,7 +97,7 @@ function runTransactionConcurrencyTest() {
         results.map(function(result){return result.error&&result.error.message||'';}).join(' | '));
     }
 
-    var rows=post({
+    var rows=transactionConcurrencyPost_({
       action:'query',token:tokenA,table:'transactions',mode:'select',
       filters:[{column:'id',op:'in',values:[idA,idB]}],limit:5
     },'verify transactions');
@@ -135,17 +135,17 @@ function runTransactionConcurrencyTest() {
         }):[];
         if(!familyId&&familyMatches.length===1)familyId=String(familyMatches[0].id);
 
-        removeRows('transactions',function(row) {
+        transactionConcurrencyRemoveRows_('transactions',function(row) {
           return String(row.id)===idA||String(row.id)===idB;
         });
         if(familyId) {
-          removeRows('categories',function(row){return String(row.family_id)===familyId;});
-          removeRows('accounts',function(row){return String(row.family_id)===familyId;});
-          removeRows('family_members',function(row){return String(row.family_id)===familyId;});
-          removeRows('families',function(row){return String(row.id)===familyId;});
+          transactionConcurrencyRemoveRows_('categories',function(row){return String(row.family_id)===familyId;});
+          transactionConcurrencyRemoveRows_('accounts',function(row){return String(row.family_id)===familyId;});
+          transactionConcurrencyRemoveRows_('family_members',function(row){return String(row.family_id)===familyId;});
+          transactionConcurrencyRemoveRows_('families',function(row){return String(row.id)===familyId;});
         }
         [userA,userB].filter(Boolean).forEach(function(uid) {
-          removeRows('profiles',function(row){return String(row.id)===uid;});
+          transactionConcurrencyRemoveRows_('profiles',function(row){return String(row.id)===uid;});
         });
         authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
 
