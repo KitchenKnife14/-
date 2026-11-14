@@ -5059,3 +5059,31 @@ test('isolated GAS runtime probes have no duplicate global function declarations
     'transactionConcurrencyRemoveRows_',
   ]) assert.ok(declarations.has(name), 'missing isolated helper ' + name);
 });
+
+
+test('single-file TEST GAS runtime bundle stays byte-for-byte synchronized with source modules', () => {
+  const paths = [
+    'tests/gas/IsolatedTestGuard.gs',
+    'tests/gas/TelegramUpdateConcurrencyTest.gs',
+    'tests/gas/ReadConsistencyConcurrencyTest.gs',
+    'tests/gas/MonthlyPlanConcurrencyTest.gs',
+    'tests/gas/TransactionConcurrencyTest.gs',
+    'tests/gas/RuntimeAcceptanceBatch.gs',
+  ];
+  const header = [
+    '/**',
+    ' * Single-file TEST GAS runtime acceptance bundle.',
+    ' * Generated from the maintained individual modules in tests/gas/.',
+    ' * Copy this one file into the isolated TEST Apps Script project.',
+    ' * Do not add this bundle to Production.',
+    ' */',
+    '',
+  ].join('\\n');
+  const expected = header + paths.map(path =>
+    '\\n\\n/* ===== BUNDLE SECTION: ' + path + ' ===== */\\n\\n' +
+    fs.readFileSync(path, 'utf8')
+  ).join('');
+  const bundle = fs.readFileSync('tests/gas/RuntimeAcceptanceBundle.gs', 'utf8');
+  assert.equal(bundle, expected, 'runtime bundle must be regenerated when any source module changes');
+  assert.match(bundle, /function runIsolatedRuntimeAcceptanceBatch/);
+});
