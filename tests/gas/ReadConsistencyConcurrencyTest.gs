@@ -31,20 +31,20 @@ function runReadConsistencyConcurrencyTest() {
   var report = {test:'optimistic read/write consistency', fixture:'synthetic TEST-only'};
   var cleanupErrors = [];
 
-  function post(body, label) {
+  function readConsistencyPost_(body, label) {
     return readConsistencyTestParse_(UrlFetchApp.fetch(url, {
       method:'post', contentType:'application/json',
       payload:JSON.stringify(body), muteHttpExceptions:true
     }), label || 'request');
   }
-  function removeRows(table, predicate) {
+  function readConsistencyRemoveRows_(table, predicate) {
     var matches = rows_(table).filter(predicate);
     if (matches.length) deleteRows_(table, matches);
   }
 
   try {
     fixtureAttempted = true;
-    var signup = post({
+    var signup = readConsistencyPost_({
       action:'signup', email:email, password:password, name:'Временный тест чтения'
     }, 'signup');
     if (signup.error || !signup.data || !signup.data.token ||
@@ -55,14 +55,14 @@ function runReadConsistencyConcurrencyTest() {
     token = String(signup.data.token);
     userId = String(signup.data.user.id);
 
-    var family = post({action:'createFamily', token:token, name:familyName}, 'create family');
+    var family = readConsistencyPost_({action:'createFamily', token:token, name:familyName}, 'create family');
     if (family.error || !family.data || !family.data.id) {
       throw new Error('Не удалось создать синтетическую TEST-семью: ' +
         (family.error && family.error.message || 'неожиданный ответ'));
     }
     familyId = String(family.data.id);
 
-    var inserted = post({
+    var inserted = readConsistencyPost_({
       action:'query', token:token, table:'planned_purchases',
       mode:'insert', returning:true,
       values:{
@@ -81,7 +81,7 @@ function runReadConsistencyConcurrencyTest() {
     }
 
     // Fetch the complete persisted snapshot required by the stale-write guard.
-    var snapshot = post({
+    var snapshot = readConsistencyPost_({
       action:'query', token:token, table:'planned_purchases', mode:'select',
       filters:[{column:'id',op:'eq',value:id}], limit:1
     }, 'read purchase snapshot');
@@ -152,7 +152,7 @@ function runReadConsistencyConcurrencyTest() {
       if (isBefore) beforeCount++; else afterCount++;
     }
 
-    var finalSnapshot = post({
+    var finalSnapshot = readConsistencyPost_({
       action:'batch', token:token,
       requests:[
         {action:'query',table:'planned_purchases',mode:'select',
@@ -185,16 +185,16 @@ function runReadConsistencyConcurrencyTest() {
         }) : [];
         if (!familyId && familyMatches.length===1) familyId=String(familyMatches[0].id);
 
-        removeRows('transactions',function(row){return String(row.id)===transactionId;});
-        removeRows('planned_purchases',function(row){return String(row.id)===id;});
+        readConsistencyRemoveRows_('transactions',function(row){return String(row.id)===transactionId;});
+        readConsistencyRemoveRows_('planned_purchases',function(row){return String(row.id)===id;});
         if (familyId) {
-          removeRows('categories',function(row){return String(row.family_id)===familyId;});
-          removeRows('accounts',function(row){return String(row.family_id)===familyId;});
-          removeRows('family_members',function(row){return String(row.family_id)===familyId;});
-          removeRows('families',function(row){return String(row.id)===familyId;});
+          readConsistencyRemoveRows_('categories',function(row){return String(row.family_id)===familyId;});
+          readConsistencyRemoveRows_('accounts',function(row){return String(row.family_id)===familyId;});
+          readConsistencyRemoveRows_('family_members',function(row){return String(row.family_id)===familyId;});
+          readConsistencyRemoveRows_('families',function(row){return String(row.id)===familyId;});
         }
         if (userId) {
-          removeRows('profiles',function(row){return String(row.id)===userId;});
+          readConsistencyRemoveRows_('profiles',function(row){return String(row.id)===userId;});
           var allProps=props.getProperties();
           Object.keys(allProps).forEach(function(key) {
             if (key.indexOf('session:')!==0) return;
