@@ -1,43 +1,83 @@
 /**
- * Real Apps Script probe: two concurrent edits target the same transaction
- * using the same optimistic snapshot. Exactly one edit must commit; the stale
- * edit must be rejected instead of silently overwriting the winner.
+ * Real Apps Script probe: provision a disposable TEST user/family/account,
+ * then race two optimistic updates against one transaction snapshot.
+ * All fixture data is synthetic and removed in finally.
  *
- * Run ONLY in an isolated TEST spreadsheet and TEST Apps Script deployment.
+ * Required Script Properties:
+ * CONCURRENT_ROW_TEST_WEB_APP_URL
+ * CONCURRENT_ROW_TEST_CONFIRM=ISOLATED_TEST_ONLY
+ * Shared TEST allowlists are checked by IsolatedTestGuard.gs.
  */
 function runConcurrentTransactionUpdateTest() {
   var props = PropertiesService.getScriptProperties();
   var url = String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL') || '').trim();
-  var token = String(props.getProperty('CONCURRENT_ROW_TEST_TOKEN') || '').trim();
-  var familyId = String(props.getProperty('CONCURRENT_ROW_TEST_FAMILY_ID') || '').trim();
-  var accountId = String(props.getProperty('CONCURRENT_ROW_TEST_ACCOUNT_ID') || '').trim();
   var confirmation = String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM') || '');
   assertIsolatedGasTestEnvironment_(props, confirmation, url);
-  if (!token || !familyId || !accountId) throw new Error('Не заданы тестовые token, family ID или account ID.');
 
-  var id = 'rowrace_' + Utilities.getUuid().replace(/-/g, '').toLowerCase();
-  var today = Utilities.formatDate(new Date(), 'Europe/Moscow', 'yyyy-MM-dd');
-  var created = false, cleanupError = null;
-  var report = {test:'concurrent optimistic update of one transaction', transaction_id:id};
+  var suffix = Utilities.getUuid().replace(/-/g, '').toLowerCase();
+  var email = 'rowrace+' + suffix + '@example.test';
+  var password = 'temporary-concurrency-probe-' + suffix;
+  var familyName = 'TEST concurrency fixture ' + suffix;
+  var userId = '', token = '', familyId = '', accountId = '';
+  var transactionId = 'rowrace_' + suffix;
+  var fixtureAttempted = false;
+  var report = {test:'concurrent optimistic update of one transaction', fixture:'synthetic TEST-only'};
+  var cleanupErrors = [];
+
   try {
-    created = true; // include ambiguous HTTP outcomes in cleanup
+    fixtureAttempted = true;
+    var signup = concurrentRowTestPost_(url, {
+      action:'signup', email:email, password:password, name:'Временный тестовый пользователь'
+    });
+    if (signup.error || !signup.data || !signup.data.token || !signup.data.user) {
+      throw new Error('Не удалось создать временного тестового пользователя: ' +
+        (signup.error && signup.error.message || 'неожиданный ответ'));
+    }
+    token = String(signup.data.token);
+    userId = String(signup.data.user.id);
+
+    var family = concurrentRowTestPost_(url, {
+      action:'createFamily', token:token, name:familyName
+    });
+    if (family.error || !family.data || !family.data.id) {
+      throw new Error('Не удалось создать временную TEST-семью: ' +
+        (family.error && family.error.message || 'неожиданный ответ'));
+    }
+    familyId = String(family.data.id);
+
+    accountId = 'rowrace_account_' + suffix;
+    var account = concurrentRowTestPost_(url, {
+      action:'query', token:token, table:'accounts', mode:'insert', returning:true,
+      values:{
+        id:accountId, family_id:familyId, name:'Временный тестовый счёт',
+        kind:'bank', owner_user_id:userId, starting_balance_kopecks:0, archived:false
+      }
+    });
+    if (account.error || !Array.isArray(account.data) || account.data.length !== 1 ||
+        String(account.data[0].id) !== accountId) {
+      throw new Error('Не удалось создать временный TEST-счёт: ' +
+        (account.error && account.error.message || 'неожиданный ответ'));
+    }
+
+    var today = Utilities.formatDate(new Date(), 'Europe/Moscow', 'yyyy-MM-dd');
     var inserted = concurrentRowTestPost_(url, {
       action:'query', token:token, table:'transactions', mode:'insert', returning:true,
       values:{
-        id:id, family_id:familyId, type:'expense', amount_kopecks:137,
+        id:transactionId, family_id:familyId, type:'expense', amount_kopecks:137,
         operation_date:today, operation_time:'12:00', category_id:null,
         account_id:accountId, to_account_id:null,
         description:'Тест конкурентного изменения', planned:false
       }
     });
     if (inserted.error || !Array.isArray(inserted.data) || inserted.data.length !== 1 ||
-        String(inserted.data[0].id) !== id) throw new Error('Не удалось создать тестовую операцию: ' + (inserted.error && inserted.error.message || 'неожиданный ответ'));
-    // Read the persisted row to obtain a complete schema snapshot. Insert
-    // returning may omit blank optional columns, while the backend requires
-    // every table column in expected for optimistic concurrency.
+        String(inserted.data[0].id) !== transactionId) {
+      throw new Error('Не удалось создать тестовую операцию: ' +
+        (inserted.error && inserted.error.message || 'неожиданный ответ'));
+    }
+
     var selected = concurrentRowTestPost_(url, {
       action:'query', token:token, table:'transactions', mode:'select',
-      filters:[{column:'id', op:'eq', value:id}], limit:1
+      filters:[{column:'id', op:'eq', value:transactionId}], limit:1
     });
     if (selected.error || !Array.isArray(selected.data) || selected.data.length !== 1) {
       throw new Error('Не удалось получить полный снимок тестовой операции.');
@@ -49,7 +89,7 @@ function runConcurrentTransactionUpdateTest() {
         url:url, method:'post', contentType:'application/json', muteHttpExceptions:true,
         payload:JSON.stringify({
           action:'query', token:token, table:'transactions', mode:'update',
-          filters:[{column:'id', op:'eq', value:id}],
+          filters:[{column:'id', op:'eq', value:transactionId}],
           values:{description:description}, expected:snapshot, returning:true
         })
       };
@@ -69,7 +109,7 @@ function runConcurrentTransactionUpdateTest() {
     }
     var finalRows = concurrentRowTestPost_(url, {
       action:'query', token:token, table:'transactions', mode:'select',
-      filters:[{column:'id', op:'eq', value:id}], limit:1
+      filters:[{column:'id', op:'eq', value:transactionId}], limit:1
     });
     if (finalRows.error || !Array.isArray(finalRows.data) || finalRows.data.length !== 1 ||
         values.indexOf(String(finalRows.data[0].description)) === -1) {
@@ -77,33 +117,80 @@ function runConcurrentTransactionUpdateTest() {
     }
     report.successful_updates = 1;
     report.stale_updates_rejected = 1;
-    report.final_description = finalRows.data[0].description;
     report.result = 'PASS';
   } finally {
-    if (created) {
+    if (fixtureAttempted) {
       try {
-        var deleted = concurrentRowTestPost_(url, {
-          action:'query', token:token, table:'transactions', mode:'delete',
-          filters:[{column:'id', op:'eq', value:id}]
+        // Resolve IDs even if an HTTP response was lost after the server committed.
+        var authMatches = authRows_().filter(function(row) { return row.email === email; });
+        if (!userId && authMatches.length === 1) userId = authMatches[0].id;
+        var familyMatches = userId ? rows_('families').filter(function(row) {
+          return String(row.created_by) === userId && String(row.name) === familyName;
+        }) : [];
+        if (!familyId && familyMatches.length === 1) familyId = String(familyMatches[0].id);
+
+        if (transactionId) {
+          var txRows = rows_('transactions').filter(function(row) { return String(row.id) === transactionId; });
+          if (txRows.length) deleteRows_('transactions', txRows);
+          if (rows_('transactions').some(function(row) { return String(row.id) === transactionId; })) {
+            throw new Error('Тестовая операция осталась после очистки.');
+          }
+        }
+        if (accountId) {
+          var accountRows = rows_('accounts').filter(function(row) { return String(row.id) === accountId; });
+          if (accountRows.length) deleteRows_('accounts', accountRows);
+          if (rows_('accounts').some(function(row) { return String(row.id) === accountId; })) {
+            throw new Error('Тестовый счёт остался после очистки.');
+          }
+        }
+        if (familyId) {
+          var categoryRows = rows_('categories').filter(function(row) { return String(row.family_id) === familyId; });
+          if (categoryRows.length) deleteRows_('categories', categoryRows);
+          var memberRows = rows_('family_members').filter(function(row) { return String(row.family_id) === familyId; });
+          if (memberRows.length) deleteRows_('family_members', memberRows);
+          var familyRows = rows_('families').filter(function(row) { return String(row.id) === familyId; });
+          if (familyRows.length) deleteRows_('families', familyRows);
+        }
+        if (userId) {
+          var profileRows = rows_('profiles').filter(function(row) { return String(row.id) === userId; });
+          if (profileRows.length) deleteRows_('profiles', profileRows);
+        }
+        authMatches = authRows_().filter(function(row) { return row.email === email; });
+        authMatches.forEach(function(row) { authSheet_().deleteRow(row.row); });
+        var allProperties = props.getProperties();
+        Object.keys(allProperties).forEach(function(key) {
+          if (key.indexOf('session:') !== 0) return;
+          try {
+            var session = JSON.parse(allProperties[key]);
+            if (String(session.userId) === userId) props.deleteProperty(key);
+          } catch (_) {}
         });
-        if (deleted.error) throw new Error(deleted.error.message || 'delete failed');
-        var verify = concurrentRowTestPost_(url, {
-          action:'query', token:token, table:'transactions', mode:'select',
-          filters:[{column:'id', op:'eq', value:id}]
-        });
-        if (verify.error || !Array.isArray(verify.data) || verify.data.length !== 0) {
-          throw new Error('Тестовая операция осталась после очистки.');
+
+        if ((transactionId && rows_('transactions').some(function(row) { return String(row.id) === transactionId; })) ||
+            (accountId && rows_('accounts').some(function(row) { return String(row.id) === accountId; })) ||
+            (familyId && (rows_('families').some(function(row) { return String(row.id) === familyId; }) ||
+              rows_('family_members').some(function(row) { return String(row.family_id) === familyId; }) ||
+              rows_('categories').some(function(row) { return String(row.family_id) === familyId; }))) ||
+            (userId && rows_('profiles').some(function(row) { return String(row.id) === userId; })) ||
+            authRows_().some(function(row) { return row.email === email; })) {
+          throw new Error('После очистки обнаружены оставшиеся синтетические записи.');
         }
         report.cleanup = 'PASS';
       } catch (error) {
-        cleanupError = String(error && error.message || error);
+        cleanupErrors.push(String(error && error.message || error));
         report.cleanup = 'FAILED';
-        report.cleanup_error = cleanupError;
-        report.manual_cleanup_id = id;
+        report.cleanup_errors = cleanupErrors;
+        report.manual_cleanup_email = email;
+        report.manual_cleanup_family_id = familyId || null;
+        report.manual_cleanup_account_id = accountId || null;
+        report.manual_cleanup_transaction_id = transactionId;
       }
     }
   }
-  if (cleanupError) throw new Error('Очистка не подтверждена. Проверьте transaction ID ' + id + ': ' + cleanupError);
+  if (cleanupErrors.length) {
+    throw new Error('Очистка TEST-фикстуры не подтверждена: ' + cleanupErrors.join('; ') +
+      '. Email: ' + email + ', family ID: ' + (familyId || 'unknown'));
+  }
   Logger.log(JSON.stringify(report));
   return report;
 }
