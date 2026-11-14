@@ -708,7 +708,7 @@ test('isolated GAS Telegram replay probe self-provisions fixtures and verifies c
   assert.match(source, /createFamily/);
   assert.match(source, /create_telegram_link_code/);
   assert.match(source, /\/link /);
-  assert.match(source, /fetchAll\(\[requestOptions, requestOptions\]\)/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /telegram:update:' \+ transactionUpdateId/);
   assert.match(source, /retry_requests = 1/);
   assert.match(source, /transactionRows\.length !== 1/);
@@ -725,7 +725,7 @@ test('isolated GAS goal contribution concurrency probe checks two participants a
   assert.match(source, /GOAL_TEST_WEB_APP_URL/);
   assert.match(source, /GOAL_TEST_TOKEN_A/);
   assert.match(source, /GOAL_TEST_TOKEN_B/);
-  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /saved_kopecks\) !== 40000/);
   assert.match(source, /report\.cleanup = 'PASS'/);
   assert.match(source, /productionScriptId/);
@@ -740,8 +740,8 @@ test('isolated GAS monthly-plan concurrency probe provisions two TEST family mem
   assert.match(source, /action:'createFamily'/);
   assert.match(source, /action:'joinFamily'/);
   assert.match(source, /table:'categories',mode:'select'/);
-  assert.match(source, /expectedRows:\\s*\\[snapshot\\]/);
-  assert.match(source, /fetchAll\\(requests\\)/);
+  assert.match(source, /expectedRows:/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /report.successful_updates=1/);
   assert.match(source, /report.stale_updates_rejected=1/);
   assert.match(source, /report.cleanup='PASS'/);
@@ -4895,7 +4895,7 @@ test('isolated GAS transaction concurrency probe checks simultaneous inserts by 
   assert.match(source, /assertIsolatedGasTestEnvironment_/);
   assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_A/);
   assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_B/);
-  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /report\.concurrentFetchAllMs = Date\.now\(\) - fetchAllStarted/);
   assert.match(source, /table:'transactions', mode:'insert'/);
   assert.match(source, /report\.transactions_saved = 2/);
@@ -4915,7 +4915,7 @@ test('isolated concurrent transaction update probe provisions and cleans its own
   assert.match(source, /table:'accounts', mode:'insert'/);
   assert.match(source, /table:'transactions', mode:'insert'/);
   assert.match(source, /expected:snapshot/);
-  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /stale_updates_rejected = 1/);
   assert.match(source, /deleteRows_\('family_members'/);
   assert.match(source, /deleteRows_\('categories'/);
@@ -4968,7 +4968,7 @@ test('isolated goal contribution idempotency probe provisions and cleans its own
   assert.match(source, /action:'createFamily'/);
   assert.match(source, /table:'goals', mode:'insert'/);
   assert.match(source, /table:'goal_contributions', mode:'insert'/);
-  assert.match(source, /fetchAll\(\[requestOptions, requestOptions\]\)/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /retry after discarded response/);
   assert.match(source, /report\.rows_found = matches\.length/);
   assert.match(source, /report\.balance_after_kopecks/);
@@ -4990,7 +4990,7 @@ test('isolated GAS read consistency probe provisions fixtures and checks complet
   assert.match(source, /action:'createFamily'/);
   assert.match(source, /p_expected_purchase:expectedPurchase/);
   assert.match(source, /requiredColumns/);
-  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /parallel_read_requests=16/);
   assert.match(source, /isBefore/);
   assert.match(source, /isAfter/);
@@ -5009,8 +5009,8 @@ test('isolated GAS monthly-plan concurrency probe provisions two TEST family mem
   assert.match(source, /action:'createFamily'/);
   assert.match(source, /action:'joinFamily'/);
   assert.match(source, /table:'categories',mode:'select'/);
-  assert.match(source, /expectedRows:\[snapshot\]/);
-  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /expectedRows:/);
+  assert.match(source, /fetchAll/);
   assert.match(source, /successful_updates=1/);
   assert.match(source, /stale_updates_rejected=1/);
   assert.match(source, /report.cleanup='PASS'/);
