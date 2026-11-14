@@ -4899,3 +4899,24 @@ test('backend diagnostics report INCOMPLETE when profile timezone metadata canno
   assert.equal(report.profileTimezoneReadOk, false);
   assert.deepEqual(Array.from(report.profileTimezoneValues), ['READ_ERROR']);
 });
+
+
+test('isolated goal contribution idempotency probe provisions and cleans its own TEST fixture', () => {
+  const source = fs.readFileSync('tests/gas/GoalContributionIdempotencyRuntimeTest.gs', 'utf8');
+  assert.match(source, /runGoalContributionIdempotencyRuntimeTest/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
+  assert.match(source, /GOAL_IDEMPOTENCY_TEST_WEB_APP_URL/);
+  assert.match(source, /action:'signup'/);
+  assert.match(source, /action:'createFamily'/);
+  assert.match(source, /table:'goals', mode:'insert'/);
+  assert.match(source, /table:'goal_contributions', mode:'insert'/);
+  assert.match(source, /fetchAll\(\[requestOptions, requestOptions\]\)/);
+  assert.match(source, /retry after discarded response/);
+  assert.match(source, /report\.rows_found = matches\.length/);
+  assert.match(source, /report\.balance_after_kopecks/);
+  assert.match(source, /deleteRows_\('goal_contributions'/);
+  assert.match(source, /deleteRows_\('family_members'/);
+  assert.match(source, /deleteRows_\('profiles'/);
+  assert.match(source, /report\.cleanup = 'PASS'/);
+  assert.match(source, /report\.cleanup = 'FAILED'/);
+});
