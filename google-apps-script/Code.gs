@@ -1419,7 +1419,7 @@ function telegramWebhook_(req){
   const props=PropertiesService.getScriptProperties();
   const expected=props.getProperty('TELEGRAM_BACKEND_SECRET');
   if(!expected||expected.length<32||!safeEqual_(String(req.telegramSecret||''),expected))throw new Error('Webhook authentication failed');
-  const update=req.update||{}, updateId=String(update.update_id||'');
+  const update=req.update||{}, updateId=update.update_id===undefined||update.update_id===null?'':String(update.update_id);
   const savedPrune=Number(props.getProperty('telegram:last_prune')||0);
   const lastPrune=Number.isFinite(savedPrune)?savedPrune:0;
   if(Date.now()-lastPrune>TELEGRAM_UPDATE_PRUNE_INTERVAL_MS){
