@@ -4,7 +4,7 @@
  * retries the same request, verifies one row/one balance increment, then cleans up.
  *
  * Required Script Property:
- * GOAL_IDEMPOTENCY_TEST_WEB_APP_URL=<existing isolated TEST Web App /exec URL>
+ * CONCURRENT_ROW_TEST_WEB_APP_URL=<existing isolated TEST Web App /exec URL>
  *
  * Uses the shared allowlists:
  * BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID
@@ -12,8 +12,8 @@
  */
 function runGoalContributionIdempotencyRuntimeTest() {
   var props = PropertiesService.getScriptProperties();
-  var url = String(props.getProperty('GOAL_IDEMPOTENCY_TEST_WEB_APP_URL') || '').trim();
-  var confirmation = String(props.getProperty('GOAL_IDEMPOTENCY_TEST_CONFIRM') || '');
+  var url = String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL') || '').trim();
+  var confirmation = String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM') || '');
   assertIsolatedGasTestEnvironment_(props, confirmation, url);
 
   var suffix = Utilities.getUuid().replace(/-/g, '').toLowerCase();
