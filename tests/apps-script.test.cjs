@@ -4905,7 +4905,7 @@ test('isolated goal contribution idempotency probe provisions and cleans its own
   const source = fs.readFileSync('tests/gas/GoalContributionIdempotencyRuntimeTest.gs', 'utf8');
   assert.match(source, /runGoalContributionIdempotencyRuntimeTest/);
   assert.match(source, /assertIsolatedGasTestEnvironment_/);
-  assert.match(source, /GOAL_IDEMPOTENCY_TEST_WEB_APP_URL/);
+  assert.match(source, /CONCURRENT_ROW_TEST_WEB_APP_URL/);
   assert.match(source, /action:'signup'/);
   assert.match(source, /action:'createFamily'/);
   assert.match(source, /table:'goals', mode:'insert'/);
