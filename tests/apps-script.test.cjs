@@ -5062,7 +5062,6 @@ test('isolated GAS runtime probes have no duplicate global function declarations
 
 test('single-file TEST GAS runtime bundle stays byte-for-byte synchronized with source modules', () => {
   const paths = [
-    'tests/gas/IsolatedTestGuard.gs',
     'tests/gas/TelegramUpdateConcurrencyTest.gs',
     'tests/gas/ReadConsistencyConcurrencyTest.gs',
     'tests/gas/MonthlyPlanConcurrencyTest.gs',
@@ -5074,6 +5073,7 @@ test('single-file TEST GAS runtime bundle stays byte-for-byte synchronized with 
     ' * Single-file TEST GAS runtime acceptance bundle.',
     ' * Generated from the maintained individual modules in tests/gas/.',
     ' * Copy this one file into the isolated TEST Apps Script project.',
+    ' * Keep the existing IsolatedTestGuard.gs file; do not add the individual probe files separately.',
     ' * Do not add this bundle to Production.',
     ' */',
     '',
