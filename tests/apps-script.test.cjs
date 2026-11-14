@@ -740,7 +740,7 @@ test('isolated GAS monthly-plan concurrency probe provisions two TEST family mem
   assert.match(source, /action:'createFamily'/);
   assert.match(source, /action:'joinFamily'/);
   assert.match(source, /table:'categories',mode:'select'/);
-  assert.match(source, /expectedRows:\\[snapshot\\]/);
+  assert.match(source, /expectedRows:\\s*\\[snapshot\\]/);
   assert.match(source, /fetchAll\\(requests\\)/);
   assert.match(source, /report.successful_updates=1/);
   assert.match(source, /report.stale_updates_rejected=1/);
