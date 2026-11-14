@@ -1,7 +1,9 @@
 /**
  * Shared fail-closed guard for live concurrency probes.
- * Set these two properties once in the isolated TEST Apps Script project:
- * GAS_TEST_ALLOWED_SCRIPT_ID=<ScriptApp.getScriptId()>
+ * The allowed Script ID reuses the value already verified by
+ * BackendSecurityDiagnostics.gs in the isolated TEST Apps Script project.
+ * Set this property and the TEST spreadsheet allowlist once:
+ * BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID=<ScriptApp.getScriptId()>
  * GAS_TEST_ALLOWED_SPREADSHEET_ID=<test spreadsheet ID>
  */
 function assertIsolatedGasTestEnvironment_(props, confirmation, webAppUrl) {
@@ -9,7 +11,7 @@ function assertIsolatedGasTestEnvironment_(props, confirmation, webAppUrl) {
     throw new Error('Тест остановлен: требуется подтверждение ISOLATED_TEST_ONLY.');
   }
   var scriptId = ScriptApp.getScriptId();
-  var allowedScriptId = String(props.getProperty('GAS_TEST_ALLOWED_SCRIPT_ID') || '').trim();
+  var allowedScriptId = String(props.getProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID') || '').trim();
   if (!allowedScriptId || scriptId !== allowedScriptId) {
     throw new Error('Тест остановлен: Script ID не совпадает с разрешённым TEST-проектом.');
   }
