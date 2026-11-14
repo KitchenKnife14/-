@@ -47,7 +47,7 @@ function runTelegramUpdateConcurrencyTest() {
     else props.setProperty(key, String(oldValue));
   }
 
-  function post(body) {
+  function telegramReplayPost_(body) {
     return telegramReplayParse_(UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
@@ -80,7 +80,7 @@ function runTelegramUpdateConcurrencyTest() {
     props.setProperty(pruneKey, String(Date.now()));
 
     fixtureAttempted = true;
-    var signup = post({
+    var signup = telegramReplayPost_({
       action: 'signup',
       email: email,
       password: password,
@@ -93,21 +93,21 @@ function runTelegramUpdateConcurrencyTest() {
     token = String(signup.data.token);
     userId = String(signup.data.user.id);
 
-    var family = post({ action: 'createFamily', token: token, name: familyName });
+    var family = telegramReplayPost_({ action: 'createFamily', token: token, name: familyName });
     if (family.error || !family.data || !family.data.id) {
       throw new Error('Не удалось создать синтетическую TEST-семью: ' +
         (family.error && family.error.message || 'неожиданный ответ'));
     }
     familyId = String(family.data.id);
 
-    var generated = post({ action: 'rpc', token: token, name: 'create_telegram_link_code' });
+    var generated = telegramReplayPost_({ action: 'rpc', token: token, name: 'create_telegram_link_code' });
     if (generated.error || !generated.data || !generated.data.code) {
       throw new Error('Не удалось создать одноразовый TEST link code: ' +
         (generated.error && generated.error.message || 'неожиданный ответ'));
     }
     linkCode = String(generated.data.code);
 
-    var linked = post(webhookUpdate(linkUpdateId, '/link ' + linkCode));
+    var linked = telegramReplayPost_(webhookUpdate(linkUpdateId, '/link ' + linkCode));
     if (linked.error || !linked.data || !/успешно привязан/i.test(String(linked.data.text || ''))) {
       throw new Error('Не удалось создать синтетическую Telegram-привязку: ' +
         (linked.error && linked.error.message || linked.data && linked.data.text || 'неожиданный ответ'));
@@ -144,7 +144,7 @@ function runTelegramUpdateConcurrencyTest() {
     // Remove only this update's replay cache to simulate a committed transaction
     // whose webhook response/cache acknowledgement was lost.
     props.deleteProperty('telegram:update:' + transactionUpdateId);
-    var retry = post(updateBody);
+    var retry = telegramReplayPost_(updateBody);
     if (retry.error || !retry.data || retry.data.text !== parallelResults[0].data.text) {
       throw new Error('Повтор после удаления replay cache не вернул исходный ответ: ' +
         (retry.error && retry.error.message || 'different response'));
