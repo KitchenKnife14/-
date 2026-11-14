@@ -3365,3 +3365,14 @@ HEAD до:
 - Следующая проверка выбрана без пользовательских credentials и без изменения данных: `runPbkdf2RuntimeDiagnostics()`. Скрипт использует только синтетические пароль/соль, не читает и не изменяет Sheets, `_auth` или Script Properties (кроме чтения защитного allowlist).
 - Benchmark сравнивает 30 000 и 600 000 итераций PBKDF2 непосредственно в Google Apps Script V8. Это замер производительности, не команда менять work factor. Никаких изменений `PW_ITERATIONS` или существующих хешей по результатам одного замера автоматически не делать.
 - Прогресс чек-листа не менялся; Production, `main`, основная таблица и Production GAS не затрагивались.
+
+
+### 2026-11-14 — PBKDF2 runtime benchmark in isolated TEST GAS
+
+- Пользователь выполнил `runPbkdf2RuntimeDiagnostics()` непосредственно в Google Apps Script V8; диагностический Script ID suffix: `KMTZTF`; timestamp измерения: `2026-11-14T15:04:29.211Z`.
+- Benchmark использовал синтетические credentials и не обращался к данным Spreadsheet. Результат 30 000 итераций: samples `[59, 60, 71, 64, 69]` ms; min 59 ms, median 64 ms, max 71 ms.
+- Результат 600 000 итераций: samples `[1289, 1336, 1367]` ms; min 1289 ms, median 1336 ms, max 1367 ms.
+- Отношение медиан: `1336 / 64 = 20.875`, то есть примерно 20.9x. Это измерение стоимости PBKDF2, а не полного login flow; оно не измеряет параллельные авторизации, UX или end-to-end latency.
+- Результат не является основанием автоматически менять `PW_ITERATIONS`, формат хешей или существующие credentials. Никакие данные/строки Spreadsheet не изменялись; cleanup для этого read-only benchmark не требуется.
+- GitHub Actions run [43607588582](https://github.com/KitchenKnife14/-/actions/runs/43607588582) для предшествующего HEAD `644a78d136a0e2da1f2faabd5e0e0f1a9804b77d` перепроверен и завершился **SUCCESS**. CI для этой записи будет запущен новым commit после обновления журнала.
+- Прогресс чек-листа не пересчитывался и не увеличивался: runtime benchmark добавляет измеренные данные, но сам по себе не закрывает аудит безопасности PBKDF2 или проверку login UX. Production, `main`, основная Google Sheet, Production GAS, Vercel и Telegram webhook не затрагивались.
