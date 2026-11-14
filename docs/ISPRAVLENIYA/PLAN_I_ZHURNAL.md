@@ -3387,3 +3387,14 @@ HEAD до:
 - GitHub Actions run [43608523219](https://github.com/KitchenKnife14/-/actions/runs/43608523219) для HEAD `d0634d8e57842314b320b876f5b7ba97da4f365b` завершился **SUCCESS**: regression tests, Apps Script syntax checks, включая новый файл, build и остальные workflow steps прошли.
 - Это подтверждает статическую проверку и синтаксис, но **не** live GAS runtime. Тест пока имеет статус NOT RUN; не засчитывать его как подтверждённый idempotency concurrency PASS до запуска пользователем в TEST GAS и получения JSON с `result=PASS`, `cleanup=PASS`.
 - Production, `main`, основная Google Sheet, Production GAS, Vercel env и Telegram webhook не затрагивались. Процент аудита не менялся.
+
+### 2026-11-14 — live GAS idempotency: duplicate goal contribution insert and retry PASS
+
+- Пользователь выполнил `runGoalContributionIdempotencyRuntimeTest()` непосредственно в изолированном TEST GAS. Получен отчёт: `parallel_requests=2`, `retry_requests=1`, `rows_found=1`, `amount_kopecks=137`, `balance_before_kopecks=0`, `balance_after_kopecks=137`, `result=PASS`, `cleanup=PASS`.
+- Два одинаковых параллельных insert с одним ID создали ровно одну строку `goal_contributions`; повтор того же запроса после имитации потерянного ответа не создал дубликат и не начислил сумму повторно. Итог `saved_kopecks` составил ровно 137 копеек.
+- Очистка синтетических TEST fixtures подтверждена самим runtime отчётом: `cleanup=PASS`. Реальные семейные данные не использовались.
+- GitHub Actions run [43608605143](https://github.com/KitchenKnife14/-/actions/runs/43608605143) для предыдущего HEAD `1a4d1dcd31e10d8d733a82291c8eff8ddb1ceac9` завершился **SUCCESS**.
+- Теперь в этой серии фактически подтверждены три live GAS concurrency/idempotency сценария: duplicate signup, optimistic transaction update (один success / один stale rejection) и duplicate goal contribution insert + retry. Это не подтверждает остальные write paths, monthly plans, Telegram replay или полный production login flow.
+- Процент чек-листа и число закрытых пунктов не меняются: runtime результат зафиксирован, но его нельзя автоматически засчитать сразу в несколько общих аудиторских критериев. Отдельные критерии и тестовые пробелы должны быть сопоставлены до пересчёта.
+- Изменения ограничены журналом рабочей ветки `ispravleniya`. Production, `main`, основная Google Sheet, Production GAS, Vercel env и Telegram webhook не затрагивались.
+- Следующий технический этап: проверить оставшиеся критичные write paths на идемпотентность/частичный commit и выбрать следующий один изолированный runtime probe; не повторять уже пройденные тесты.
