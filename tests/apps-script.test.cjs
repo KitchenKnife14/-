@@ -4889,21 +4889,22 @@ test('backend diagnostics do not create a missing profiles sheet', () => {
   assert.equal(logs.length, 1);
 });
 
-test('isolated GAS transaction concurrency probe checks simultaneous inserts by both family members and cleanup', () => {
+test('isolated GAS transaction concurrency probe provisions two TEST family members and verifies both inserts', () => {
   const source = fs.readFileSync('tests/gas/TransactionConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTransactionConcurrencyTest/);
   assert.match(source, /assertIsolatedGasTestEnvironment_/);
-  assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_A/);
-  assert.match(source, /TRANSACTION_CONCURRENCY_TEST_TOKEN_B/);
-  assert.match(source, /fetchAll\(requests\)/);
-  assert.match(source, /report\.concurrentFetchAllMs = Date\.now\(\) - fetchAllStarted/);
-  assert.match(source, /table:'transactions', mode:'insert'/);
-  assert.match(source, /report\.transactions_saved = 2/);
-  assert.match(source, /report\.cleanup = cleanupErrors\.length \? 'FAILED' : 'PASS'/);
-  assert.match(source, /TRANSACTION_CONCURRENCY_TEST_WEB_APP_URL/);
-  assert.match(source, /function transactionConcurrencyPost_\(url, token, body\)/);
+  assert.match(source, /CONCURRENT_ROW_TEST_WEB_APP_URL/);
+  assert.match(source, /CONCURRENT_ROW_TEST_CONFIRM/);
+  assert.match(source, /action:'signup'/);
+  assert.match(source, /action:'createFamily'/);
+  assert.match(source, /action:'joinFamily'/);
+  assert.match(source, /fetchAll/);
+  assert.match(source, /table:'transactions',mode:'insert'/);
+  assert.match(source, /report.transactions_saved=2/);
+  assert.match(source, /report.cleanup='PASS'/);
+  assert.match(source, /report.cleanup='FAILED'/);
+  assert.match(source, /manual_cleanup_transaction_ids/);
 });
-
 
 test('isolated concurrent transaction update probe provisions and cleans its own TEST fixture', () => {
   const source = fs.readFileSync('tests/gas/ConcurrentTransactionUpdateTest.gs', 'utf8');
