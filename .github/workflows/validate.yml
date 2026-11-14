@@ -48,6 +48,8 @@ jobs:
         run: node --check < tests/gas/TransactionConcurrencyTest.gs
       - name: Apps Script one-click runtime acceptance batch syntax check
         run: node --check < tests/gas/RuntimeAcceptanceBatch.gs
+      - name: Apps Script single-file runtime acceptance bundle syntax check
+        run: node --check < tests/gas/RuntimeAcceptanceBundle.gs
       - name: Apps Script concurrent transaction update test syntax check
         run: node --check < tests/gas/ConcurrentTransactionUpdateTest.gs
       - name: Goal contribution idempotency runtime test syntax check
