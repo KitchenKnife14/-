@@ -5040,7 +5040,7 @@ test('isolated GAS runtime probes have no duplicate global function declarations
   const declarations = new Map();
   for (const path of paths) {
     const source = fs.readFileSync(path, 'utf8');
-    for (const match of source.matchAll(/^\\s*function\\s+([A-Za-z_$][\\w$]*)\\s*\\(/gm)) {
+    for (const match of source.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)) {
       const name = match[1];
       const locations = declarations.get(name) || [];
       locations.push(path);
@@ -5060,7 +5060,6 @@ test('isolated GAS runtime probes have no duplicate global function declarations
   ]) assert.ok(declarations.has(name), 'missing isolated helper ' + name);
 });
 
-
 test('single-file TEST GAS runtime bundle stays byte-for-byte synchronized with source modules', () => {
   const paths = [
     'tests/gas/IsolatedTestGuard.gs',
@@ -5078,9 +5077,9 @@ test('single-file TEST GAS runtime bundle stays byte-for-byte synchronized with 
     ' * Do not add this bundle to Production.',
     ' */',
     '',
-  ].join('\\n');
+  ].join('\n');
   const expected = header + paths.map(path =>
-    '\\n\\n/* ===== BUNDLE SECTION: ' + path + ' ===== */\\n\\n' +
+    '\n\n/* ===== BUNDLE SECTION: ' + path + ' ===== */\n\n' +
     fs.readFileSync(path, 'utf8')
   ).join('');
   const bundle = fs.readFileSync('tests/gas/RuntimeAcceptanceBundle.gs', 'utf8');
