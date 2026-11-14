@@ -698,18 +698,24 @@ test('shared GAS concurrency guard rejects missing and mismatched TEST allowlist
   assert.equal(context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url).getId(), 'TEST_SHEET');
 });
 
-test('isolated GAS Telegram update concurrency probe verifies duplicate delivery and cleanup', () => {
+test('isolated GAS Telegram replay probe self-provisions fixtures and verifies concurrent delivery, lost-cache retry and cleanup', () => {
   const source = fs.readFileSync('tests/gas/TelegramUpdateConcurrencyTest.gs', 'utf8');
   assert.match(source, /runTelegramUpdateConcurrencyTest/);
   assert.match(source, /assertIsolatedGasTestEnvironment_/);
-  assert.match(source, /TELEGRAM_CONCURRENCY_TEST_WEB_APP_URL/);
-  assert.match(source, /TELEGRAM_BACKEND_SECRET/);
+  assert.match(source, /CONCURRENT_ROW_TEST_WEB_APP_URL/);
+  assert.match(source, /CONCURRENT_ROW_TEST_CONFIRM/);
+  assert.match(source, /action: 'signup'/);
+  assert.match(source, /createFamily/);
+  assert.match(source, /create_telegram_link_code/);
+  assert.match(source, /\/link /);
   assert.match(source, /fetchAll\(\[requestOptions, requestOptions\]\)/);
-  assert.match(source, /results\[0\]\.data\.text !== results\[1\]\.data\.text/);
-  assert.match(source, /rows\.data\.length !== 1/);
-  assert.match(source, /deleteProperty\('telegram:update:'/);
+  assert.match(source, /telegram:update:' \+ transactionUpdateId/);
+  assert.match(source, /retry_requests = 1/);
+  assert.match(source, /transactionRows\.length !== 1/);
+  assert.match(source, /restoreProperty\(secretKey, oldSecret\)/);
+  assert.match(source, /restoreProperty\(pruneKey, oldPrune\)/);
   assert.match(source, /report\.cleanup = 'PASS'/);
-  assert.match(source, /productionScriptId/);
+  assert.match(source, /manual_cleanup_transaction_id/);
 });
 
 test('isolated GAS goal contribution concurrency probe checks two participants and cleanup', () => {
