@@ -4332,6 +4332,53 @@ test('Telegram link retry remains successful if update cache write fails after t
   assert.equal(h.context.rows_('telegram_links').filter(row => row.telegram_user_id === '730').length, 1);
 });
 
+test('Telegram update_id zero remains a stable idempotency key', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-zero-update-id@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Нулевой update ID' });
+  const secret = 'telegram-zero-update-secret-0123456789';
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('TELEGRAM_BACKEND_SECRET', secret);
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+
+  const link = h.call({
+    action: 'telegramWebhook',
+    telegramSecret: secret,
+    update: {
+      update_id: 8000,
+      message: { chat: { id: 800, type: 'private' }, from: { id: 800 }, text: '/link ' + generated.data.code }
+    }
+  });
+  assert.equal(link.error, null, link.error?.message);
+
+  const update = {
+    update_id: 0,
+    message: {
+      chat: { id: 800, type: 'private' },
+      from: { id: 800 },
+      date: 1794380000,
+      text: 'Проезд 45 рублей'
+    }
+  };
+  const first = h.call({ action: 'telegramWebhook', telegramSecret: secret, update });
+  assert.equal(first.error, null, first.error?.message);
+  assert.ok(props.getProperty('telegram:update:0'));
+
+  // Simulate a lost response/cache acknowledgement. The deterministic transaction
+  // ID must still prevent a second row even when the replay cache is absent.
+  props.deleteProperty('telegram:update:0');
+  const retry = h.call({ action: 'telegramWebhook', telegramSecret: secret, update });
+  assert.equal(retry.error, null, retry.error?.message);
+
+  const transactions = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'select'
+  }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].id, 'telegram_0');
+  assert.equal(transactions[0].amount_kopecks, 4500);
+});
+
 test('Telegram expense retry after update cache failure reuses the stable transaction ID', () => {
   const h = makeHarness();
   const user = h.signup('telegram-expense-retry@example.com');
