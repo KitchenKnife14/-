@@ -5015,3 +5015,14 @@ test('one-click TEST GAS runtime batch runs only isolated self-cleaning probes',
   assert.match(source, /passedCount/);
   assert.match(source, /failedCount/);
 });
+
+
+test('multi-user TEST GAS probes delete synthetic auth rows bottom-up without shifting later rows', () => {
+  for (const path of [
+    'tests/gas/MonthlyPlanConcurrencyTest.gs',
+    'tests/gas/TransactionConcurrencyTest.gs',
+  ]) {
+    const source = fs.readFileSync(path, 'utf8');
+    assert.ok(source.includes('authMatches.sort(function(a,b){return b.row-a.row;})'), path);
+  }
+});
