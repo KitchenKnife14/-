@@ -687,10 +687,10 @@ test('shared GAS concurrency guard rejects missing and mismatched TEST allowlist
   const url = 'https://script.google.com/macros/s/TEST_DEPLOYMENT/exec';
 
   assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), '', url), /ISOLATED_TEST_ONLY/);
-  properties.set('GAS_TEST_ALLOWED_SCRIPT_ID', 'WRONG_SCRIPT');
+  properties.set('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'WRONG_SCRIPT');
   properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SHEET');
   assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url), /Script ID/);
-  properties.set('GAS_TEST_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT');
+  properties.set('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT');
   properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'WRONG_SHEET');
   assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url), /TEST-таблицей/);
   properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SHEET');
