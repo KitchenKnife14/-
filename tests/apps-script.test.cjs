@@ -4993,3 +4993,22 @@ test('isolated GAS read consistency probe provisions fixtures and checks complet
   assert.match(source, /report.cleanup='FAILED'/);
   assert.match(source, /manual_cleanup_purchase_id/);
 });
+
+
+test('isolated GAS monthly-plan concurrency probe provisions two TEST family members and cleans them', () => {
+  const source = fs.readFileSync('tests/gas/MonthlyPlanConcurrencyTest.gs', 'utf8');
+  assert.match(source, /runMonthlyPlanConcurrencyTest/);
+  assert.match(source, /CONCURRENT_ROW_TEST_WEB_APP_URL/);
+  assert.match(source, /CONCURRENT_ROW_TEST_CONFIRM/);
+  assert.match(source, /action:'signup'/);
+  assert.match(source, /action:'createFamily'/);
+  assert.match(source, /action:'joinFamily'/);
+  assert.match(source, /table:'categories',mode:'select'/);
+  assert.match(source, /expectedRows:\[snapshot\]/);
+  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /successful_updates=1/);
+  assert.match(source, /stale_updates_rejected=1/);
+  assert.match(source, /report.cleanup='PASS'/);
+  assert.match(source, /report.cleanup='FAILED'/);
+  assert.match(source, /manual_cleanup_plan_id/);
+});
