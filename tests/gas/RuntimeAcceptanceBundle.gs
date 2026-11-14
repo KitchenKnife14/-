@@ -1035,7 +1035,8 @@ function transactionConcurrencyParse_(response,label) {
 
 /**
  * One-click orchestrator for the pending isolated TEST GAS runtime probes.
- * Copy this file together with the four referenced probe files into TEST GAS.
+ * Source module for RuntimeAcceptanceBundle.gs; do not copy this file separately.
+ * The generated bundle is the only new GAS file needed; the existing guard stays separate.
  * Every probe creates and cleans its own synthetic fixtures.
  */
 function runIsolatedRuntimeAcceptanceBatch() {
