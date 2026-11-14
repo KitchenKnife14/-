@@ -4847,6 +4847,23 @@ test('isolated GAS transaction concurrency probe checks simultaneous inserts by 
 });
 
 
+test('isolated concurrent transaction update probe provisions and cleans its own TEST fixture', () => {
+  const source = fs.readFileSync('tests/gas/ConcurrentTransactionUpdateTest.gs', 'utf8');
+  assert.match(source, /runConcurrentTransactionUpdateTest/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
+  assert.match(source, /CONCURRENT_ROW_TEST_WEB_APP_URL/);
+  assert.match(source, /action:'signup'/);
+  assert.match(source, /action:'createFamily'/);
+  assert.match(source, /table:'accounts', mode:'insert'/);
+  assert.match(source, /table:'transactions', mode:'insert'/);
+  assert.match(source, /expected:snapshot/);
+  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /stale_updates_rejected = 1/);
+  assert.match(source, /deleteRows_\('family_members'/);
+  assert.match(source, /deleteRows_\('categories'/);
+  assert.match(source, /report.cleanup = 'PASS'/);
+});
+
 test('backend diagnostics report INCOMPLETE when profile timezone metadata cannot be read', () => {
   const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
   const properties = new Map([
