@@ -27,40 +27,40 @@ function runMonthlyPlanConcurrencyTest() {
   var report={test:'concurrent optimistic monthly-plan update',fixture:'synthetic TEST-only'};
   var cleanupErrors=[];
 
-  function post(body,label) {
+  function monthlyPlanPost_(body,label) {
     return monthlyPlanTestParse_(UrlFetchApp.fetch(url,{
       method:'post',contentType:'application/json',
       payload:JSON.stringify(body),muteHttpExceptions:true
     }),label||'request');
   }
-  function removeRows(table,predicate) {
+  function monthlyPlanRemoveRows_(table,predicate) {
     var matches=rows_(table).filter(predicate);
     if(matches.length)deleteRows_(table,matches);
   }
 
   try {
     fixtureAttempted=true;
-    var signupA=post({action:'signup',email:emailA,password:passwordA,name:'TEST участник A'},'signup A');
+    var signupA=monthlyPlanPost_({action:'signup',email:emailA,password:passwordA,name:'TEST участник A'},'signup A');
     if(signupA.error||!signupA.data||!signupA.data.token||!signupA.data.user||!signupA.data.user.id) {
       throw new Error('Не удалось создать TEST участника A: '+(signupA.error&&signupA.error.message||'неожиданный ответ'));
     }
     tokenA=String(signupA.data.token);
     userA=String(signupA.data.user.id);
 
-    var family=post({action:'createFamily',token:tokenA,name:familyName},'create family');
+    var family=monthlyPlanPost_({action:'createFamily',token:tokenA,name:familyName},'create family');
     if(family.error||!family.data||!family.data.id||!family.data.invite_code) {
       throw new Error('Не удалось создать TEST-семью: '+(family.error&&family.error.message||'неожиданный ответ'));
     }
     familyId=String(family.data.id);
 
-    var signupB=post({action:'signup',email:emailB,password:passwordB,name:'TEST участник B'},'signup B');
+    var signupB=monthlyPlanPost_({action:'signup',email:emailB,password:passwordB,name:'TEST участник B'},'signup B');
     if(signupB.error||!signupB.data||!signupB.data.token||!signupB.data.user||!signupB.data.user.id) {
       throw new Error('Не удалось создать TEST участника B: '+(signupB.error&&signupB.error.message||'неожиданный ответ'));
     }
     tokenB=String(signupB.data.token);
     userB=String(signupB.data.user.id);
 
-    var joined=post({
+    var joined=monthlyPlanPost_({
       action:'joinFamily',token:tokenB,invite_code:family.data.invite_code,
       display_name:'TEST участник B'
     },'join family');
@@ -68,7 +68,7 @@ function runMonthlyPlanConcurrencyTest() {
       throw new Error('Не удалось добавить второго TEST участника: '+(joined.error&&joined.error.message||'неожиданный ответ'));
     }
 
-    var categories=post({
+    var categories=monthlyPlanPost_({
       action:'query',token:tokenA,table:'categories',mode:'select',
       filters:[
         {column:'family_id',op:'eq',value:familyId},
@@ -83,7 +83,7 @@ function runMonthlyPlanConcurrencyTest() {
 
     var month=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM')+'-01';
     var key={family_id:familyId,month_date:month,category_id:categoryId,type:'expense'};
-    var inserted=post({
+    var inserted=monthlyPlanPost_({
       action:'query',token:tokenA,table:'monthly_plans',mode:'upsert',
       onConflict:'family_id,month_date,category_id,type',returning:true,
       values:Object.assign({id:planId,planned_kopecks:10000,note:'Исходный TEST план'},key)
@@ -93,7 +93,7 @@ function runMonthlyPlanConcurrencyTest() {
       throw new Error('Не удалось создать TEST monthly plan: '+(inserted.error&&inserted.error.message||'неожиданный ответ'));
     }
 
-    var selected=post({
+    var selected=monthlyPlanPost_({
       action:'query',token:tokenA,table:'monthly_plans',mode:'select',
       filters:[{column:'id',op:'eq',value:planId}],limit:1
     },'read plan snapshot');
@@ -128,7 +128,7 @@ function runMonthlyPlanConcurrencyTest() {
         ', stale='+stale.length+', errors='+results.map(function(result){return result.error&&result.error.message||'';}).join(' | '));
     }
 
-    var final=post({
+    var final=monthlyPlanPost_({
       action:'query',token:tokenA,table:'monthly_plans',mode:'select',
       filters:[{column:'id',op:'eq',value:planId}],limit:1
     },'read final plan');
@@ -163,15 +163,15 @@ function runMonthlyPlanConcurrencyTest() {
         }):[];
         if(!familyId&&familyMatches.length===1)familyId=String(familyMatches[0].id);
 
-        removeRows('monthly_plans',function(row){return String(row.id)===planId;});
+        monthlyPlanRemoveRows_('monthly_plans',function(row){return String(row.id)===planId;});
         if(familyId) {
-          removeRows('categories',function(row){return String(row.family_id)===familyId;});
-          removeRows('accounts',function(row){return String(row.family_id)===familyId;});
-          removeRows('family_members',function(row){return String(row.family_id)===familyId;});
-          removeRows('families',function(row){return String(row.id)===familyId;});
+          monthlyPlanRemoveRows_('categories',function(row){return String(row.family_id)===familyId;});
+          monthlyPlanRemoveRows_('accounts',function(row){return String(row.family_id)===familyId;});
+          monthlyPlanRemoveRows_('family_members',function(row){return String(row.family_id)===familyId;});
+          monthlyPlanRemoveRows_('families',function(row){return String(row.id)===familyId;});
         }
         [userA,userB].filter(Boolean).forEach(function(uid) {
-          removeRows('profiles',function(row){return String(row.id)===uid;});
+          monthlyPlanRemoveRows_('profiles',function(row){return String(row.id)===uid;});
         });
         authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
 
