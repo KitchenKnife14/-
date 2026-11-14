@@ -5014,6 +5014,8 @@ test('one-click TEST GAS runtime batch runs only isolated self-cleaning probes',
   assert.match(source, /stopped_for_cleanup_failure/);
   assert.match(source, /passedCount/);
   assert.match(source, /failedCount/);
+  assert.match(source, /resetRuntimeAcceptanceCaches_/);
+  assert.match(source, /finally/);
 });
 
 
