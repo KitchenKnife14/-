@@ -3376,3 +3376,14 @@ HEAD до:
 - Результат не является основанием автоматически менять `PW_ITERATIONS`, формат хешей или существующие credentials. Никакие данные/строки Spreadsheet не изменялись; cleanup для этого read-only benchmark не требуется.
 - GitHub Actions run [43607588582](https://github.com/KitchenKnife14/-/actions/runs/43607588582) для предшествующего HEAD `644a78d136a0e2da1f2faabd5e0e0f1a9804b77d` перепроверен и завершился **SUCCESS**. CI для этой записи будет запущен новым commit после обновления журнала.
 - Прогресс чек-листа не пересчитывался и не увеличивался: runtime benchmark добавляет измеренные данные, но сам по себе не закрывает аудит безопасности PBKDF2 или проверку login UX. Production, `main`, основная Google Sheet, Production GAS, Vercel и Telegram webhook не затрагивались.
+
+
+### 2026-11-14 — self-contained live TEST probe for goal contribution idempotency prepared
+
+- Добавлен `tests/gas/GoalContributionIdempotencyRuntimeTest.gs`: `runGoalContributionIdempotencyRuntimeTest()` самостоятельно создаёт синтетические TEST signup/family/goal fixtures, выполняет два одинаковых параллельных insert с одним ID, повторяет тот же запрос как retry после условно потерянного ответа, проверяет ровно одну строку и ровно одно увеличение `saved_kopecks` на 137 копеек.
+- Тест использует уже существующие TEST Script Properties `CONCURRENT_ROW_TEST_WEB_APP_URL` и `CONCURRENT_ROW_TEST_CONFIRM=ISOLATED_TEST_ONLY`, а также общие allowlists `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID` и `GAS_TEST_ALLOWED_SPREADSHEET_ID`. Новые свойства для него не нужны.
+- Cleanup выполняется в `finally`: тестовые goal contributions, goal, связанные family rows/categories, profile, auth row и session property удаляются; затем проверяется отсутствие синтетических записей. При неподтверждённой очистке функция завершится отдельной ошибкой и выведет fixture IDs для ручной диагностики.
+- Добавлена regression-проверка в `tests/apps-script.test.cjs` и отдельный Node syntax-check в `.github/workflows/validate.yml`.
+- GitHub Actions run [43608523219](https://github.com/KitchenKnife14/-/actions/runs/43608523219) для HEAD `d0634d8e57842314b320b876f5b7ba97da4f365b` завершился **SUCCESS**: regression tests, Apps Script syntax checks, включая новый файл, build и остальные workflow steps прошли.
+- Это подтверждает статическую проверку и синтаксис, но **не** live GAS runtime. Тест пока имеет статус NOT RUN; не засчитывать его как подтверждённый idempotency concurrency PASS до запуска пользователем в TEST GAS и получения JSON с `result=PASS`, `cleanup=PASS`.
+- Production, `main`, основная Google Sheet, Production GAS, Vercel env и Telegram webhook не затрагивались. Процент аудита не менялся.
