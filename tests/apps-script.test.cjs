@@ -4999,3 +4999,19 @@ test('isolated GAS read consistency probe provisions fixtures and checks complet
   assert.match(source, /report.cleanup='FAILED'/);
   assert.match(source, /manual_cleanup_purchase_id/);
 });
+
+
+test('one-click TEST GAS runtime batch runs only isolated self-cleaning probes', () => {
+  const source = fs.readFileSync('tests/gas/RuntimeAcceptanceBatch.gs', 'utf8');
+  assert.match(source, /runIsolatedRuntimeAcceptanceBatch/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
+  assert.match(source, /CONCURRENT_ROW_TEST_WEB_APP_URL/);
+  assert.match(source, /runTelegramUpdateConcurrencyTest/);
+  assert.match(source, /runReadConsistencyConcurrencyTest/);
+  assert.match(source, /runMonthlyPlanConcurrencyTest/);
+  assert.match(source, /runTransactionConcurrencyTest/);
+  assert.match(source, /report\.cleanup==='FAILED'/);
+  assert.match(source, /stopped_for_cleanup_failure/);
+  assert.match(source, /passedCount/);
+  assert.match(source, /failedCount/);
+});
