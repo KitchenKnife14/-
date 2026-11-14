@@ -3433,3 +3433,11 @@ HEAD до:
 - No checklist percentage is increased by preparing these probes. Last recorded detailed checklist remains 183/272 = 67.28%; macro-stage tracker remains 1/12. This is a checklist ratio, not a claim that 67.28% of production readiness or user acceptance is complete. Reconcile the stale manual-action queue during the next full tracker audit.
 - All changes remain on `ispravleniya`. Production, `main`, the primary Google Sheet, Production GAS, Vercel Production configuration/deployment and the live Telegram webhook were not changed.
 - Manual actions remain deferred under M-03: present one consolidated TEST GAS batch only after autonomous code and CI work is complete; after the user reports results, continue closing the remaining audit stages and recalculate percentages from verified criteria.
+
+### 2026-11-14 — correction: monthly-plan probe regression suite CI PASS
+
+- Исправлены две последовательные проблемы только в source-level assertion: сначала тест ожидал удалённые `MONTHLY_PLAN_TEST_*` properties; затем шаблон регулярного выражения был избыточно экранирован. Оба сбоя происходили на шаге `All regression tests`, до Apps Script syntax checks; ни один не был live GAS runtime failure.
+- Во время корректировки один промежуточный commit временно заменил полный `tests/apps-script.test.cjs` неполным фрагментом. Полный файл восстановлен из последней целой версии; итоговый diff ограничен обновлением старой проверки monthly-plan probe и удалением повторно добавленного дублирующего теста. Остальные regression assertions сохранены.
+- Финальная проверка актуального HEAD `2b04d9bd083ad510229d727f9ec7db5c68cefebb`: GitHub Actions [43614498448](https://github.com/KitchenKnife14/-/actions/runs/43614498448) **SUCCESS**. Успешны все шаги: dependency audit, TypeScript/production build, preview smoke, полный regression suite, Code.gs и все GAS probe syntax checks, manifest validation.
+- Read-consistency probe и monthly-plan concurrency probe теперь проходят CI/static checks. Их live TEST GAS запуск всё ещё не выполнен; не считать их runtime PASS. Для них используются общие TEST properties, без отдельных токенов, ID семьи или категории.
+- Последняя зафиксированная оценка аудита остаётся 183/272 = 67.28%, макроэтапы 1/12. Процент не меняется от подготовки тестов; пересчёт будет только после сопоставления фактически закрытых критериев.
