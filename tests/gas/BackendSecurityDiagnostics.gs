@@ -52,8 +52,16 @@ function runBackendSecurityDiagnostics() {
     profileTimezones = ['READ_ERROR'];
   }
 
+  var deploymentServiceEnabled = false;
+  var deploymentServiceCheckOk = false;
+  var deploymentService = null;
+  try {
+    deploymentService = ScriptApp.getService();
+    deploymentServiceEnabled = !!deploymentService.isEnabled();
+    deploymentServiceCheckOk = true;
+  } catch (_) {}
   var deploymentUrl = '';
-  try { deploymentUrl = String(ScriptApp.getService().getUrl() || '').trim(); } catch (_) {}
+  try { deploymentUrl = String(deploymentService ? deploymentService.getUrl() || '' : '').trim(); } catch (_) {}
   var deploymentUrlHost = '';
   var deploymentUrlShape = 'empty';
   var deploymentParts = deploymentUrl.match(/^https:\/\/([^/?#]+)(\/[^?#]*)?(?:[?#].*)?$/i);
@@ -94,10 +102,14 @@ function runBackendSecurityDiagnostics() {
     signupDisabledPropertyPresent: props.getProperty('SIGNUP_DISABLED') !== null,
     debugInfoEnabled: String(props.getProperty('DEBUG_INFO') || '') === '1',
     debugInfoPropertyPresent: props.getProperty('DEBUG_INFO') !== null,
+    deploymentServiceCheckOk: deploymentServiceCheckOk,
+    deploymentServiceEnabled: deploymentServiceEnabled,
     deploymentUrlPresent: !!deploymentUrl,
     deploymentUrlHost: deploymentUrlHost || null,
     deploymentUrlShape: deploymentUrlShape,
-    webAppDeploymentPresent: deploymentUrlShape === 'standard_exec' || deploymentUrlShape === 'account_exec',
+    // getUrl() intentionally returns /dev while executing the development web app.
+    // isEnabled() is the authoritative Service-level check for web-app availability.
+    webAppDeploymentPresent: deploymentServiceCheckOk ? deploymentServiceEnabled : null,
     webAppDeploymentIdSuffix: deploymentMatch ? deploymentMatch[1].slice(-6) : null,
     result: profileTimezoneReadOk ? 'DIAGNOSTIC_COMPLETE' : 'DIAGNOSTIC_INCOMPLETE'
   };
