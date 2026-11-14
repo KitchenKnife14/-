@@ -86,6 +86,26 @@ test('webhook rejects invalid Apps Script endpoint configuration', async () => {
   assert.equal(res.statusCode, 503);
 });
 
+test('webhook rejects Apps Script URLs with credentials, query, fragment or a nonstandard port', async () => {
+  const invalidUrls = [
+    'https://user:password@script.google.com/macros/s/test-deployment/exec',
+    'https://script.google.com/macros/s/test-deployment/exec?unexpected=1',
+    'https://script.google.com/macros/s/test-deployment/exec#fragment',
+    'https://script.google.com:8443/macros/s/test-deployment/exec',
+  ];
+
+  for (const url of invalidUrls) {
+    let calls = 0;
+    const handler = setup(async () => { calls++; throw new Error('fetch must not run'); }, {
+      ...ENV, TELEGRAM_APPS_SCRIPT_URL: url,
+    });
+    const res = response();
+    await handler(request(), res);
+    assert.equal(res.statusCode, 503, url);
+    assert.equal(calls, 0, url);
+  }
+});
+
 test('webhook rejects malformed JSON without calling backend', async () => {
   let calls = 0;
   const handler = setup(async () => { calls++; });
