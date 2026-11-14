@@ -5026,3 +5026,36 @@ test('multi-user TEST GAS probes delete synthetic auth rows bottom-up without sh
     assert.ok(source.includes('authMatches.sort(function(a,b){return b.row-a.row;})'), path);
   }
 });
+
+
+test('isolated GAS runtime probes have no duplicate global function declarations', () => {
+  const paths = [
+    'tests/gas/IsolatedTestGuard.gs',
+    'tests/gas/TelegramUpdateConcurrencyTest.gs',
+    'tests/gas/ReadConsistencyConcurrencyTest.gs',
+    'tests/gas/MonthlyPlanConcurrencyTest.gs',
+    'tests/gas/TransactionConcurrencyTest.gs',
+    'tests/gas/RuntimeAcceptanceBatch.gs',
+  ];
+  const declarations = new Map();
+  for (const path of paths) {
+    const source = fs.readFileSync(path, 'utf8');
+    for (const match of source.matchAll(/^\\s*function\\s+([A-Za-z_$][\\w$]*)\\s*\\(/gm)) {
+      const name = match[1];
+      const locations = declarations.get(name) || [];
+      locations.push(path);
+      declarations.set(name, locations);
+    }
+  }
+  const duplicates = [...declarations.entries()].filter(([, locations]) => locations.length > 1);
+  assert.deepEqual(duplicates, [], 'Apps Script global function names must be unique across runtime probes');
+  for (const name of [
+    'telegramReplayPost_',
+    'readConsistencyPost_',
+    'readConsistencyRemoveRows_',
+    'monthlyPlanPost_',
+    'monthlyPlanRemoveRows_',
+    'transactionConcurrencyPost_',
+    'transactionConcurrencyRemoveRows_',
+  ]) assert.ok(declarations.has(name), 'missing isolated helper ' + name);
+});
