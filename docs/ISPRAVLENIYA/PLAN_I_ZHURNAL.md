@@ -3356,3 +3356,12 @@ HEAD до:
 - Итого в этой серии подтверждены два live concurrency сценария: duplicate signup и optimistic update одной операции. Остальные подготовленные probes (goal contribution, monthly plan, read consistency, transaction inserts, Telegram replay) не считаются выполненными.
 - Процент чек-листа не пересчитывался и не увеличивался этой записью: для этого необходимо сопоставить результат с конкретными открытыми критериями, не засчитывая один runtime probe сразу в несколько пунктов.
 - Изменения ограничены журналом рабочей ветки `ispravleniya`; Production, `main`, основная Google Sheet, Production GAS, Vercel env и Telegram webhook не затрагивались.
+
+
+### 2026-11-14 — CI confirmation and next isolated runtime measurement
+
+- GitHub Actions run [43607290008](https://github.com/KitchenKnife14/-/actions/runs/43607290008) для HEAD `327b1e797c127ed2b28d9373fecd0a4c55ffe5b2` завершился **SUCCESS**.
+- Реальный TEST GAS probe конкурентного optimistic update одной операции остаётся подтверждённым: один update принят, второй stale отклонён, cleanup PASS.
+- Следующая проверка выбрана без пользовательских credentials и без изменения данных: `runPbkdf2RuntimeDiagnostics()`. Скрипт использует только синтетические пароль/соль, не читает и не изменяет Sheets, `_auth` или Script Properties (кроме чтения защитного allowlist).
+- Benchmark сравнивает 30 000 и 600 000 итераций PBKDF2 непосредственно в Google Apps Script V8. Это замер производительности, не команда менять work factor. Никаких изменений `PW_ITERATIONS` или существующих хешей по результатам одного замера автоматически не делать.
+- Прогресс чек-листа не менялся; Production, `main`, основная таблица и Production GAS не затрагивались.
