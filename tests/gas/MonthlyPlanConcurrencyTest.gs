@@ -173,7 +173,7 @@ function runMonthlyPlanConcurrencyTest() {
         [userA,userB].filter(Boolean).forEach(function(uid) {
           removeRows('profiles',function(row){return String(row.id)===uid;});
         });
-        authMatches.forEach(function(row){authSheet_().deleteRow(row.row);});
+        authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
 
         var allProps=props.getProperties();
         Object.keys(allProps).forEach(function(key) {
