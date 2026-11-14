@@ -4973,3 +4973,23 @@ test('isolated goal contribution idempotency probe provisions and cleans its own
   assert.match(source, /report\.cleanup = 'PASS'/);
   assert.match(source, /report\.cleanup = 'FAILED'/);
 });
+
+
+test('isolated GAS read consistency probe provisions fixtures and checks complete optimistic snapshots', () => {
+  const source = fs.readFileSync('tests/gas/ReadConsistencyConcurrencyTest.gs', 'utf8');
+  assert.match(source, /runReadConsistencyConcurrencyTest/);
+  assert.match(source, /assertIsolatedGasTestEnvironment_/);
+  assert.match(source, /CONCURRENT_ROW_TEST_WEB_APP_URL/);
+  assert.match(source, /CONCURRENT_ROW_TEST_CONFIRM/);
+  assert.match(source, /action:'signup'/);
+  assert.match(source, /action:'createFamily'/);
+  assert.match(source, /p_expected_purchase:expectedPurchase/);
+  assert.match(source, /requiredColumns/);
+  assert.match(source, /fetchAll\(requests\)/);
+  assert.match(source, /parallel_read_requests=16/);
+  assert.match(source, /isBefore/);
+  assert.match(source, /isAfter/);
+  assert.match(source, /report.cleanup='PASS'/);
+  assert.match(source, /report.cleanup='FAILED'/);
+  assert.match(source, /manual_cleanup_purchase_id/);
+});
