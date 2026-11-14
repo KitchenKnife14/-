@@ -1055,6 +1055,7 @@ function runIsolatedRuntimeAcceptanceBatch() {
 
   tests.forEach(function(test) {
     if(stoppedForCleanup)return;
+    resetRuntimeAcceptanceCaches_();
     try {
       var report=test.run();
       var passed=!!report&&report.result==='PASS'&&report.cleanup==='PASS';
@@ -1064,6 +1065,8 @@ function runIsolatedRuntimeAcceptanceBatch() {
       var message=String(error&&error.message||error);
       results.push({test:test.name,result:'FAIL',error:message});
       if(/cleanup|очистк/i.test(message))stoppedForCleanup=true;
+    } finally {
+      resetRuntimeAcceptanceCaches_();
     }
   });
 
@@ -1080,4 +1083,18 @@ function runIsolatedRuntimeAcceptanceBatch() {
   };
   Logger.log(JSON.stringify(output));
   return output;
+}
+
+
+/**
+ * Each probe talks to the Web App in a separate Apps Script execution, but
+ * cleanup reads the spreadsheet directly in this orchestrator execution.
+ * Clear per-execution caches between probes so later cleanup never sees a
+ * stale snapshot left by an earlier probe.
+ */
+function resetRuntimeAcceptanceCaches_() {
+  ROWS_CACHE = {};
+  TZ_CACHE = null;
+  SS_CACHE = null;
+  SHEET_SCHEMA_VALIDATED = {};
 }
