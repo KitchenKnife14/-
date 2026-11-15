@@ -4,7 +4,7 @@ import { BackendRequestError, googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
 import type { Account, Category, TxType } from '../lib/types'
 import { parseRublesToKopecks } from '../lib/money'
-import { clearPendingTransaction, fingerprintTransactionPayload, getOrCreatePendingTransactionId, pendingTransactionStorageKey } from '../lib/pendingTransaction'
+import { clearPendingTransaction, fingerprintTransactionPayload, getOrCreatePendingTransactionId, pendingTransactionStorageKey, getPendingStorage } from '../lib/pendingTransaction'
 import { todayISO } from '../lib/dates'
 import { Loader as Loader2 } from 'lucide-react'
 
@@ -129,10 +129,10 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
           requestId = pendingInsertRef.current.id
         } else {
           try {
-            requestId = getOrCreatePendingTransactionId(window.localStorage, storageKey, fingerprint, createTransactionRequestId)
+            requestId = getOrCreatePendingTransactionId(getPendingStorage(), storageKey, fingerprint, createTransactionRequestId)
           } catch {
             // Storage may be disabled or full. Remove any stale record before using the in-memory fallback.
-            try { window.localStorage.removeItem(storageKey) } catch { /* Storage is unavailable. */ }
+            try { getPendingStorage().removeItem(storageKey) } catch { /* Storage is unavailable. */ }
             requestId = createTransactionRequestId()
           }
           pendingInsertRef.current = { key: storageKey, fingerprint, id: requestId }
@@ -145,7 +145,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         if (err) throw err
 
         try {
-          clearPendingTransaction(window.localStorage, storageKey, requestId)
+          clearPendingTransaction(getPendingStorage(), storageKey, requestId)
         } catch {
           // A stale metadata record is harmless; the server remains the source of truth.
         }
@@ -156,7 +156,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
     } catch (e) {
       if (!editing && e instanceof BackendRequestError && pendingInsertRef.current) {
         const pending = pendingInsertRef.current
-        try { clearPendingTransaction(window.localStorage, pending.key, pending.id) } catch { /* Storage may be unavailable. */ }
+        try { clearPendingTransaction(getPendingStorage(), pending.key, pending.id) } catch { /* Storage may be unavailable. */ }
         pendingInsertRef.current = null
       }
       setError(e instanceof Error ? e.message : 'Ошибка сохранения')
