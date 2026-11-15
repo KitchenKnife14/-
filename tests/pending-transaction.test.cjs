@@ -171,7 +171,7 @@ test('generic pending mutation clears ID only after a definitive backend rejecti
     runPendingMutation(storage,key,'a'.repeat(64),createId,async () => {
       const error = new Error('validation rejected')
       error.name = 'BackendRequestError'
-      throw error
+      return { data: null, error }
     },1000),
     /validation rejected/,
   )
