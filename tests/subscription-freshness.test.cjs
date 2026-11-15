@@ -13,7 +13,7 @@ const cases = [
 ]
 
 for (const [file, dependencies] of cases) {
-  test(\`${file} subscription refresh uses the latest load callback\`, () => {
+  test(`${file} subscription refresh uses the latest load callback`, () => {
     const source = fs.readFileSync(path.join(root, 'src/pages', file), 'utf8')
     assert.match(source, /import \{ useCallback, useEffect, (?:useMemo, )?(?:useRef, )?useState \} from 'react'/)
     assert.match(source, /const load = useCallback\(async \(\) => \{/)
@@ -33,7 +33,7 @@ test('goal section headings follow the filtered visible order', () => {
 })
 
 for (const file of ['TransactionsPage.tsx', 'DashboardPage.tsx', 'CalendarPage.tsx', 'NotificationsPage.tsx', 'PlanningPage.tsx']) {
-  test(\`${file} ignores stale asynchronous list responses\`, () => {
+  test(`${file} ignores stale asynchronous list responses`, () => {
     const source = fs.readFileSync(path.join(root, 'src/pages', file), 'utf8')
     assert.match(source, /const loadSequence = useRef\(createRequestSequence\(\)\)/)
     assert.match(source, /const requestId = loadSequence\.current\.begin\(\)/)
