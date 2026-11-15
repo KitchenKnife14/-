@@ -845,7 +845,7 @@ HEAD до:
 | 7 | Исправление Telegram и повторной доставки webhook | В работе: parser punctuation, fingerprint, timeout/retry, строгая проверка backend response envelope и маппинг сигарет/кредитных расходов исправлены на ветке и покрыты CI; остаётся выполнить live TEST GAS replay. Неоднозначный sendMessage принят как at-least-once: возможен повтор текста, но финансовая запись защищена от дубля |
 | 8 | Авторизация, безопасность, ScriptLock, изоляция семей и производительность | Реализован optimistic read lane для allow-listed чтений без ожидания ScriptLock; все записи сохраняют сериализацию. CI покрывает overlap/retry и fail-closed. Остались реальные TEST GAS замеры lock wait/p50/p95 и приёмка runtime |
 | 9 | Frontend: автор/ответственный, мобильная компоновка, доступность и UX | В работе: фильтры категорий, предупреждение о недостоверном остатке, FC-23 и безопасный retry lifecycle финансовых форм усилены; desktop/iPhone browser test, автор/ответственный и safe area остаются открыты |
-| 10 | Зависимости, typecheck, сборка, unit/integration/browser tests | В работе: branch CI проходит typecheck/build/smoke и 282/282 unit/regression tests; browser/iPhone и live GAS integration ещё не пройдены |
+| 10 | Зависимости, typecheck, сборка, unit/integration/browser tests | В работе: branch CI проходит typecheck/build/smoke, Playwright auth/responsive smoke и 282/282 unit/regression tests; полные финансовые E2E, iPhone и live GAS integration ещё не пройдены |
 | 11 | Сквозная регрессия, резервная копия и проверка восстановления | Не начат |
 | 12 | Подготовка безопасного выпуска и единый список ручных Production-действий | Не начат |
 
