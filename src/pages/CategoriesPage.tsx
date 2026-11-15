@@ -189,7 +189,7 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, f
         const scope = parentId ? `parent:${parentId}` : 'root'
         const pendingKey = pendingMutationStorageKey('categories', familyId, userId, scope)
         const fingerprint = await fingerprintTransactionPayload(insertPayload)
-        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('categories').insert({ ...insertPayload, id }))
+        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('categories').insert({ ...insertPayload, id }))
       }
       onSaved()
       onClose()
