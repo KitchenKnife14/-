@@ -32,7 +32,10 @@ test('pending storage falls back to a page-session store when browser storage is
   }))
   assert.equal(afterRemount.getItem('pending-key'), 'pending-value')
   const persistent = createStorage()
-  assert.equal(getPendingStorage(() => persistent), persistent)
+  const persistentAdapter = getPendingStorage(() => persistent)
+  persistentAdapter.setItem('persistent-key', 'persistent-value')
+  assert.equal(persistent.getItem('persistent-key'), 'persistent-value')
+  assert.equal(persistentAdapter.getItem('persistent-key'), 'persistent-value')
 })
 
 test('pending storage falls back after a persistent write failure without losing the current request', async () => {
