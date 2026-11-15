@@ -18,3 +18,20 @@ export function getGoalSectionLabel(goals: Goal[], index: number): string | null
   if (current.status !== 'active' && goals[index - 1]?.status === 'active') return 'Неактивные цели'
   return null
 }
+
+export interface GoalDisplayFilters {
+  status?: string
+  priority?: string
+  participantId?: string
+  search?: string
+}
+
+export function filterAndSortGoals(goals: Goal[], filters: GoalDisplayFilters = {}): Goal[] {
+  const query = (filters.search || '').trim().toLocaleLowerCase('ru-RU')
+  return sortGoalsForDisplay(goals).filter((goal) => {
+    if (filters.status && filters.status !== 'all' && goal.status !== filters.status) return false
+    if (filters.priority && filters.priority !== 'all' && String(goal.priority) !== filters.priority) return false
+    if (filters.participantId && goal.responsible_user_id !== filters.participantId) return false
+    return !query || `${goal.name} ${goal.description || ''}`.toLocaleLowerCase('ru-RU').includes(query)
+  })
+}
