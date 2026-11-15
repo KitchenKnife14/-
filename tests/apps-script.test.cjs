@@ -5198,3 +5198,42 @@ test('single-file TEST GAS runtime bundle stays byte-for-byte synchronized with 
   assert.equal(bundle, expected, 'runtime bundle must be regenerated when any source module changes');
   assert.match(bundle, /function runIsolatedRuntimeAcceptanceBatch/);
 });
+
+
+test('Telegram maps cigarette and credit expenses to their dedicated seeded categories', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-credit-cigarettes@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Категории Telegram' });
+  const secret = 'credit-cigarettes-secret-0123456789abcdef';
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', secret);
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const linked = h.call({
+    action: 'telegramWebhook', telegramSecret: secret,
+    update: { update_id: 7901, message: { chat: { id: 790, type: 'private' }, from: { id: 790 }, text: '/link ' + generated.data.code } },
+  });
+  assert.equal(linked.error, null, linked.error?.message);
+
+  const cases = [
+    [7902, 'Сигареты 150 рублей', 'Сигареты'],
+    [7903, 'Погашение кредита 5000 рублей', 'Погашение основного долга'],
+    [7904, 'Проценты по кредиту 300 рублей', 'Проценты по кредиту'],
+    [7905, 'Комиссия по кредиту 50 рублей', 'Комиссии по кредиту'],
+  ];
+  for (const [update_id, text, expectedCategory] of cases) {
+    const result = h.call({
+      action: 'telegramWebhook', telegramSecret: secret,
+      update: { update_id, message: { chat: { id: 790, type: 'private' }, from: { id: 790 }, text } },
+    });
+    assert.equal(result.error, null, result.error?.message);
+    assert.match(result.data.text, /Записал расход:/);
+    assert.match(result.data.text, new RegExp('Категория: ' + expectedCategory));
+  }
+
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  const categories = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  assert.equal(transactions.length, 4);
+  assert.deepEqual(transactions.map(tx => categories.find(c => c.id === tx.category_id)?.name).sort(), [
+    'Комиссии по кредиту', 'Погашение основного долга', 'Проценты по кредиту', 'Сигареты',
+  ]);
+});
