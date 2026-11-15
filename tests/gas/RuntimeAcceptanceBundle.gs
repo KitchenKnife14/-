@@ -687,20 +687,23 @@ function runMonthlyPlanConcurrencyTest() {
     var key={family_id:familyId,month_date:month,category_id:categoryId,type:'expense'};
     var inserted=monthlyPlanPost_({
       action:'query',token:tokenA,table:'monthly_plans',mode:'upsert',
-      onConflict:'family_id,month_date,category_id,type',returning:true,
+      onConflict:'family_id,month_date,category_id,type',
       values:Object.assign({id:planId,planned_kopecks:10000,note:'Исходный TEST план'},key)
     },'insert monthly plan');
-    if(inserted.error||!Array.isArray(inserted.data)||inserted.data.length!==1||
-       String(inserted.data[0].id)!==planId) {
-      throw new Error('Не удалось создать TEST monthly plan: '+(inserted.error&&inserted.error.message||'неожиданный ответ'));
+    // GAS query_(mode=upsert) intentionally returns data:null; verify persistence
+    // with a separate authenticated read instead of expecting PostgREST returning rows.
+    if(inserted.error) {
+      throw new Error('Не удалось создать TEST monthly plan: '+inserted.error.message);
     }
 
     var selected=monthlyPlanPost_({
       action:'query',token:tokenA,table:'monthly_plans',mode:'select',
       filters:[{column:'id',op:'eq',value:planId}],limit:1
     },'read plan snapshot');
-    if(selected.error||!Array.isArray(selected.data)||selected.data.length!==1) {
-      throw new Error('Не удалось получить snapshot TEST monthly plan.');
+    if(selected.error||!Array.isArray(selected.data)||selected.data.length!==1||
+       String(selected.data[0].id)!==planId||Number(selected.data[0].planned_kopecks)!==10000) {
+      throw new Error('TEST monthly plan не сохранён или не совпадает с исходными данными: '+
+        (selected.error&&selected.error.message||'запись не найдена/не совпадает'));
     }
     var snapshot=selected.data[0];
 
