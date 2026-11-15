@@ -20,7 +20,7 @@
   - `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID` равен фактическому Script ID;
   - `GAS_TEST_ALLOWED_SPREADSHEET_ID` равен активной таблице, имя которой содержит TEST/ТЕСТ;
   - `CONCURRENT_ROW_TEST_WEB_APP_URL` имеет формат отдельного Apps Script deployment и не совпадает с известным Production deployment.
-- `tests/gas/RuntimeAcceptanceBundle.gs` — единый self-contained файл с четырьмя pending runtime probes и orchestrator. Blob SHA: `36b19fd8988bbd52a5b5d6f60fcea9a042852e16`.
+- `tests/gas/RuntimeAcceptanceBundle.gs` — единый self-contained файл с четырьмя pending runtime probes и orchestrator. Blob SHA: `f781fa6cafa58892bc0d83dce383b095bdae7989`.
 - Точка входа в bundle: `runIsolatedRuntimeAcceptanceBatch()`. Она существует в bundle; отдельный файл `RuntimeAcceptanceBatch.gs` вручную добавлять не нужно.
 - Отдельные source modules в `tests/gas/` — исходники для сопровождения bundle. В TEST Apps Script добавляется только собранный `RuntimeAcceptanceBundle.gs`, не все отдельные probe-файлы.
 
@@ -37,9 +37,27 @@
 
 Batch не использует реальные Telegram Bot API, Vercel, Production deployment, основную Google Sheet или реальные семейные записи. Он обращается только к сохранённому TEST Web App URL.
 
-## 4. Единственное оставшееся ручное действие — M-04
+## 4. Восстановление после неуспешного запуска 2026-11-15
 
-Выполнить один раз после подготовки текущего HEAD:
+Последний live batch завершился `FAIL`: Telegram probe прошёл; read-consistency probe упал на одном параллельном чтении; monthly-plan probe не подтвердил очистку. Batch остановился до запуска transaction-insert probe. Не запускать batch повторно, пока не выполнена точечная очистка.
+
+В bundle добавлена строго ограниченная функция `cleanupFailedMonthlyPlanFixture()`. Она проверяет тот же TEST-only guard и работает только с конкретной синтетической записью:
+- Plan ID: `monthrace_c9b44a7e653b4b90b366d4bc9a710d83`
+- Synthetic emails: `monthly-plan-a+c9b44a7e653b4b90b366d4bc9a710d83@example.test` и `monthly-plan-b+c9b44a7e653b4b90b366d4bc9a710d83@example.test`
+- Семья удаляется только при совпадении её ID с ID из этой записи и точного имени `TEST monthly plan c9b44a7e653b4b90b366d4bc9a710d83`.
+
+Перед следующим batch:
+1. Обновить только `RuntimeAcceptanceBundle.gs` в TEST Apps Script файлом из текущей ветки (Code.gs не менялся).
+2. Сохранить проект. Для этой правки повторное развёртывание Web App не требуется: helper работает непосредственно с TEST spreadsheet, а API backend не изменён.
+3. Запустить `cleanupFailedMonthlyPlanFixture()` один раз и проверить в журнале `result=PASS`, `cleanup=PASS`, а также `verified_remaining` со всеми значениями `false`.
+4. Если recovery cleanup не PASS — остановиться и прислать полный error/report; не удалять строки вручную наугад.
+5. Только после подтверждённой очистки запустить `runIsolatedRuntimeAcceptanceBatch()`.
+
+Read-consistency probe теперь выводит тело вложенного ошибочного ответа, а monthly-plan cleanup повторно проверяет листы после `SpreadsheetApp.flush()` и сброса локальных caches. Это диагностические изменения; они не меняют бизнес-логику приложения.
+
+## 5. Единое ручное действие M-04 после восстановления
+
+Выполнить после точечной очистки:
 
 1. Открыть именно отдельный TEST Apps Script project, привязанный к TEST-таблице. Не открывать основной проект «Семейный бюджет».
 2. В файле `Code.gs` заменить содержимое на актуальный файл из ветки `ispravleniya`: [google-apps-script/Code.gs](https://github.com/KitchenKnife14/-/blob/ispravleniya/google-apps-script/Code.gs).
@@ -55,7 +73,7 @@ Batch не использует реальные Telegram Bot API, Vercel, Produ
 
 Если любой тест завершился FAIL или cleanup не PASS — не повторять batch вслепую. Нужен отчёт выполнения, после чего разбирается конкретный сбой и состояние синтетических данных.
 
-## 5. CI и границы доказательств
+## 6. CI и границы доказательств
 
 GitHub CI проверяет синтаксис `Code.gs`, `IsolatedTestGuard.gs`, individual probes, orchestrator и bundle; это не исполняет Apps Script runtime и не доказывает работу реального LockService/Sheets.
 
@@ -63,7 +81,7 @@ GitHub CI проверяет синтаксис `Code.gs`, `IsolatedTestGuard.gs
 
 Никакие секреты, токены, URL deployment или содержимое финансовой таблицы не нужно отправлять в чат. Для разбора достаточно JSON-отчёта; чувствительные значения в нём должны оставаться замаскированы.
 
-## 6. Не выполнять
+## 7. Не выполнять
 
 - Не запускать batch в Production GAS.
 - Не открывать и не менять основную Google Sheet.
