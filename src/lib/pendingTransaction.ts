@@ -2,7 +2,7 @@ export const PENDING_TRANSACTION_TTL_MS = 24 * 60 * 60 * 1000
 
 export class PendingTransactionConflictError extends Error {
   constructor() {
-    super('Предыдущая операция ещё не подтверждена. Повторите отправку с прежними данными; после подтверждения её можно будет изменить.')
+    super('Предыдущий запрос ещё не подтверждён. Повторите отправку с прежними данными; после подтверждения можно будет внести изменения.')
     this.name = 'PendingTransactionConflictError'
   }
 }
