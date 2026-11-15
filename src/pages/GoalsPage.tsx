@@ -5,7 +5,7 @@ import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO, monthsUntilDate } from '../lib/dates'
 import Modal from '../components/Modal'
-import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
 
 const STATUS_LABELS: Record<string, string> = { active: 'Активная', paused: 'Пауза', done: 'Достигнута', cancelled: 'Отменена' }
@@ -193,8 +193,7 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
         const requestPayload = { family_id: familyId, ...payload, create_purchase: createPurchase }
         const pendingKey = pendingMutationStorageKey('goals', familyId, userId, 'create-with-purchase')
         const fingerprint = await fingerprintTransactionPayload(requestPayload)
-        const requestId = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
-        const { error: err } = await googleSheets.rpc('create_goal_with_purchase', {
+        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, requestId => googleSheets.rpc('create_goal_with_purchase', {
           p_request_id: requestId,
           p_family_id: familyId,
           p_name: payload.name,
@@ -203,9 +202,7 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
           p_target_date: payload.target_date,
           p_priority: payload.priority,
           p_create_purchase: createPurchase,
-        })
-        if (err) throw err
-        clearPendingMutation(storage, pendingKey, requestId)
+        }))
       }
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
