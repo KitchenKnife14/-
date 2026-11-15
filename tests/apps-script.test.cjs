@@ -4342,6 +4342,46 @@ test('Telegram link retry remains successful if update cache write fails after t
   assert.equal(h.context.rows_('telegram_links').filter(row => row.telegram_user_id === '730').length, 1);
 });
 
+test('Telegram replay cache rejects a different payload that reuses an update_id', () => {
+  const h = makeHarness();
+  const user = h.signup('telegram-update-id-collision@example.com');
+  h.call({ action: 'createFamily', token: user.token, name: 'Коллизия update ID' });
+  const secret = 'telegram-update-collision-secret-0123456789';
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('TELEGRAM_BACKEND_SECRET', secret);
+  const generated = h.call({ action: 'rpc', token: user.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  const link = h.call({
+    action: 'telegramWebhook', telegramSecret: secret,
+    update: { update_id: 8050, message: { chat: { id: 805, type: 'private' }, from: { id: 805 }, text: '/link ' + generated.data.code } }
+  });
+  assert.equal(link.error, null, link.error?.message);
+
+  const original = {
+    update_id: 8051,
+    message: { chat: { id: 805, type: 'private' }, from: { id: 805 }, date: 1794380000, text: 'Проезд 45 рублей' }
+  };
+  const first = h.call({ action: 'telegramWebhook', telegramSecret: secret, update: original });
+  assert.equal(first.error, null, first.error?.message);
+  const reorderedEquivalent = {
+    message: { text: 'Проезд 45 рублей', date: 1794380000, from: { first_name: undefined, id: 805 }, chat: { type: 'private', id: 805 } },
+    update_id: 8051
+  };
+  // Canonical key ordering makes object property order irrelevant.
+  const equivalent = h.call({ action: 'telegramWebhook', telegramSecret: secret, update: reorderedEquivalent });
+  assert.equal(equivalent.error, null, equivalent.error?.message);
+
+  const collision = h.call({
+    action: 'telegramWebhook', telegramSecret: secret,
+    update: { ...original, message: { ...original.message, text: 'Доход 9000 рублей зарплата' } }
+  });
+  assert.match(collision.error?.message || '', /update_id collision/i);
+  const transactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].id, 'telegram_8051');
+  assert.equal(transactions[0].amount_kopecks, 4500);
+});
+
 test('Telegram update_id zero remains a stable idempotency key', () => {
   const h = makeHarness();
   const user = h.signup('telegram-zero-update-id@example.com');
