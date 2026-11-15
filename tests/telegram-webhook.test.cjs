@@ -150,6 +150,29 @@ test('webhook returns 502 when Apps Script response is not JSON', async () => {
   assert.equal(res.statusCode, 502);
 });
 
+test('webhook rejects malformed Apps Script response envelopes instead of silently acknowledging them', async () => {
+  for (const payload of [
+    {},
+    { data: { skip: false }, error: null },
+    { data: null, error: null },
+    { data: null, error: true },
+    { data: null, error: { message: 42 } },
+  ]) {
+    let telegramCalls = 0;
+    const handler = setup(async url => {
+      if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
+        return { ok: true, text: async () => JSON.stringify(payload) };
+      }
+      telegramCalls++;
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    const res = response();
+    await handler(request(), res);
+    assert.equal(res.statusCode, 502, JSON.stringify(payload));
+    assert.equal(telegramCalls, 0, JSON.stringify(payload));
+  }
+});
+
 test('webhook forwards backend replies to Telegram and acknowledges success', async () => {
   const calls = [];
   const handler = setup(async (url, options) => {
