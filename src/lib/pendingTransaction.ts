@@ -111,6 +111,9 @@ export function getOrCreatePendingMutationId(
 ): string {
   const current = readRecord(storage, key, now)
   if (current?.fingerprint === fingerprint) return current.id
+  if (current && current.fingerprint !== fingerprint) {
+    throw new PendingTransactionConflictError()
+  }
   const record: PendingTransactionRecord = {
     version: 1,
     id: createId(),
@@ -119,6 +122,31 @@ export function getOrCreatePendingMutationId(
   }
   storage.setItem(key, JSON.stringify(record))
   return record.id
+}
+
+export async function runPendingMutation<T>(
+  storage: KeyValueStorage,
+  key: string,
+  fingerprint: string,
+  createId: () => string,
+  execute: (id: string) => Promise<T>,
+  now = Date.now(),
+): Promise<T> {
+  const id = getOrCreatePendingMutationId(storage, key, fingerprint, createId, now)
+  try {
+    const result = await execute(id)
+    if (result && typeof result === 'object' && 'error' in result) {
+      const error = (result as { error?: unknown }).error
+      if (error) throw error
+    }
+    clearPendingMutation(storage, key, id)
+    return result
+  } catch (error) {
+    if (error instanceof Error && error.name === 'BackendRequestError') {
+      clearPendingMutation(storage, key, id)
+    }
+    throw error
+  }
 }
 
 export const clearPendingMutation = clearPendingTransaction
