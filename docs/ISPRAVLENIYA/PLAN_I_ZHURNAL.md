@@ -332,8 +332,8 @@
 ## FC-17 — тестовое покрытие и CI
 - [x] Добавить тесты Vercel Telegram webhook handler.
 - [x] Добавить тесты API contract для frontend adapter.
-- [ ] Добавить интеграционные проверки Apps Script на отдельной тестовой таблице.
-- [ ] Добавить concurrency tests для критических операций и Telegram.
+- [x] Добавить интеграционные проверки Apps Script на отдельной тестовой таблице. Реализованы self-contained TEST-only пробы и единый RuntimeAcceptanceBundle; фактический запуск остаётся отдельной ручной приёмкой этапа 5.
+- [x] Добавить concurrency tests для критических операций и Telegram. Добавлены signup/join, transaction update/insert, goal contribution, Telegram replay и read consistency probes; runtime execution учитывается отдельно.
 - [ ] Добавить браузерные E2E: вход, создание/изменение/удаление операции, перевод, бюджеты, цели, Telegram linking.
 - [x] Добавить dependency audit/security scan в CI с понятной политикой блокировки.
 - [x] Сохранить текущие регрессионные тесты; не удалять тест ради прохождения сборки.
@@ -837,7 +837,7 @@ HEAD до:
 | 1 | Восстановление исходников, инвентаризация проекта и первичный реестр аудита | Завершён |
 | 2 | Статический аудит backend: денежная целостность, связи, категории, повторы записей | Завершён на уровне статического анализа и CI: FC-01/02/04/06/13/20 исправлены и покрыты регрессиями; живые Apps Script runtime-проверки вынесены в этап 5 |
 | 3 | Аудит Telegram: парсер, повторы webhook, баланс и сценарии ошибок | Завершён: parser punctuation, точные суммы/границы, replay fingerprint, timeout и retry-сценарии покрыты CI. Зафиксирован at-least-once контракт ответа: редкий дубль подтверждения допустим, потеря подтверждения нежелательнее; exactly-once Bot API не гарантируется. Живой TEST GAS replay относится к этапу 5 |
-| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 276/276 regression tests проходят CI; полная browser/E2E и live GAS acceptance матрица ещё не закрыта |
+| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 276/276 regression tests проходят CI; TEST-only GAS integration/concurrency probes добавлены и собраны в единый bundle. Остались browser E2E и live GAS acceptance |
 | 5 | Изолированная динамическая проверка в тестовом Apps Script и тестовой таблице | Подготовлены четыре self-contained runtime-пробы; отдельно уже PASS signup concurrency, stale transaction update и goal contribution retry. Единый acceptance batch с Telegram replay, optimistic read/write, monthly-plan и transaction insert ещё не запускался |
 | 6 | Исправление P1 backend: строгие деньги, категории, ссылки, идемпотентность | Завершён на уровне кода ветки и CI: FC-01/02/04/06/13/20 закрыты regression suite; live GAS runtime-приёмка учитывается отдельно на этапе 5 |
 | 7 | Исправление Telegram и повторной доставки webhook | В работе: parser punctuation, fingerprint и timeout/retry исправлены на ветке и покрыты CI; остаётся выполнить live TEST GAS replay. Неоднозначный sendMessage принят как at-least-once: возможен повтор текста, но финансовая запись защищена от дубля |
@@ -3562,3 +3562,10 @@ HEAD до:
 - Макроэтап №3 «Аудит Telegram» закрыт. Live TEST GAS concurrency/replay не засчитывается как выполненный: он остаётся отдельным критерием этапа №5; сквозное внедрение и приёмка — этап №7.
 - Макроэтапы: **4/12 (33,3%)**. Подробный checklist без изменений: **163/229 (71,2%)**, поскольку это исправление закрывает аудит-пакет, но не заменяет отдельный критерий runtime-приёмки.
 - Изменения только в `ispravleniya`; Production, `main`, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не затронуты.
+### 2026-11-15 — закрытие критериев FC-17 по GAS integration и concurrency test assets
+
+- В FC-17 закрыты два критерия реализации тестового набора: интеграционные проверки Apps Script на отдельной TEST-таблице и concurrency tests для критических операций/Telegram.
+- В ветке присутствуют изолированные GAS probes для signup/join, transaction insert/update, goal contribution, Telegram duplicate delivery/replay и read consistency. Все пробы включены в `tests/gas/RuntimeAcceptanceBundle.gs`; bundle и отдельные файлы проходят CI syntax validation.
+- Это закрывает именно добавление тестов, а не их живое выполнение. Единый bundle всё ещё должен быть перенесён в TEST GAS и запущен пользователем; production не используется.
+- Checklist теперь **165/229 = 72,1%**, открыто 64. Макроэтапы остаются **4/12 = 33,3%**: этап 4 не завершён, потому что browser E2E и live GAS acceptance ещё впереди.
+- Telegram parser fix CI: [43711554235 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43711554235), 276/276 regression tests. Изменения только в `ispravleniya`.
