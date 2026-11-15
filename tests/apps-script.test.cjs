@@ -1447,13 +1447,13 @@ test('new families receive all 87 default categories including cigarettes and cr
   h.context.deleteRows_('categories', legacyRows);
   assert.equal(legacyRows.length, 5);
   const migrated = h.call({
-    action: 'rpc', token: user.token, name: 'ensure_supplemental_categories',
+    action: 'rpc', token: u.token, name: 'ensure_supplemental_categories',
     params: { p_family_id: f.id },
   });
   assert.equal(migrated.error, null, migrated.error?.message);
   assert.equal(migrated.data.added, 5);
   const retried = h.call({
-    action: 'rpc', token: user.token, name: 'ensure_supplemental_categories',
+    action: 'rpc', token: u.token, name: 'ensure_supplemental_categories',
     params: { p_family_id: f.id },
   });
   assert.equal(retried.error, null, retried.error?.message);
