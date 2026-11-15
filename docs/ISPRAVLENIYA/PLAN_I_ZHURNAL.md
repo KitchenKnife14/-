@@ -3637,3 +3637,11 @@ HEAD до:
 - В FRONT-01 закрыт критерий добавления тестов для обновления данных при смене периода/фильтров. Реальная ручная browser/device проверка остаётся открытой.
 - Контрольный прогресс: **170/233 = 73,0%**, открыто 63; макроэтапы **4/12 = 33,3%**. Этап 4 остаётся в работе до полных финансовых E2E и live GAS acceptance.
 - Изменения только в `ispravleniya`; Production, `main`, основная Google Sheet, основной GAS, Vercel Production и опубликованный Telegram webhook не затронуты.
+### 2026-11-15 — общий request-sequence helper и защита пяти экранов от гонок
+
+- Предыдущая защита от устаревших ответов была унифицирована: создан `src/lib/requestSequence.ts` с API `begin/isCurrent/invalidate`; все пять экранов используют один и тот же проверенный механизм.
+- Защита применена к операциям, главной, календарю, уведомлениям и месячному планированию. Старая загрузка не может изменить данные, ошибку или индикатор загрузки после запуска новой загрузки; cleanup инвалидирует pending ID.
+- Добавлены поведенческие тесты конкурирующих запросов и cleanup/invalidation, а также проверки подключения helper на всех пяти экранах.
+- После исправления двух неполных проверок `isCurrent()` CI [43715884702 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43715884702): **292/292 regression tests**, typecheck/build, dependency audit, preview smoke, Playwright Chromium auth/mobile/desktop и Apps Script syntax/manifest checks прошли.
+- Детальный план остаётся **170/233 = 73,0%**, 63 открытых критерия; макроэтапы **4/12 = 33,3%**. Этап 4 не закрыт: нужны финансовые E2E и live GAS acceptance.
+- Изменения только в `ispravleniya`; Production, `main`, рабочая таблица, основной GAS, Vercel Production и опубликованный Telegram webhook не затронуты.
