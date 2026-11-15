@@ -81,9 +81,17 @@ export function pendingTransactionStorageKey(familyId: string, userId: string): 
 }
 
 function readRecord(storage: KeyValueStorage, key: string, now: number): PendingTransactionRecord | null {
-  const raw = storage.getItem(key)
+  let raw: string | null
+  try {
+    raw = storage.getItem(key)
+  } catch {
+    return null
+  }
   if (!raw) return null
 
+  const discard = () => {
+    try { storage.removeItem(key) } catch { /* Preserve safety if storage is read-only. */ }
+  }
   try {
     const value = JSON.parse(raw) as Partial<PendingTransactionRecord>
     const valid = value.version === 1
@@ -92,12 +100,12 @@ function readRecord(storage: KeyValueStorage, key: string, now: number): Pending
       && typeof value.createdAt === 'number' && Number.isFinite(value.createdAt)
       && value.createdAt <= now
     if (!valid || now - value.createdAt! > PENDING_TRANSACTION_TTL_MS) {
-      storage.removeItem(key)
+      discard()
       return null
     }
     return value as PendingTransactionRecord
   } catch {
-    storage.removeItem(key)
+    discard()
     return null
   }
 }
