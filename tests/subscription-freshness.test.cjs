@@ -27,8 +27,8 @@ for (const [file, dependencies] of cases) {
 
 test('goal section headings follow the filtered visible order', () => {
   const source = fs.readFileSync(path.join(root, 'src/pages', 'GoalsPage.tsx'), 'utf8')
-  assert.match(source, /const visibleSortedGoals = sortedGoals\.filter\(/)
+  assert.match(source, /const visibleSortedGoals = useMemo\(\(\) => filterAndSortGoals\(goals, \{/)
   assert.ok(source.includes('visibleSortedGoals.map((g, index) => {'))
   assert.ok(source.includes('getGoalSectionLabel(visibleSortedGoals, index)'))
-  assert.ok(source.includes('sortGoalsForDisplay(goals)'))
+  assert.ok(source.includes('filterAndSortGoals, getGoalSectionLabel'))
 })
