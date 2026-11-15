@@ -7,7 +7,7 @@ import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { safeHttpUrl } from '../lib/safeUrl'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
-import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 import { Plus, Pencil, Trash2, ShoppingCart, Check, ExternalLink } from 'lucide-react'
 
 const PRIORITY_LABELS: Record<number, string> = { 1: 'Критически необходимое', 2: 'Необходимое', 3: 'Важное', 4: 'Желательное', 5: 'Необязательное' }
@@ -197,7 +197,7 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
         if (err) throw err
       } else {
         const insertPayload = { ...payload, family_id: familyId, created_by: userId }
-        const storage = window.localStorage
+        const storage = getPendingStorage()
         const pendingKey = pendingMutationStorageKey('planned_purchases', familyId, userId)
         const fingerprint = await fingerprintTransactionPayload(insertPayload)
         await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('planned_purchases').insert({ ...insertPayload, id }))
