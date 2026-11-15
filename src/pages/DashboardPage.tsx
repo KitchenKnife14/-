@@ -57,7 +57,7 @@ export default function DashboardPage() {
     } catch (e) {
       if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
-      if (requestId === loadSequence.current) setLoading(false)
+      if (loadSequence.current.isCurrent(requestId)) setLoading(false)
     }
   }, [familyId, range.start, range.end])
 
