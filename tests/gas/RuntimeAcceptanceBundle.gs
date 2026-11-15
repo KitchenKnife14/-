@@ -1147,6 +1147,11 @@ function cleanupFailedMonthlyPlanFixture() {
   var family=familyId?rows_('families').filter(function(row){
     return String(row.id)===familyId&&String(row.name)==='TEST monthly plan '+suffix;
   }):[];
+  if(family.length===1) {
+    var familyMembers=rows_('family_members').filter(function(row){return String(row.family_id)===familyId;});
+    userIds=userIds.concat(familyMembers.map(function(row){return String(row.user_id);}),[String(family[0].created_by||'')])
+      .filter(function(uid,index,all){return !!uid&&all.indexOf(uid)===index;});
+  }
   if(planRows.length)deleteRows_('monthly_plans',planRows);
   if(family.length===1) {
     removeRows('categories',function(row){return String(row.family_id)===familyId;});
