@@ -129,7 +129,7 @@ class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|nu
 const listeners=new Set<(event:string,session:GoogleSession|null)=>void>();function notify(event:string,s:GoogleSession|null){listeners.forEach(f=>f(event,s))}
 export const googleSheets={
  from:(table:string)=>new QueryBuilder<any>(table),
- rpc:async(name:string,params:Record<string,unknown>={})=>{try{return{data:await request({action:'rpc',name,params}),error:null}}catch(e){return{data:null,error:new Error(e instanceof Error?e.message:'Ошибка RPC')}}},
+ rpc:async(name:string,params:Record<string,unknown>={})=>{try{return{data:await request({action:'rpc',name,params}),error:null}}catch(e){return{data:null,error:e instanceof Error?e:new Error('Ошибка RPC')}}},
  channel:(_name:string)=>{
   const subs:{table:string;familyId:string;callback:()=>void;previous:string}[]=[]
   let timer:ReturnType<typeof setInterval>|null=null
