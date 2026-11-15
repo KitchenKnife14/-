@@ -20,6 +20,15 @@ function createStorage() {
   }
 }
 
+test('pending storage falls back to a page-session store when browser storage is unavailable', async () => {
+  const { getPendingStorage } = await loadPendingModule()
+  const fallback = getPendingStorage(() => { throw new Error('storage denied') })
+  fallback.setItem('pending-key', 'pending-value')
+  assert.equal(fallback.getItem('pending-key'), 'pending-value')
+  const persistent = createStorage()
+  assert.equal(getPendingStorage(() => persistent), persistent)
+})
+
 test('pending transaction ID is reused for the same payload across form remounts', async () => {
   const { getOrCreatePendingTransactionId } = await loadPendingModule()
   const storage = createStorage()
@@ -194,6 +203,7 @@ test('all financial create forms use the shared safe pending mutation lifecycle'
   for (const file of files) {
     const source = fs.readFileSync(path.join(__dirname, '../src/pages', file), 'utf8')
     assert.match(source, /runPendingMutation\(/, `${file} must use runPendingMutation`)
+    assert.match(source, /getPendingStorage\(\)/, `${file} must tolerate unavailable localStorage`)
     assert.doesNotMatch(source, /getOrCreatePendingMutationId\(/, `${file} must not bypass the shared lifecycle`)
     assert.doesNotMatch(source, /clearPendingMutation\(/, `${file} must not clear pending IDs outside the shared lifecycle`)
   }
