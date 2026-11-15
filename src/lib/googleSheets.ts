@@ -2,6 +2,13 @@ import { parseApiResponse } from './apiResponse'
 type Filter = { column: string; op: string; value?: unknown; values?: unknown[] }
 export type GoogleSession = { access_token: string; token_type: 'bearer'; expires_at: number; user: { id: string; email: string } }
 const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL as string | undefined
+
+export class BackendRequestError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BackendRequestError'
+  }
+}
 const SESSION_KEY = 'budget_google_session_v1'
 let volatileSession: GoogleSession | null = null
 
@@ -66,7 +73,7 @@ async function rawRequest<T>(payload:Record<string,unknown>):Promise<T>{
   if(result.error){
     const message=result.error.message
     if(AUTH_ERRORS.some(m=>message.startsWith(m))&&readSession()){saveSession(null);notify('SIGNED_OUT',null)}
-    throw new Error(message)
+    throw new BackendRequestError(message)
   }
   return result.data as T
 }
@@ -108,7 +115,7 @@ function request<T>(payload:Record<string,unknown>):Promise<T>{
   inFlightReads.set(key,current)
   return current
 }
-async function flushQueue(){if(flushTimer!==null){clearTimeout(flushTimer);flushTimer=null}const items=queue;queue=[];if(!items.length)return;if(items.length===1){rawRequest(items[0].payload).then(items[0].resolve,items[0].reject);return}try{const results=await rawRequest<{data?:unknown;error?:{message:string}|null}[]>({action:'batch',requests:items.map(i=>i.payload)});items.forEach((it,idx)=>{const r=results[idx];if(!r)it.reject(new Error('Сервер вернул неполный ответ'));else if(r.error)it.reject(new Error(r.error.message));else it.resolve(r.data)})}catch(e){if(e instanceof Error&&e.message.startsWith('Неизвестное действие')){batchingSupported=false;items.forEach(it=>rawRequest(it.payload).then(it.resolve,it.reject))}else items.forEach(it=>it.reject(e))}}
+async function flushQueue(){if(flushTimer!==null){clearTimeout(flushTimer);flushTimer=null}const items=queue;queue=[];if(!items.length)return;if(items.length===1){rawRequest(items[0].payload).then(items[0].resolve,items[0].reject);return}try{const results=await rawRequest<{data?:unknown;error?:{message:string}|null}[]>({action:'batch',requests:items.map(i=>i.payload)});items.forEach((it,idx)=>{const r=results[idx];if(!r)it.reject(new Error('Сервер вернул неполный ответ'));else if(r.error)it.reject(new BackendRequestError(r.error.message));else it.resolve(r.data)})}catch(e){if(e instanceof Error&&e.message.startsWith('Неизвестное действие')){batchingSupported=false;items.forEach(it=>rawRequest(it.payload).then(it.resolve,it.reject))}else items.forEach(it=>it.reject(e))}}
 
 class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|null;error:{message:string}|null}>{
  private mode='select';private filters:Filter[]=[];private values:Record<string,unknown>|Record<string,unknown>[]={};private returning=false;private limitValue?:number;private orderValues:{column:string;ascending:boolean}[]=[];private conflict?:string;private expected?:Record<string,unknown>;private expectedRows?:(object|null)[];private singleMode:'single'|'maybeSingle'|null=null;
@@ -116,7 +123,7 @@ class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|nu
  select(_columns='*'){this.returning=true;return this} insert(v:Record<string,unknown>|Record<string,unknown>[]){this.mode='insert';this.values=v;return this} update(v:Record<string,unknown>){this.mode='update';this.values=v;return this} delete(){this.mode='delete';return this} upsert(v:Record<string,unknown>|Record<string,unknown>[],o?:{onConflict?:string}){this.mode='upsert';this.values=v;this.conflict=o?.onConflict;return this}
  eq(column:string,value:unknown){this.filters.push({column,op:'eq',value});return this} neq(column:string,value:unknown){this.filters.push({column,op:'neq',value});return this} gt(column:string,value:unknown){this.filters.push({column,op:'gt',value});return this} gte(column:string,value:unknown){this.filters.push({column,op:'gte',value});return this} lt(column:string,value:unknown){this.filters.push({column,op:'lt',value});return this} lte(column:string,value:unknown){this.filters.push({column,op:'lte',value});return this} in(column:string,values:unknown[]){this.filters.push({column,op:'in',values});return this} is(column:string,value:unknown){this.filters.push({column,op:'is',value});return this}
  expect(snapshot:Record<string,unknown>){this.expected=snapshot;return this} expectUpsert(snapshots:(object|null)[]){this.expectedRows=snapshots;return this} order(column:string,o?:{ascending?:boolean}){this.orderValues.push({column,ascending:o?.ascending!==false});return this} limit(n:number){this.limitValue=n;return this} single(){this.singleMode='single';return this.execute() as Promise<{data:T|null;error:{message:string}|null}>} maybeSingle(){this.singleMode='maybeSingle';return this.execute() as Promise<{data:T|null;error:{message:string}|null}>}
- private async execute():Promise<{data:any;error:{message:string}|null}>{try{const d=await request<any>({action:'query',table:this.table,mode:this.mode,filters:this.filters,values:this.values,returning:this.returning,limit:this.limitValue,orders:this.orderValues,onConflict:this.conflict,expected:this.expected,expectedRows:this.expectedRows});if(this.singleMode){const a=Array.isArray(d)?d:d==null?[]:[d];if(!a.length&&this.singleMode==='single')throw new Error('Запись не найдена');if(a.length>1)throw new Error('Найдено несколько записей');return{data:a[0]??null,error:null}}return{data:d,error:null}}catch(e){return{data:null,error:new Error(e instanceof Error?e.message:'Ошибка запроса')}}}
+ private async execute():Promise<{data:any;error:{message:string}|null}>{try{const d=await request<any>({action:'query',table:this.table,mode:this.mode,filters:this.filters,values:this.values,returning:this.returning,limit:this.limitValue,orders:this.orderValues,onConflict:this.conflict,expected:this.expected,expectedRows:this.expectedRows});if(this.singleMode){const a=Array.isArray(d)?d:d==null?[]:[d];if(!a.length&&this.singleMode==='single')throw new Error('Запись не найдена');if(a.length>1)throw new Error('Найдено несколько записей');return{data:a[0]??null,error:null}}return{data:d,error:null}}catch(e){return{data:null,error:e instanceof Error?e:new Error('Ошибка запроса')}}}
  then<A= {data:T[]|null;error:{message:string}|null},B=never>(ok?:((v:{data:T[]|null;error:{message:string}|null})=>A|PromiseLike<A>)|null,bad?:((e:unknown)=>B|PromiseLike<B>)|null):PromiseLike<A|B>{return this.execute().then(ok,bad)}
 }
 const listeners=new Set<(event:string,session:GoogleSession|null)=>void>();function notify(event:string,s:GoogleSession|null){listeners.forEach(f=>f(event,s))}
