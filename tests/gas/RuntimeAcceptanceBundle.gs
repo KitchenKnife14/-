@@ -798,8 +798,14 @@ function runMonthlyPlanConcurrencyTest() {
         var remainingUsers=[userA,userB].filter(Boolean).some(function(uid) {
           return rows_('profiles').some(function(row){return String(row.id)===uid;});
         });
+        SpreadsheetApp.flush();
+        delete ROWS_CACHE.monthly_plans;
+        delete ROWS_CACHE.families;
+        delete ROWS_CACHE.profiles;
         if(remainingAuth||remainingPlan||remainingFamily||remainingUsers) {
-          throw new Error('После cleanup остались синтетические TEST-записи.');
+          throw new Error('После cleanup остались синтетические TEST-записи: '+
+            JSON.stringify({auth:!!remainingAuth,plan:!!remainingPlan,family:!!remainingFamily,users:!!remainingUsers,
+              userA:userA||null,userB:userB||null,familyId:familyId||null,planId:planId}));
         }
         report.cleanup='PASS';
       } catch(error) {
