@@ -164,7 +164,7 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, userId, mont
         const storage = window.localStorage
         const pendingKey = pendingMutationStorageKey('budgets', familyId, userId)
         const fingerprint = await fingerprintTransactionPayload(payload)
-        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('budgets').insert({ ...payload, id }))
+        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('budgets').insert({ ...payload, id }))
       }
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
