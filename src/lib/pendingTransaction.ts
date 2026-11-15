@@ -1,5 +1,12 @@
 export const PENDING_TRANSACTION_TTL_MS = 24 * 60 * 60 * 1000
 
+export class PendingTransactionConflictError extends Error {
+  constructor() {
+    super('Предыдущая операция ещё не подтверждена. Повторите отправку с прежними данными; после подтверждения её можно будет изменить.')
+    this.name = 'PendingTransactionConflictError'
+  }
+}
+
 interface PendingTransactionRecord {
   version: 1
   id: string
@@ -48,6 +55,9 @@ export function getOrCreatePendingTransactionId(
 ): string {
   const current = readRecord(storage, key, now)
   if (current?.fingerprint === fingerprint) return current.id
+  if (current && current.fingerprint !== fingerprint) {
+    throw new PendingTransactionConflictError()
+  }
 
   const record: PendingTransactionRecord = {
     version: 1,
