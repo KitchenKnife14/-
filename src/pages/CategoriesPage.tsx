@@ -5,7 +5,7 @@ import type { Category, CategoryKind } from '../lib/types'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Archive, Folder } from 'lucide-react'
 import { ensureSupplementalCategories } from '../lib/categories'
-import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 
 export default function CategoriesPage() {
   const { family } = useAuth()
@@ -185,7 +185,7 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, f
         const { data: authData } = await googleSheets.auth.getUser()
         const userId = authData.user?.id
         if (!userId) throw new Error('Сессия завершена. Войдите снова.')
-        const storage = window.localStorage
+        const storage = getPendingStorage()
         const scope = parentId ? `parent:${parentId}` : 'root'
         const pendingKey = pendingMutationStorageKey('categories', familyId, userId, scope)
         const fingerprint = await fingerprintTransactionPayload(insertPayload)
