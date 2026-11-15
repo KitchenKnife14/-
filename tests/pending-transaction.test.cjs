@@ -182,6 +182,23 @@ test('generic pending mutation clears ID only after a definitive backend rejecti
 })
 
 
+test('all financial create forms use the shared safe pending mutation lifecycle', () => {
+  const files = [
+    'AccountsPage.tsx',
+    'CategoriesPage.tsx',
+    'GoalsPage.tsx',
+    'PurchasesPage.tsx',
+    'RecurringPage.tsx',
+    'BudgetsPage.tsx',
+  ]
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(__dirname, '../src/pages', file), 'utf8')
+    assert.match(source, /runPendingMutation\(/, `${file} must use runPendingMutation`)
+    assert.doesNotMatch(source, /getOrCreatePendingMutationId\(/, `${file} must not bypass the shared lifecycle`)
+    assert.doesNotMatch(source, /clearPendingMutation\(/, `${file} must not clear pending IDs outside the shared lifecycle`)
+  }
+})
+
 test('category create form keeps a stable pending ID for an uncertain insert', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/pages/CategoriesPage.tsx'), 'utf8')
   assert.match(source, /pendingMutationStorageKey\('categories'/)
