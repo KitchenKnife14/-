@@ -77,6 +77,8 @@ export default function GoalsPage() {
     const date = String(a.target_date || '9999-12-31').localeCompare(String(b.target_date || '9999-12-31'))
     return date || String(a.created_at || '').localeCompare(String(b.created_at || ''))
   }), [goals])
+  // Build section boundaries from the filtered order, not the unfiltered list.
+  const visibleSortedGoals = sortedGoals.filter((g) => filteredGoals.some((f) => f.id === g.id))
 
   return (
     <div className="space-y-4">
@@ -105,15 +107,19 @@ export default function GoalsPage() {
         <div className="card text-center py-8 text-sm text-slate-500">По заданным фильтрам целей нет.</div>
       ) : (
         <div className="space-y-2">
-          {sortedGoals.filter((g) => filteredGoals.some((f) => f.id === g.id)).map((g, index) => {
+          {visibleSortedGoals.map((g, index) => {
             const pct = g.target_kopecks > 0 ? (g.saved_kopecks / g.target_kopecks) * 100 : 0
             const remaining = g.target_kopecks - g.saved_kopecks
             const monthsLeft = g.target_date ? monthsUntilDate(g.target_date) : null
             const monthlyNeeded = monthsLeft && monthsLeft > 0 ? Math.round(remaining / monthsLeft) : null
+            const sectionLabel = index === 0
+              ? (g.status === 'active' ? 'Активные цели' : 'Неактивные цели')
+              : g.status !== 'active' && visibleSortedGoals[index - 1].status === 'active'
+                ? 'Неактивные цели'
+                : null
             return (
               <div key={g.id}>
-                {index === 0 && <div className="pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{g.status === 'active' ? 'Активные цели' : 'Неактивные цели'}</div>}
-                {index > 0 && g.status !== 'active' && sortedGoals[index - 1].status === 'active' && <div className="pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Неактивные цели</div>}
+                {sectionLabel && <div className={index === 0 ? 'pb-1' : 'pb-1 pt-3'} + ' text-xs font-semibold uppercase tracking-wide text-slate-500'>{sectionLabel}</div>}
                 <div className={`card ${g.status === 'done' || g.status === 'cancelled' ? 'opacity-60' : ''}`}>
                 <div className="flex items-start gap-3">
                   <div className="text-xl w-9 h-9 rounded-full bg-primary-50 flex items-center justify-center flex-shrink-0"><Target size={16} className="text-primary-600" /></div>
