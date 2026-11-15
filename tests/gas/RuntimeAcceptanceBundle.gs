@@ -161,6 +161,14 @@ function runTelegramUpdateConcurrencyTest() {
         (retry.error && retry.error.message || 'different response'));
     }
 
+    var collision = telegramReplayPost_(webhookUpdate(
+      transactionUpdateId,
+      'Доход 9000 рублей зарплата — payload collision probe'
+    ));
+    if (!collision.error || !/update_id collision/i.test(String(collision.error.message || ''))) {
+      throw new Error('Повторный update_id с другим содержимым не был отклонён.');
+    }
+
     var transactionRows = rows_('transactions').filter(function(row) {
       return String(row.id) === transactionId;
     });
@@ -179,6 +187,7 @@ function runTelegramUpdateConcurrencyTest() {
 
     report.parallel_requests = 2;
     report.retry_requests = 1;
+    report.different_payload_collision_rejected = true;
     report.telegram_link_rows = linkRows.length;
     report.transaction_rows = transactionRows.length;
     report.amount_kopecks = Number(transaction.amount_kopecks);
