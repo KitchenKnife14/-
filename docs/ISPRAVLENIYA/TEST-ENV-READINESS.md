@@ -82,3 +82,10 @@ GitHub CI проверяет синтаксис `Code.gs`, `IsolatedTestGuard.gs
 - Не менять Production Vercel environment/deployment и опубликованный Telegram webhook.
 - Не удалять и не очищать существующие семейные данные.
 - Не менять Script Properties с реальными секретами ради теста; probes должны самостоятельно временно подменять только тестируемое свойство и восстанавливать его в `finally`.
+
+
+## Recovery after the 2026-11-15 monthly-plan cleanup helper error
+
+The latest batch passed Telegram duplicate/retry and optimistic read/write consistency. The monthly-plan test stopped in cleanup because the copied runtime bundle called an undefined `removeRows` helper. The maintained standalone module already uses `monthlyPlanRemoveRows_`; the bundle is now aligned with it.
+
+In TEST GAS, replace only `RuntimeAcceptanceBundle.gs` from branch `ispravleniya`, save, and run `cleanupLatestFailedMonthlyPlanFixture()`. This recovery helper is restricted to the exact synthetic fixture suffix `16169d60785f4b9981640d68f142f927` and the isolated TEST guard. Confirm `result=PASS`, `cleanup=PASS`, and all `verified_remaining` flags are false. Then run `runIsolatedRuntimeAcceptanceBatch()`. Do not run the batch before cleanup is confirmed. No Code.gs change or redeployment is required.
