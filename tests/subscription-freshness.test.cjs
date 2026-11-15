@@ -15,9 +15,9 @@ const cases = [
 for (const [file, dependencies] of cases) {
   test(`${file} subscription refresh uses the latest load callback`, () => {
     const source = fs.readFileSync(path.join(root, 'src/pages', file), 'utf8')
-    assert.match(source, /import \{ useCallback, useEffect, (?:useMemo, )?useState \} from 'react'/)
+    assert.match(source, /import \{ useCallback, useEffect, (?:useMemo, )?(?:useRef, )?useState \} from 'react'/)
     assert.match(source, /const load = useCallback\(async \(\) => \{/)
-    assert.match(source, /useEffect\(\(\) => \{ void load\(\) \}, \[load\]\)/)
+    assert.match(source, /useEffect\(\(\) => \{\s*void load\(\)(?:\s*return \(\) => \{ loadSequence\.current \+= 1 \})?\s*\}, \[load\]\)/)
     assert.match(source, dependencies)
     assert.match(source, /\(\) => \{ void load\(\) \}/)
     assert.doesNotMatch(source, /\(\) => load\(\)/)
@@ -31,4 +31,14 @@ test('goal section headings follow the filtered visible order', () => {
   assert.ok(source.includes('visibleSortedGoals.map((g, index) => {'))
   assert.ok(source.includes('getGoalSectionLabel(visibleSortedGoals, index)'))
   assert.ok(source.includes('filterAndSortGoals, getGoalSectionLabel'))
+})
+
+test('TransactionsPage ignores stale list responses and invalidates in-flight loads on cleanup', () => {
+  const source = fs.readFileSync(path.join(root, 'src/pages', 'TransactionsPage.tsx'), 'utf8')
+  assert.match(source, /const loadSequence = useRef\(0\)/)
+  assert.match(source, /const requestId = \+\+loadSequence\.current/)
+  assert.match(source, /if \(requestId !== loadSequence\.current\) return/)
+  assert.match(source, /if \(requestId === loadSequence\.current\) setError/)
+  assert.match(source, /if \(requestId === loadSequence\.current\) setLoading\(false\)/)
+  assert.match(source, /return \(\) => \{ loadSequence\.current \+= 1 \}/)
 })
