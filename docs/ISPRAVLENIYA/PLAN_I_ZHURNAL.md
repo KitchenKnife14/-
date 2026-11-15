@@ -3473,3 +3473,16 @@ HEAD до:
 - Финальный CI для bundle commit `203359dee44c1d647528fe154f176f9e8bddb78b` — [43617178615](https://github.com/KitchenKnife14/-/actions/runs/43617178615) **SUCCESS**: dependency audit, TypeScript/production build, preview smoke, полный regression suite, syntax checks всех GAS модулей и bundle, manifest validation.
 - Четыре runtime-проверки всё ещё не запускались в живом TEST GAS. Счётчик аудита не повышен: 183/286 = 63.99% (64.0%), 103 открытых; макроэтапы 1/12. Подготовка, static tests и CI не заменяют runtime PASS.
 - В TEST GAS для запуска требуется добавить только один новый файл `RuntimeAcceptanceBundle.gs`; существующий `IsolatedTestGuard.gs` оставить. Не создавать рядом четыре отдельных probe-файла — это повторно внесло бы их глобальные функции. Production и `main` не менялись.
+
+
+### 2026-11-15 — защита от дублирования операции после неопределённого ответа
+
+- При проверке FC-20 найден риск в src/lib/pendingTransaction.ts: если запрос создания операции мог сохраниться на сервере, но ответ потерялся, изменение суммы/описания заменяло pending ID новым. Повторная отправка могла создать вторую финансовую операцию.
+- Исправлено: пока исходная операция не получила подтверждённый результат, новый payload не может перезаписать её ID. Пользователь получает понятное сообщение: повторить отправку с прежними данными; после подтверждения можно изменить уже созданную запись.
+- Чтобы не блокировать исправление обычной ошибки валидации, googleSheets.ts различает явный error-envelope backend и неопределённые ошибки транспорта/протокола. Только явный отказ backend очищает pending ID. Timeout, потеря соединения и некорректный ответ сохраняют ID для безопасного повтора. TransactionForm.tsx использует этот контракт.
+- Добавлены regression tests: изменённый payload не заменяет незавершённый ID; прежний ID продолжает использоваться; после подтверждённого отказа pending ID можно очистить и создать исправленную операцию.
+- Коммиты: helper da330483c203dd0602f44845c43d62cae0c73c61; tests 3eb82c89fd2efa26b2d5ae5f396dc4a9ddb48315; backend-error classification 233d1cdea727646d2f248262e868c9849973e627; form integration 03a66e68064e7162262bdaf6c28a89ec44ab5099; import cleanup 4ef51781f19679c46aae8c9b5ee82cf2ecb07d5d.
+- GitHub Actions run 43706454433 на HEAD 4ef51781f19679c46aae8c9b5ee82cf2ecb07d5d — SUCCESS: 266/266 regression tests, TypeScript/production build, preview smoke test, dependency audit, Apps Script syntax checks и manifest validation прошли.
+- Ограничения, которые остаются: pending metadata истекает через 24 часа; при недоступном localStorage fallback существует только в памяти текущего компонента. Поэтому для длительного неопределённого сбоя или браузера без persistent storage полная гарантия повторного использования ID не доказана. Общая политика pending IDs для остальных форм (getOrCreatePendingMutationId) в этом изменении не менялась.
+- Прогресс чек-листа не увеличен: код и тесты усилены, но критерии FC-20 должны быть пересчитаны по полной матрице, а не засчитаны автоматически. Последняя подтверждённая контрольная точка — 183/286 (64.0%), 103 открытых; макроэтапы 1/12.
+- Все изменения только в ispravleniya. Production, main, основная Google Sheet, GAS deployments, Vercel Production и Telegram webhook не затрагивались.
