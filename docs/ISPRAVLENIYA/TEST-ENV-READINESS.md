@@ -1,80 +1,72 @@
-# Test environment readiness — Family Cash
+# TEST GAS readiness — Family Cash
 
-> Дата проверки: 2026-11-11  
-> Рабочая ветка: ispravleniya  
-> Цель: определить, что можно проверять локально, что требует настоящего Apps Script runtime и какие инструкции нельзя выполнять до сверки среды.
+> Актуализировано: 2026-11-15  
+> Рабочая ветка: `ispravleniya`  
+> Назначение: единый безопасный порядок обновления изолированного TEST GAS и запуска подготовленного runtime acceptance batch.
 
-## 1. Вывод
+## 1. Подтверждённое состояние TEST-контура
 
-**Динамический тест Apps Script пока не запускался.** Пользователь подтвердил, что присланный URL — тестовый вариант сайта, в котором сейчас установлен тот же исходный `Code.gs`, что и в основном проекте; исправления из ветки `ispravleniya` туда ещё не переносились. Read-only GET тестового Web App ответил `status=ok`, `version=11`. Это подтверждает доступность endpoint и версию API, но само по себе не доказывает, к какой именно Google Sheet привязан проект.
+- Отдельный TEST Apps Script project и отдельная TEST Google Sheet существуют.
+- Последняя read-only диагностика подтвердила: `spreadsheetNameIsTest=true`, Script ID suffix `KMTZTF`, spreadsheet ID suffix `bqT8qQ`; Script timezone и Spreadsheet timezone — `Europe/Moscow`; профиль timezone — `Europe/Moscow`.
+- TEST Web App URL уже сохранён в Script Properties как `CONCURRENT_ROW_TEST_WEB_APP_URL`; повторно запрашивать URL не нужно.
+- Ранее в TEST GAS уже были успешно выполнены отдельные live probes: duplicate signup; конкурентное обновление одной операции (один update принят, второй отклонён как stale); duplicate goal contribution/retry. Эти результаты не заменяют новые probes из batch.
+- Важное различие: подтверждение TEST-проекта/таблицы не означает, что в TEST deployment уже загружен актуальный `google-apps-script/Code.gs` из текущего HEAD. Для следующего batch требуется обновить TEST Code.gs из ветки `ispravleniya`.
 
-Тестовая база на текущем этапе — исходный пользовательский код, совпадающий с основным проектом по подтверждению пользователя. Ветка `ispravleniya` содержит отдельный набор исправлений; её Code.gs нельзя считать уже загруженным в тестовый deployment. Перед мутационными runtime-тестами всё ещё нужно подтвердить, что Apps Script действительно привязан к отдельной копии таблицы, а не к основной. Секреты и финансовые данные в чат не передавать.
+## 2. Текущие файлы ветки
 
-## 2. Подтверждённое состояние ветки
+- `google-apps-script/Code.gs` — актуальный backend, `API_VERSION=11`, V8-compatible source. Blob SHA: `e2bbaeb9e2c81d8da9159c81f9264f6b71ef40a3`.
+- `tests/gas/IsolatedTestGuard.gs` — общий fail-closed guard. Он проверяет:
+  - `CONCURRENT_ROW_TEST_CONFIRM=ISOLATED_TEST_ONLY`;
+  - `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID` равен фактическому Script ID;
+  - `GAS_TEST_ALLOWED_SPREADSHEET_ID` равен активной таблице, имя которой содержит TEST/ТЕСТ;
+  - `CONCURRENT_ROW_TEST_WEB_APP_URL` имеет формат отдельного Apps Script deployment и не совпадает с известным Production deployment.
+- `tests/gas/RuntimeAcceptanceBundle.gs` — единый self-contained файл с четырьмя pending runtime probes и orchestrator. Blob SHA: `36b19fd8988bbd52a5b5d6f60fcea9a042852e16`.
+- Точка входа в bundle: `runIsolatedRuntimeAcceptanceBatch()`. Она существует в bundle; отдельный файл `RuntimeAcceptanceBatch.gs` вручную добавлять не нужно.
+- Отдельные source modules в `tests/gas/` — исходники для сопровождения bundle. В TEST Apps Script добавляется только собранный `RuntimeAcceptanceBundle.gs`, не все отдельные probe-файлы.
 
-- google-apps-script/Code.gs присутствует в ветке ispravleniya; SHA на момент проверки: b5468aacbf56e80f4b6d9aa58345fbe814b5b520.
-- Ветка содержит API_VERSION=11.
-- tests/apps-script.test.cjs запускает веточный google-apps-script/Code.gs через Node vm; он не загружает пользовательский восстановленный Code.gs.
-- В VM-harness SpreadsheetApp.getActiveSpreadsheet() и openById() возвращают одну mock-таблицу. Это не проверяет выбор реальной таблицы.
-- Mock LockService учитывает вызовы wait/release, но не моделирует блокировку, ожидание, timeout и реальную конкуренцию.
-- package.json определяет npm test как node --test, npm run build как tsc -b && vite build, npm run typecheck как tsc -b --noEmit.
-- GitHub Actions workflow .github/workflows/validate.yml запускает Node 22, npm ci, build, npm test и node --check < google-apps-script/Code.gs. Он не разворачивает Apps Script и не проверяет реальные Sheets/LockService/PropertiesService.
-- google-apps-script/ в ветке содержит Code.gs, README.md, SETUP.md; файл appsscript.json в этом каталоге отсутствует. Это не доказывает, что manifest отсутствует в самом редакторе Apps Script; его runtime-настройки нужно отдельно проверить, если они важны для теста.
+## 3. Что выполняет единый batch
 
-## 3. Несоответствия в существующей документации
+В последовательном порядке запускаются четыре пробы:
 
-README.md и google-apps-script/SETUP.md не соответствуют текущему рабочему процессу аудита:
+1. **Telegram duplicate delivery and retry** — повторная доставка одного синтетического webhook update; проверка одной финансовой записи и replay/cache поведения.
+2. **Optimistic read/write consistency** — проверка согласованности чтения и конкурентной записи.
+3. **Monthly-plan concurrent stale update** — два конкурентных изменения одного snapshot месячного плана; проверка stale rejection.
+4. **Two-member transaction insert concurrency** — параллельные вставки операций двумя синтетическими участниками семьи.
 
-1. README указывает рабочую ветку work/final-features-performance; текущая ветка аудита — ispravleniya.
-2. SETUP предлагает брать Code.gs из work/final-features-performance и использовать Preview этой ветки. Это не та ветка, где ведётся текущая проверка.
-3. SETUP в одном месте говорит «в исходной таблице выберите Расширения → Apps Script», хотя одновременно требует отдельную тестовую таблицу. Следовать этому шагу без проверки выбранной таблицы опасно.
-4. SETUP описывает создание промежуточных версий Apps Script ради совпадения номера версии платформы с API_VERSION=11. Внутренняя константа приложения и порядковый номер версии Apps Script — разные величины; искусственно создавать версии только ради совпадения номеров не требуется и не следует.
-5. SETUP предлагает временно включать DEBUG_INFO и публиковать имя таблицы через doGet для проверки привязки. Не использовать этот способ без отдельной оценки доступа/риска; предпочтительнее проверять spreadsheet ID/имя из редактора тестового проекта и его Script Properties, не публикуя их через endpoint.
-6. README/SETUP утверждают состояние Preview-переменной и тестового подключения, которое в рамках этой проверки не было независимо подтверждено. Не считать это текущим фактом без проверки Vercel settings.
+Каждая проба создаёт собственные синтетические сущности и удаляет их в `finally`. Batch сбрасывает per-execution caches между тестами. При ошибке очистки batch прекращает последующие тесты, чтобы не накапливать fixtures.
 
-**Решение:** существующий SETUP не использовать как пошаговую инструкцию для текущего тестового запуска. Его нужно переписать после подтверждения конкретного тестового проекта, таблицы и исходного Code.gs. В рамках этой работы инструкции не менялись, чтобы не угадывать неизвестные ID/URL и не направить тесты в неверную среду.
+Batch не использует реальные Telegram Bot API, Vercel, Production deployment, основную Google Sheet или реальные семейные записи. Он обращается только к сохранённому TEST Web App URL.
 
-## 4. Безопасная схема runtime-проверки
+## 4. Единственное оставшееся ручное действие — M-04
 
-Перед первым запросом должны быть подтверждены все пункты:
+Выполнить один раз после подготовки текущего HEAD:
 
-- [ ] тестовый Apps Script project отделён от Production проекта;
-- [ ] тестовая Google Sheet отделена от «Семейный бюджет» и не содержит реальных семейных записей;
-- [ ] проект привязан именно к тестовой Sheet;
-- [ ] /exec URL принадлежит тестовому deployment, а не Production;
-- [ ] код в тестовом проекте соответствует конкретному зафиксированному SHA/файлу, выбранному для тестирования;
-- [ ] тестовые Script Properties не содержат Production Telegram token, backend secret или Production webhook secret;
-- [ ] тестовый webhook не зарегистрирован вместо Production webhook и не может принимать/обрабатывать реальные пользовательские сообщения;
-- [ ] все тестовые аккаунты, суммы, категории и операции синтетические;
-- [ ] перед тестом зафиксированы состояние пустой тестовой таблицы и список листов;
-- [ ] тесты на setupSheets() и selfTest() запускаются только в этой изолированной таблице; пользовательский selfTest() создаёт и удаляет временный лист.
+1. Открыть именно отдельный TEST Apps Script project, привязанный к TEST-таблице. Не открывать основной проект «Семейный бюджет».
+2. В файле `Code.gs` заменить содержимое на актуальный файл из ветки `ispravleniya`: [google-apps-script/Code.gs](https://github.com/KitchenKnife14/-/blob/ispravleniya/google-apps-script/Code.gs).
+3. Существующий `IsolatedTestGuard.gs` оставить без изменений. Не заменять его старой версией и не удалять.
+4. Создать один новый файл Apps Script с именем `RuntimeAcceptanceBundle.gs` и вставить в него полное содержимое: [RuntimeAcceptanceBundle.gs](https://github.com/KitchenKnife14/-/blob/ispravleniya/tests/gas/RuntimeAcceptanceBundle.gs). Не добавлять отдельно `RuntimeAcceptanceBatch.gs` и четыре individual probe files.
+5. Сохранить проект. В разделе **Развернуть → Управление развертываниями** отредактировать существующее TEST Web App deployment, выбрать новую версию и развернуть. Не создавать новый URL и не менять Production deployment.
+6. В списке функций выбрать точное имя `runIsolatedRuntimeAcceptanceBatch` и запустить один раз.
+7. Открыть журнал выполнения и сохранить полный JSON-отчёт.
 
-## 5. Что возможно без тестового URL
+Ожидаемый успешный итог: `completed=4`, `passed=4`, `failed=0`, `result="PASS"`; у каждого из четырёх вложенных отчётов должны быть `result="PASS"` и `cleanup="PASS"`.
 
-Можно продолжать:
-- статический аудит и подготовку тестов на веточном VM-harness;
-- unit-тесты чистых frontend/helper функций;
-- сравнение веточного и пользовательского Code.gs;
-- подготовку безопасных синтетических fixtures и сценариев fault injection;
-- проверку CI workflow и зависимостей.
+Если функция не появилась в списке после сохранения, сначала проверить, что весь bundle вставлен в правильный TEST project и сохранён. Не создавать отдельные копии функций вручную и не запускать individual probes по одному.
 
-Нельзя достоверно проверить без отдельного тестового deployment:
-- реальные LockService contention/timeouts;
-- фактическую семантику PropertiesService/CacheService;
-- поведение Sheets при частичных/конкурентных записях;
-- реальные права Web App и привязку к таблице;
-- сквозной запрос frontend/Vercel → Apps Script → Sheet.
+Если любой тест завершился FAIL или cleanup не PASS — не повторять batch вслепую. Нужен отчёт выполнения, после чего разбирается конкретный сбой и состояние синтетических данных.
 
-## 6. Ручные действия
+## 5. CI и границы доказательств
 
-Очередь ручных действий остаётся прежней:
+GitHub CI проверяет синтаксис `Code.gs`, `IsolatedTestGuard.gs`, individual probes, orchestrator и bundle; это не исполняет Apps Script runtime и не доказывает работу реального LockService/Sheets.
 
-- **M-01:** URL тестового Web App уже предоставлен и отвечает на GET; повторно присылать его не нужно.
-- **M-02:** подтвердить привязку тестового Apps Script к отдельной копии Google Sheet и отсутствие Production credentials/webhook в тестовом контуре. До этого мутационные тесты не запускать.
-- **M-03:** после завершения самостоятельных исправлений — единый пакет ручных runtime-проверок и настроек Apps Script/Vercel/Telegram.
+Финальный live batch должен быть запущен в TEST Apps Script вручную. Результат засчитывается только по фактическому журналу Apps Script и подтверждённой очистке fixtures.
 
-На данном этапе M-01 не блокирует статическую и локальную работу. Не отправлять секреты, токены и содержимое финансовой таблицы в чат.
+Никакие секреты, токены, URL deployment или содержимое финансовой таблицы не нужно отправлять в чат. Для разбора достаточно JSON-отчёта; чувствительные значения в нём должны оставаться замаскированы.
 
-## 7. Следующий технический шаг
+## 6. Не выполнять
 
-Продолжить локальный пакет T1 с чистых unit-тестов и отдельно подготовить red regression tests для backend money validation. Перед изменением веточного backend сначала сверить его с пользовательским Code.gs и принять решение о базовом исходнике. Не выполнять merge целого файла по принципу «последняя версия»; переносить только проверенные изменения.
+- Не запускать batch в Production GAS.
+- Не открывать и не менять основную Google Sheet.
+- Не менять Production Vercel environment/deployment и опубликованный Telegram webhook.
+- Не удалять и не очищать существующие семейные данные.
+- Не менять Script Properties с реальными секретами ради теста; probes должны самостоятельно временно подменять только тестируемое свойство и восстанавливать его в `finally`.
