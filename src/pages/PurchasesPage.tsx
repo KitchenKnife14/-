@@ -200,7 +200,7 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
         const storage = window.localStorage
         const pendingKey = pendingMutationStorageKey('planned_purchases', familyId, userId)
         const fingerprint = await fingerprintTransactionPayload(insertPayload)
-        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('planned_purchases').insert({ ...insertPayload, id }))
+        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('planned_purchases').insert({ ...insertPayload, id }))
       }
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
