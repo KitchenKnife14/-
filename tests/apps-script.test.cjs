@@ -4058,15 +4058,37 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
     update: { update_id: 7506, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Потратил 500 рублей' } },
   });
   assert.equal(expense.error, null, expense.error?.message);
+
+  const punctuatedIncome = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7511, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Доход: 250 рублей' } },
+  });
+  assert.equal(punctuatedIncome.error, null, punctuatedIncome.error?.message);
+  assert.match(punctuatedIncome.data.text, /Записал доход: 250,00 ₽ — Доход/);
+
+  const punctuatedExpense = h.call({
+    action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
+    update: { update_id: 7512, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text: 'Расход — 250 рублей' } },
+  });
+  assert.equal(punctuatedExpense.error, null, punctuatedExpense.error?.message);
+  assert.match(punctuatedExpense.data.text, /Записал расход: 250,00 ₽ — Расход/);
+
   const updatedTransactions = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
-  assert.equal(updatedTransactions.length, 5);
+  assert.equal(updatedTransactions.length, 7);
   const savedSalary = updatedTransactions.filter(row => row.type === 'income' && row.amount_kopecks === 500000);
   assert.equal(savedSalary.length, 3);
   assert.ok(savedSalary.every(row => row.type === 'income'));
   assert.ok(savedSalary.some(row => /зарплата/i.test(row.description)));
-  const savedExpense = updatedTransactions.find(row => row.type === 'expense');
-  assert.equal(savedExpense.amount_kopecks, 50000);
+  const savedExpense = updatedTransactions.find(row => row.type === 'expense' && row.amount_kopecks === 50000);
   assert.equal(savedExpense.description, 'Расход');
+  const punctuatedIncomeRow = updatedTransactions.find(row => row.id === 'telegram_7511');
+  assert.equal(punctuatedIncomeRow.type, 'income');
+  assert.equal(punctuatedIncomeRow.amount_kopecks, 25000);
+  assert.equal(punctuatedIncomeRow.description, 'Доход');
+  const punctuatedExpenseRow = updatedTransactions.find(row => row.id === 'telegram_7512');
+  assert.equal(punctuatedExpenseRow.type, 'expense');
+  assert.equal(punctuatedExpenseRow.amount_kopecks, 25000);
+  assert.equal(punctuatedExpenseRow.description, 'Расход');
 });
 
 
