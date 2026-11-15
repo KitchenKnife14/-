@@ -67,7 +67,7 @@ export default function TransactionsPage() {
     } catch (e) {
       if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
-      if (requestId === loadSequence.current) setLoading(false)
+      if (loadSequence.current.isCurrent(requestId)) setLoading(false)
     }
   }, [familyId, dateFrom, dateTo, range.start, range.end])
 
