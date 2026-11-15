@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { createRequestSequence } from '../lib/requestSequence'
 import { googleSheets } from '../lib/googleSheets'
 import { calculateRealizedTotals } from '../lib/realizedTotals'
 import type { Transaction, Category, Account } from '../lib/types'
@@ -16,7 +17,7 @@ export default function DashboardPage() {
   const [txs, setTxs] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
-  const loadSequence = useRef(0)
+  const loadSequence = useRef(createRequestSequence())
   const [now] = useState(currentMoscowDate)
   const [showAdd, setShowAdd] = useState(false)
   const [newTransactionType, setNewTransactionType] = useState<'expense' | 'income' | 'transfer'>('expense')
@@ -29,7 +30,7 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     if (!familyId) return
-    const requestId = ++loadSequence.current
+    const requestId = loadSequence.current.begin()
     setLoading(true)
     setError(null)
     try {
@@ -46,7 +47,7 @@ export default function DashboardPage() {
         googleSheets.from('categories').select('*').eq('family_id', familyId),
         googleSheets.from('accounts').select('*').eq('family_id', familyId),
       ])
-      if (requestId !== loadSequence.current) return
+      if (!loadSequence.current.isCurrent(requestId)) return
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
       if (accountRes.error) throw accountRes.error
@@ -54,7 +55,7 @@ export default function DashboardPage() {
       setCategories(catRes.data as Category[])
       setAccounts(accountRes.data as Account[])
     } catch (e) {
-      if (requestId === loadSequence.current) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
+      if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
       if (requestId === loadSequence.current) setLoading(false)
     }
@@ -62,7 +63,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void load()
-    return () => { loadSequence.current += 1 }
+    return () => { loadSequence.current.invalidate() }
   }, [load])
   useEffect(() => {
     if (!familyId) return
