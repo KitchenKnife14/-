@@ -3594,5 +3594,5 @@ HEAD до:
 
 - Усилена проверка успешного ответа Apps Script: `chat_id` теперь должен быть непустой строкой либо ненулевым безопасным целым числом; `text` — непустой строкой после trim. Это закрывает ещё один путь, где `chat_id: 0` или пробельный текст могли привести к HTTP 200 без фактической отправки сообщения.
 - Расширен malformed-envelope test: дополнительно проверяются нулевой chat ID и пустой/пробельный текст.
-- CI [43712727209 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43712727209) на HEAD `4e6eedc26ec44f2a489e3252ebfa442311a23b54`? Нет: run head SHA `9723fb84896abb9f96c3c3226392afcbcc63106a`; тестовый коммит `4e6eedc26ec44f2a489e3252ebfa442311a23b54` был предыдущим, а итоговый код HEAD — `9723fb84896abb9f96c3c3226392afcbcc63106a`. **281/281 regression tests**, build, preview smoke, dependency audit и Apps Script syntax checks прошли.
+- CI [43712727209 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43712727209) на HEAD `9723fb84896abb9f96c3c3226392afcbcc63106a`: **281/281 regression tests**, build, preview smoke, dependency audit и Apps Script syntax checks прошли.
 - Контрольные счётчики без изменений: **165/229 (72,1%)**, макроэтапы **4/12 (33,3%)**.
