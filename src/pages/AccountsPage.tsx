@@ -82,7 +82,7 @@ export default function AccountsPage() {
         const storage = window.localStorage
         const pendingKey = pendingMutationStorageKey('accounts', family.id, userId)
         const fingerprint = await fingerprintTransactionPayload(payload)
-        result = await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('accounts').insert({ ...payload, id }))
+        result = await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('accounts').insert({ ...payload, id }))
       }
       if (result.error) throw result.error
       setModalOpen(false)
