@@ -130,13 +130,14 @@ export function clearPendingTransaction(
   key: string,
   expectedId: string,
 ): void {
-  const raw = storage.getItem(key)
-  if (!raw) return
   try {
+    const raw = storage.getItem(key)
+    if (!raw) return
     const current = JSON.parse(raw) as Partial<PendingTransactionRecord>
     if (current.id === expectedId) storage.removeItem(key)
   } catch {
-    storage.removeItem(key)
+    // A failed cleanup must not turn a successful server write into a failed save.
+    // Keeping the old ID is safer: a retry can still resolve through backend idempotency.
   }
 }
 
