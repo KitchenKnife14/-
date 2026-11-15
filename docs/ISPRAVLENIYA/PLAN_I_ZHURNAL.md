@@ -851,9 +851,10 @@ HEAD до:
 
 ## Очередь ручных действий пользователя (не выполнять по ходу)
 
-- [ ] **M-01.** Когда будет готова тестовая матрица и подготовлен безопасный сценарий, предоставить URL отдельного тестового Apps Script Web App (`/exec`) и подтвердить, что он подключён только к тестовой Google Sheet. Основной Production URL не подходит. До этого момента можно продолжать статический аудит и подготовку тестов; сейчас действие не блокирует работу.
-- [ ] **M-02.** Если тестовый Apps Script проект ещё не создан, создать его и отдельную тестовую таблицу. Не копировать туда реальные семейные операции без отдельного согласования; допустима пустая схема и синтетические тестовые данные. Попросить пользователя сделать это только когда будет готова точная пошаговая инструкция.
+- [x] **M-01.** TEST Apps Script Web App URL уже задан в Script Properties как `CONCURRENT_ROW_TEST_WEB_APP_URL`; диагностический вывод подтвердил отдельный TEST-проект (Script ID suffix `KMTZTF`), а runtime-пробы используют allowlist TEST Script/Spreadsheet. URL не требуется повторно присылать в чат.
+- [x] **M-02.** Отдельный TEST Apps Script проект и TEST Google Sheet созданы; подтверждены `GAS_TEST_ALLOWED_SPREADSHEET_ID`, `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID`, timezone `Europe/Moscow` и тестовая схема. Реальные семейные операции не копируются.
 - [ ] **M-03.** Ручные настройки Apps Script / Google Sheet / Vercel / Telegram для выпуска собрать в один финальный чек-лист после прохождения этапов 4–11. Не просить выполнять их по отдельности заранее.
+- [ ] **M-04.** Одним пакетом перенести актуальный `google-apps-script/Code.gs` и `tests/gas/RuntimeAcceptanceBundle.gs` в TEST Apps Script, оставить `IsolatedTestGuard.gs`, обновить TEST deployment и запустить `runIsolatedRuntimeAcceptanceBatch()`. Выдать точные пошаговые действия только после завершения подготовки тестовой матрицы; Production не использовать.
 
 **Правило:** новые ручные действия сразу добавляются сюда с ID M-xx. В каждом отчёте сообщать, появились ли новые действия, но не просить пользователя выполнять накопленный список до финального пакетного сообщения, кроме случая, когда отсутствие конкретного действия делает дальнейшую работу невозможной.
 
@@ -3596,3 +3597,8 @@ HEAD до:
 - Расширен malformed-envelope test: дополнительно проверяются нулевой chat ID и пустой/пробельный текст.
 - CI [43712727209 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43712727209) на HEAD `9723fb84896abb9f96c3c3226392afcbcc63106a`: **281/281 regression tests**, build, preview smoke, dependency audit и Apps Script syntax checks прошли.
 - Контрольные счётчики без изменений: **165/229 (72,1%)**, макроэтапы **4/12 (33,3%)**.
+### 2026-11-15 — актуализация ручной очереди TEST GAS
+
+- Убраны из будущих инструкций два уже выполненных действия: TEST Web App URL хранится в Script Properties, отдельный TEST Apps Script и TEST spreadsheet существуют; это подтверждается ранее выполненными изолированными runtime-тестами и диагностикой TEST Script ID suffix `KMTZTF` / spreadsheet suffix `bqT8qQ`.
+- Вместо повторного запроса URL оставлено одно объединённое действие M-04: обновить TEST Code.gs + single-file RuntimeAcceptanceBundle, сохранить IsolatedTestGuard, обновить TEST deployment и выполнить `runIsolatedRuntimeAcceptanceBatch()` один раз.
+- M-04 не просится сейчас: сначала завершается подготовка тестовой матрицы. Production GAS, таблица, Vercel Production и Telegram webhook не используются.
