@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { createRequestSequence } from '../lib/requestSequence'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
 import type { Transaction, Category, RecurringPayment } from '../lib/types'
@@ -19,7 +20,7 @@ export default function CalendarPage() {
   const [txs, setTxs] = useState<Transaction[]>([])
   const [recurring, setRecurring] = useState<RecurringPayment[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const loadSequence = useRef(0)
+  const loadSequence = useRef(createRequestSequence())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('month')
@@ -33,7 +34,7 @@ export default function CalendarPage() {
 
   const load = useCallback(async () => {
     if (!familyId) return
-    const requestId = ++loadSequence.current
+    const requestId = loadSequence.current.begin()
     setLoading(true); setError(null)
     try {
       const categoryMigration = ensureSupplementalCategories(familyId)
@@ -43,16 +44,16 @@ export default function CalendarPage() {
         googleSheets.from('recurring_payments').select('*').eq('family_id', familyId).eq('active', true),
         googleSheets.from('categories').select('*').eq('family_id', familyId),
       ])
-      if (requestId !== loadSequence.current) return
+      if (!loadSequence.current.isCurrent(requestId)) return
       if (tRes.error) throw tRes.error; if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setRecurring(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[])
-    } catch (e) { if (requestId === loadSequence.current) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
+    } catch (e) { if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { if (requestId === loadSequence.current) setLoading(false) }
   }, [familyId, range.start, range.end])
 
   useEffect(() => {
     void load()
-    return () => { loadSequence.current += 1 }
+    return () => { loadSequence.current.invalidate() }
   }, [load])
   useEffect(() => {
     if (!familyId) return
