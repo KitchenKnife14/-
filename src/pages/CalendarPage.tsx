@@ -48,7 +48,7 @@ export default function CalendarPage() {
       if (tRes.error) throw tRes.error; if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setRecurring(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[])
     } catch (e) { if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
-    finally { if (requestId === loadSequence.current) setLoading(false) }
+    finally { if (loadSequence.current.isCurrent(requestId)) setLoading(false) }
   }, [familyId, range.start, range.end])
 
   useEffect(() => {
