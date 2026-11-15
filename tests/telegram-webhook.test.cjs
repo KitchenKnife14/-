@@ -154,6 +154,8 @@ test('webhook rejects malformed Apps Script response envelopes instead of silent
   for (const payload of [
     {},
     { data: { skip: false }, error: null },
+    { data: { chat_id: 0, text: 'Ответ' }, error: null },
+    { data: { chat_id: 123, text: '   ' }, error: null },
     { data: null, error: null },
     { data: null, error: true },
     { data: null, error: { message: 42 } },
