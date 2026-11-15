@@ -6,7 +6,7 @@ import type { Budget, Category, Transaction } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
 import Modal from '../components/Modal'
-import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
 import { Plus, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react'
 
 export default function BudgetsPage() {
@@ -164,10 +164,7 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, userId, mont
         const storage = window.localStorage
         const pendingKey = pendingMutationStorageKey('budgets', familyId, userId)
         const fingerprint = await fingerprintTransactionPayload(payload)
-        const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
-        const { error: err } = await googleSheets.from('budgets').insert({ ...payload, id })
-        if (err) throw err
-        clearPendingMutation(storage, pendingKey, id)
+        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('budgets').insert({ ...payload, id }))
       }
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
