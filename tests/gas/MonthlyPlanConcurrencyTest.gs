@@ -85,7 +85,7 @@ function runMonthlyPlanConcurrencyTest() {
     var key={family_id:familyId,month_date:month,category_id:categoryId,type:'expense'};
     var inserted=monthlyPlanPost_({
       action:'query',token:tokenA,table:'monthly_plans',mode:'upsert',
-      onConflict:'family_id,month_date,category_id,type',returning:true,
+      onConflict:'family_id,month_date,category_id,type',
       values:Object.assign({id:planId,planned_kopecks:10000,note:'Исходный TEST план'},key)
     },'insert monthly plan');
     if(inserted.error||!Array.isArray(inserted.data)||inserted.data.length!==1||
