@@ -1415,6 +1415,19 @@ function telegramCodeHash_(code){
   const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(code).trim().toUpperCase(),Utilities.Charset.UTF_8);
   return Utilities.base64Encode(digest).split('+').join('-').split('/').join('_').replace(/=+$/,'');
 }
+function telegramUpdateFingerprint_(update){
+  function canonical_(value){
+    if(Array.isArray(value))return value.map(canonical_);
+    if(value&&typeof value==='object'){
+      const result={};
+      Object.keys(value).sort().forEach(key=>{result[key]=canonical_(value[key]);});
+      return result;
+    }
+    return value;
+  }
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(canonical_(update)),Utilities.Charset.UTF_8);
+  return Utilities.base64Encode(digest).split('+').join('-').split('/').join('_').replace(/=+$/,'');
+}
 function telegramWebhook_(req){
   const props=PropertiesService.getScriptProperties();
   const expected=props.getProperty('TELEGRAM_BACKEND_SECRET');
@@ -1428,9 +1441,22 @@ function telegramWebhook_(req){
     props.setProperty('telegram:last_prune',String(Date.now()));
   }
   const updateKey=updateId?'telegram:update:'+updateId:'';
+  const updateFingerprint=updateKey?telegramUpdateFingerprint_(update):'';
   if(updateKey){
     const saved=props.getProperty(updateKey);
-    if(saved){try{const cached=JSON.parse(saved);if(cached.expires>Date.now())return cached.reply;props.deleteProperty(updateKey);}catch(_){props.deleteProperty(updateKey);}}
+    if(saved){try{
+      const cached=JSON.parse(saved);
+      if(cached.expires>Date.now()){
+        // A Telegram update_id identifies one immutable update. Never replay a
+        // cached response for a different payload that reuses the same ID.
+        if(cached.fingerprint&&cached.fingerprint!==updateFingerprint)throw new Error('Telegram update_id collision: payload mismatch.');
+        return cached.reply;
+      }
+      props.deleteProperty(updateKey);
+    }catch(error){
+      if(String(error&&error.message||error).indexOf('Telegram update_id collision:')===0)throw error;
+      props.deleteProperty(updateKey);
+    }}
   }
   const message=update.message;
   if(!message||!message.chat||!message.from||String(message.chat.type)!=='private')return {skip:true};
@@ -1570,7 +1596,7 @@ function telegramWebhook_(req){
   if(updateKey){
     // The update cache is an optimization, not the only idempotency guard:
     // transaction IDs, link replay checks and unlink deletion make side effects safe on retries.
-    try{props.setProperty(updateKey,JSON.stringify({expires:Date.now()+TELEGRAM_UPDATE_TTL_MS,reply}));}catch(_){}
+    try{props.setProperty(updateKey,JSON.stringify({expires:Date.now()+TELEGRAM_UPDATE_TTL_MS,fingerprint:updateFingerprint,reply}));}catch(_){}
   }
   return reply;
 }
