@@ -3645,3 +3645,10 @@ HEAD до:
 - После исправления двух неполных проверок `isCurrent()` CI [43715884702 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43715884702): **292/292 regression tests**, typecheck/build, dependency audit, preview smoke, Playwright Chromium auth/mobile/desktop и Apps Script syntax/manifest checks прошли.
 - Детальный план остаётся **170/233 = 73,0%**, 63 открытых критерия; макроэтапы **4/12 = 33,3%**. Этап 4 не закрыт: нужны финансовые E2E и live GAS acceptance.
 - Изменения только в `ispravleniya`; Production, `main`, рабочая таблица, основной GAS, Vercel Production и опубликованный Telegram webhook не затронуты.
+### 2026-11-15 — уникальные якоря алфавитной навигации категорий
+
+- Исправлен `CategoriesPage.tsx`: раньше каждый корневой раздел с одинаковой первой буквой получал одинаковый DOM `id` (`category-letter-А` и т. п.). Навигация попадала в первый элемент, но документ содержал дублирующиеся ID.
+- Теперь якорь присваивается только первому корневому элементу каждой буквы; остальные карточки не создают дубликаты. Кнопки букв и клавиатурный переход продолжают использовать тот же уникальный anchor.
+- Добавлен regression test на один anchor на букву и согласованность цели навигации. CI [43716124152 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43716124152): **292/292 regression tests**, build, dependency audit, Vite preview smoke, Playwright Chromium auth/responsive smoke и Apps Script syntax/manifest checks прошли.
+- Прогресс без изменения: **170/233 = 73,0%**, макроэтапы **4/12 = 33,3%**. Изменение исправляет UI-дефект, но не закрывает новый критерий плана.
+- Изменения только в `ispravleniya`; Production и реальные финансовые данные не затрагивались.
