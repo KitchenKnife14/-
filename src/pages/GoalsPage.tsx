@@ -119,7 +119,7 @@ export default function GoalsPage() {
                 : null
             return (
               <div key={g.id}>
-                {sectionLabel && <div className={index === 0 ? 'pb-1' : 'pb-1 pt-3'} + ' text-xs font-semibold uppercase tracking-wide text-slate-500'>{sectionLabel}</div>}
+                {sectionLabel && <div className={`text-xs font-semibold uppercase tracking-wide text-slate-500 ${index === 0 ? 'pb-1' : 'pb-1 pt-3'}`}>{sectionLabel}</div>}
                 <div className={`card ${g.status === 'done' || g.status === 'cancelled' ? 'opacity-60' : ''}`}>
                 <div className="flex items-start gap-3">
                   <div className="text-xl w-9 h-9 rounded-full bg-primary-50 flex items-center justify-center flex-shrink-0"><Target size={16} className="text-primary-600" /></div>
