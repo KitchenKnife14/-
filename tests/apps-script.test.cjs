@@ -1418,7 +1418,26 @@ test('strings beginning with equals are escaped before writing to Sheets', () =>
   assert.equal(h.context.safeCell_(null), null);
 });
 
-test('v3 creates exactly 82 default categories with valid parent links',()=>{const h=makeHarness(),u=h.signup('cat-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Категории'}).data,c=h.call({action:'query',token:u.token,table:'categories',mode:'select'}).data,p=c.filter(x=>!x.parent_id),ch=c.filter(x=>x.parent_id);assert.equal(c.length,82);assert.equal(p.length,13);assert.equal(ch.length,69);const ids=new Set(p.map(x=>x.id));assert.ok(ch.every(x=>ids.has(x.parent_id)));assert.ok(c.every(x=>x.family_id===f.id));});
+test('new families receive all 87 default categories including cigarettes and credit subcategories',()=>{
+  const h=makeHarness(),u=h.signup('cat-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Категории'}).data;
+  const categories=h.call({action:'query',token:u.token,table:'categories',mode:'select'}).data;
+  const parents=categories.filter(x=>!x.parent_id),children=categories.filter(x=>x.parent_id);
+  assert.equal(categories.length,87);
+  assert.equal(parents.length,15);
+  assert.equal(children.length,72);
+  const parentIds=new Set(parents.map(x=>x.id));
+  assert.ok(children.every(x=>parentIds.has(x.parent_id)));
+  assert.ok(categories.every(x=>x.family_id===f.id));
+  const cigarettes=parents.find(x=>x.name==='Сигареты');
+  const credits=parents.find(x=>x.name==='Кредиты');
+  assert.ok(cigarettes);
+  assert.equal(cigarettes.kind,'expense');
+  assert.ok(credits);
+  assert.equal(credits.kind,'expense');
+  assert.deepEqual(children.filter(x=>x.parent_id===credits.id).map(x=>x.name).sort(),[
+    'Комиссии по кредиту','Погашение основного долга','Проценты по кредиту'
+  ]);
+});
 test('v3 get_my_context returns profile, memberships and first family',()=>{const h=makeHarness(),u=h.signup('ctx-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Контекст',display_name:'Новое имя'}).data,r=h.call({action:'rpc',token:u.token,name:'get_my_context',params:{}});assert.equal(r.error,null,r.error?.message);assert.equal(r.data.profile.display_name,'Новое имя');assert.equal(r.data.members.length,1);assert.equal(r.data.family.id,f.id);});
 test('v3 create_family and join_family_by_invite save display names',()=>{const h=makeHarness(),o=h.signup('owner-v3@example.com'),p=h.signup('partner-v3@example.com'),f=h.call({action:'rpc',token:o.token,name:'create_family',params:{p_name:'Семья v3',p_display_name:'Владелец'}});assert.equal(f.error,null,f.error?.message);const j=h.call({action:'rpc',token:p.token,name:'join_family_by_invite',params:{p_invite_code:f.data.invite_code,p_display_name:'Партнёр'}});assert.equal(j.error,null,j.error?.message);const c=h.call({action:'rpc',token:p.token,name:'get_my_context',params:{}});assert.equal(c.data.profile.display_name,'Партнёр');assert.equal(c.data.family.id,f.data.id);});
 test('v3 batch isolates errors and preserves request order',()=>{const h=makeHarness(),u=h.signup('batch-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Пакет'}).data,r=h.call({action:'batch',token:u.token,requests:[{action:'query',table:'families',mode:'select'},{action:'rpc',name:'get_my_context',params:{}},{action:'unknown_action'}]});assert.equal(r.error,null,r.error?.message);assert.equal(r.data.length,3);assert.equal(r.data[0].data[0].id,f.id);assert.equal(r.data[1].data.family.id,f.id);assert.match(r.data[2].error.message,/Неизвестное действие/);});
