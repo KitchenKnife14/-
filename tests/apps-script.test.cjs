@@ -4311,6 +4311,7 @@ test('Telegram parses fractional ruble amounts exactly and rejects unsupported p
     [7802, 'Проезд 45,1 рублей', 4510],
     [7803, 'Кофе 45.10 рублей', 4510],
     [7804, 'Покупка 0,01 ₽', 1],
+    [7809, 'Покупка 10000000000 рублей', 1000000000000],
   ]) {
     const result = h.call({
       action: 'telegramWebhook', telegramSecret: 'fractional-money-secret-0123456789abcdef',
@@ -4327,6 +4328,7 @@ test('Telegram parses fractional ruble amounts exactly and rejects unsupported p
     [7806, 'Покупка 45.123 рублей'],
     [7807, 'Покупка 0 рублей'],
     [7808, 'Покупка -45 рублей'],
+    [7810, 'Покупка 10000000000,01 рублей'],
   ]) {
     const result = h.call({
       action: 'telegramWebhook', telegramSecret: 'fractional-money-secret-0123456789abcdef',
@@ -4336,8 +4338,8 @@ test('Telegram parses fractional ruble amounts exactly and rejects unsupported p
   }
 
   const txs = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data;
-  assert.equal(txs.length, 3);
-  assert.deepEqual(txs.map(row => row.amount_kopecks).sort((a,b) => a-b), [1, 4510, 4510]);
+  assert.equal(txs.length, 4);
+  assert.deepEqual(txs.map(row => row.amount_kopecks).sort((a,b) => a-b), [1, 4510, 4510, 1000000000000]);
 });
 
 
