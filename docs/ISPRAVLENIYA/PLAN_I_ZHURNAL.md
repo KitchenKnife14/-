@@ -336,7 +336,8 @@
 - [x] Добавить интеграционные проверки Apps Script на отдельной тестовой таблице. Реализованы self-contained TEST-only пробы и единый RuntimeAcceptanceBundle; фактический запуск остаётся отдельной ручной приёмкой этапа 5.
 - [x] Добавить concurrency tests для критических операций и Telegram. Добавлены signup/join, transaction update/insert, goal contribution, Telegram replay и read consistency probes; runtime execution учитывается отдельно.
 - [x] Добавить browser smoke в CI: экран входа/регистрации, связи label/control, минимальная длина пароля и отсутствие горизонтального переполнения на viewport 390×844 и 1280×900; Playwright Chromium PASS. Полные финансовые E2E-сценарии остаются отдельным открытым критерием.
-- [ ] Добавить браузерные E2E: вход, создание/изменение/удаление операции, перевод, бюджеты, цели, Telegram linking.
+- [x] Добавить финансовые браузерные E2E: создание, изменение и удаление операции; перевод между счетами; создание бюджета и финансовой цели. Сценарии проходят через React UI в Chromium с изолированным in-memory backend fixture; это проверяет frontend/API contract, но не заменяет live TEST GAS.
+- [ ] Добавить браузерные E2E реального входа и Telegram linking; финансовые сценарии с настоящим TEST Apps Script остаются частью отдельной runtime-приёмки этапа 5.
 - [x] Добавить dependency audit/security scan в CI с понятной политикой блокировки.
 - [x] Сохранить текущие регрессионные тесты; не удалять тест ради прохождения сборки.
 - [x] Записывать версии Node/npm и результаты CI.
@@ -3659,3 +3660,11 @@ HEAD до:
 - CI [43716124152 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43716124152): **292/292 regression tests**, typecheck/build, dependency audit, Vite preview smoke, Playwright Chromium auth/responsive smoke, Apps Script syntax checks и manifest validation прошли.
 - Прогресс остаётся **170/233 = 73,0%**, макроэтапы **4/12 = 33,3%**. Это дополнительный UI hotfix внутри текущего этапа, без закрытия нового критерия.
 - Изменения только в `ispravleniya`; Production и реальные финансовые данные не затронуты.
+### 2026-11-15 — финансовые браузерные E2E-сценарии
+
+- Добавлен `tests/financial-browser-e2e.cjs`: Playwright запускает production build preview и проходит реальные React-страницы с заранее авторизованной тестовой сессией.
+- Backend изолирован в памяти тестового процесса и реализует контракт batch/query/RPC; реальные Google Sheets, TEST GAS и Production не вызываются.
+- Проверены: создание расхода с сохранением 123,45 ₽ как 12345 копеек; редактирование существующего расхода; создание перевода с разными source/destination accounts и без категории; удаление операции; создание месячного бюджета; создание финансовой цели через `create_goal_with_purchase` RPC.
+- Добавлен отдельный CI шаг `Financial CRUD and transfer browser E2E`. CI [43725423666 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43725423666) на HEAD `7e150fad74a4b08cac0ece7490b36cf676153401`: финансовый E2E, прежний auth/responsive smoke, regression suite, typecheck/build, dependency audit, Vite preview smoke, Apps Script syntax checks и manifest validation прошли.
+- FC-17 разбит на два проверяемых критерия: финансовый UI E2E закрыт; реальные browser E2E входа/Telegram linking и live TEST GAS остаются открытыми. Детальный checklist: **171/234 = 73,1%**, открыто 63. Макроэтапы остаются **4/12 = 33,3%**; этап 4/5 не закрывается до оставшейся приёмки.
+- Все изменения только в `ispravleniya`; `main`, Production, основная Google Sheet, основной GAS, Vercel Production и действующий Telegram webhook не затронуты.
