@@ -84,8 +84,10 @@ GitHub CI проверяет синтаксис `Code.gs`, `IsolatedTestGuard.gs
 - Не менять Script Properties с реальными секретами ради теста; probes должны самостоятельно временно подменять только тестируемое свойство и восстанавливать его в `finally`.
 
 
-## Recovery after the 2026-11-15 monthly-plan cleanup helper error
+## Recovery after the latest monthly-plan auth cleanup failure
 
-The latest batch passed Telegram duplicate/retry and optimistic read/write consistency. The monthly-plan test stopped in cleanup because the copied runtime bundle called an undefined `removeRows` helper. The maintained standalone module already uses `monthlyPlanRemoveRows_`; the bundle is now aligned with it.
+The latest TEST batch passed Telegram duplicate/retry and optimistic read/write consistency. The monthly-plan probe stopped during cleanup: the plan/family rows were removed, but two synthetic auth rows remained. This does not establish whether the concurrent stale-update assertion passed; the test did not complete. The transaction-insert probe was not run.
 
-In TEST GAS, replace only `RuntimeAcceptanceBundle.gs` from branch `ispravleniya`, save, and run `cleanupLatestFailedMonthlyPlanFixture()`. This recovery helper is restricted to the exact synthetic fixture suffix `16169d60785f4b9981640d68f142f927` and the isolated TEST guard. Confirm `result=PASS`, `cleanup=PASS`, and all `verified_remaining` flags are false. Then run `runIsolatedRuntimeAcceptanceBatch()`. Do not run the batch before cleanup is confirmed. No Code.gs change or redeployment is required.
+The bundle now uses `monthlyPlanDeleteSyntheticAuthRows_()`, which scans the live `_auth` email column immediately before deleting only the exact synthetic emails, rather than relying on previously captured auth row numbers. A recovery function is restricted to fixture suffix `c4c8cab147c74f1cb9d87540ef684349`.
+
+In TEST GAS, replace only `RuntimeAcceptanceBundle.gs` from branch `ispravleniya`, save, and run `cleanupLatestFailedMonthlyPlanFixture()`. Confirm `result=PASS`, `cleanup=PASS`, and every `verified_remaining` flag is false. Only then run `runIsolatedRuntimeAcceptanceBatch()`. Do not change `Code.gs`, the isolated guard, or the deployment.
