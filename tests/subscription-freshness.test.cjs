@@ -23,3 +23,12 @@ for (const [file, dependencies] of cases) {
     assert.doesNotMatch(source, /\(\) => load\(\)/)
   })
 }
+
+
+test('goal section headings follow the filtered visible order', () => {
+  const source = fs.readFileSync(path.join(root, 'src/pages', 'GoalsPage.tsx'), 'utf8')
+  assert.match(source, /const visibleSortedGoals = sortedGoals\.filter\(/)
+  assert.match(source, /visibleSortedGoals\.map\(\(g, index\) => \{/)
+  assert.match(source, /visibleSortedGoals\[index - 1\]\.status === 'active'/)
+  assert.doesNotMatch(source, /sortedGoals\[index - 1\]\.status === 'active'/)
+})
