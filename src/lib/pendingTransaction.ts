@@ -20,6 +20,28 @@ export interface KeyValueStorage {
   removeItem(key: string): void
 }
 
+const volatilePendingValues = new Map<string, string>()
+const volatilePendingStorage: KeyValueStorage = {
+  getItem(key) { return volatilePendingValues.get(key) ?? null },
+  setItem(key, value) { volatilePendingValues.set(key, value) },
+  removeItem(key) { volatilePendingValues.delete(key) },
+}
+
+/** Uses persistent browser storage when writable; otherwise keeps IDs in memory for this page session. */
+export function getPendingStorage(
+  getPersistentStorage: () => KeyValueStorage = () => window.localStorage,
+): KeyValueStorage {
+  try {
+    const storage = getPersistentStorage()
+    const probe = 'budget:pending-storage-probe'
+    storage.setItem(probe, '1')
+    storage.removeItem(probe)
+    return storage
+  } catch {
+    return volatilePendingStorage
+  }
+}
+
 export function pendingTransactionStorageKey(familyId: string, userId: string): string {
   return `budget:pending-transaction:v1:${encodeURIComponent(familyId)}:${encodeURIComponent(userId)}`
 }
