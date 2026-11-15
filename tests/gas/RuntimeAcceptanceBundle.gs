@@ -771,13 +771,13 @@ function runMonthlyPlanConcurrencyTest() {
 
         monthlyPlanRemoveRows_('monthly_plans',function(row){return String(row.id)===planId;});
         if(familyId) {
-          monthlyPlanRemoveRows_('categories',function(row){return String(row.family_id)===familyId;});
-          monthlyPlanRemoveRows_('accounts',function(row){return String(row.family_id)===familyId;});
-          monthlyPlanRemoveRows_('family_members',function(row){return String(row.family_id)===familyId;});
-          monthlyPlanRemoveRows_('families',function(row){return String(row.id)===familyId;});
+          removeRows('categories',function(row){return String(row.family_id)===familyId;});
+          removeRows('accounts',function(row){return String(row.family_id)===familyId;});
+          removeRows('family_members',function(row){return String(row.family_id)===familyId;});
+          removeRows('families',function(row){return String(row.id)===familyId;});
         }
         [userA,userB].filter(Boolean).forEach(function(uid) {
-          monthlyPlanRemoveRows_('profiles',function(row){return String(row.id)===uid;});
+          removeRows('profiles',function(row){return String(row.id)===uid;});
         });
         authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
 
@@ -1135,6 +1135,7 @@ function cleanupFailedMonthlyPlanFixture() {
   var url=String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL')||'').trim();
   var confirmation=String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM')||'');
   assertIsolatedGasTestEnvironment_(props,confirmation,url);
+  function removeRows(table,predicate){var matches=rows_(table).filter(predicate);if(matches.length)deleteRows_(table,matches);}
   var suffix='c9b44a7e653b4b90b366d4bc9a710d83';
   var planId='monthrace_'+suffix;
   var emailA='monthly-plan-a+'+suffix+'@example.test';
