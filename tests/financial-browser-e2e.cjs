@@ -213,7 +213,7 @@ async function main() {
     const transferCard = page.locator('.card').filter({ hasText: 'E2E перевод' }).first()
     await transferCard.getByRole('button', { name: 'Удалить' }).click()
     await page.getByRole('heading', { name: 'Удалить операцию?' }).waitFor()
-    await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+    await page.locator('button.btn-danger').click()
     await page.getByText('E2E перевод', { exact: true }).waitFor({ state: 'detached' })
     assert.equal(state.transactions.length, 1)
 
