@@ -6,7 +6,7 @@ import type { RecurringPayment, Category, Account, FamilyMember, Profile } from 
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
-import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 import { Plus, Check, Pause, Play, Trash2, Repeat } from 'lucide-react'
 
 const FREQ_LABELS: Record<string, string> = { daily: 'Ежедневно', weekly: 'Еженедельно', monthly: 'Ежемесячно', yearly: 'Ежегодно', custom: 'По интервалу' }
@@ -169,7 +169,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, members, 
         frequency, custom_interval_days: frequency === 'custom' ? parseInt(customDays) : null,
         next_due_date: startDate, remind: true, active: true, created_by: userId,
       }
-      const storage = window.localStorage
+      const storage = getPendingStorage()
       const pendingKey = pendingMutationStorageKey('recurring_payments', familyId, userId)
       const fingerprint = await fingerprintTransactionPayload(payload)
       await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('recurring_payments').insert({ ...payload, id }))
