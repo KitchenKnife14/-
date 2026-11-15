@@ -96,10 +96,12 @@ export default function CategoriesPage() {
           ))}
         </nav>
         <div className="space-y-3">
-          {roots.map((root) => {
+          {roots.map((root, rootIndex) => {
+            const letter = root.name.trim().charAt(0).toLocaleUpperCase('ru-RU')
+            const isFirstForLetter = roots.findIndex((item) => item.name.trim().charAt(0).toLocaleUpperCase('ru-RU') === letter) === rootIndex
             const kids = childrenOf(root.id)
             return (
-              <div key={root.id} id={`category-letter-${root.name.trim().charAt(0).toLocaleUpperCase('ru-RU')}`} className="card scroll-mt-20">
+              <div key={root.id} id={isFirstForLetter ? `category-letter-${letter}` : undefined} className="card scroll-mt-20">
                 <div className="flex items-center gap-3">
                   <div className="text-xl w-9 h-9 rounded-full flex items-center justify-center" style={{ background: root.color + '22' }}>{root.icon}</div>
                   <div className="flex-1">
