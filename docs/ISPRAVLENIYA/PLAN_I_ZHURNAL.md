@@ -1,6 +1,6 @@
 # Family Cash — план исправлений и журнал работ
 
-> Статус: план и исправления ведутся в рабочей ветке ispravleniya; Production не затрагивался. Текущий контрольный прогресс активного плана: 168 из 232 критериев закрыто (72.4%); 64 открыто. Методика: учитываются действующие разделы этапов 0–6, отдельный UX-01 и все четыре критерия FC-14; исторические чекбоксы в журнале, архивные инструкции и очередь ручных действий в знаменатель не входят. Это прогресс плана стабилизации, а не процент готовности приложения.
+> Статус: план и исправления ведутся в рабочей ветке ispravleniya; Production не затрагивался. Текущий контрольный прогресс активного плана: 169 из 233 критериев закрыто (72.5%); 64 открыто. Методика: учитываются действующие разделы этапов 0–6, отдельный UX-01 и все четыре критерия FC-14; исторические чекбоксы в журнале, архивные инструкции и очередь ручных действий в знаменатель не входят. Это прогресс плана стабилизации, а не процент готовности приложения.
 > Дата фиксации плана: 2026-11-09.
 > Рабочая ветка: `ispravleniya`.
 > Базовый Production-коммит: `a7f105df927a54fe7351fc928b896fe473714386`.
@@ -335,6 +335,7 @@
 - [x] Добавить тесты API contract для frontend adapter.
 - [x] Добавить интеграционные проверки Apps Script на отдельной тестовой таблице. Реализованы self-contained TEST-only пробы и единый RuntimeAcceptanceBundle; фактический запуск остаётся отдельной ручной приёмкой этапа 5.
 - [x] Добавить concurrency tests для критических операций и Telegram. Добавлены signup/join, transaction update/insert, goal contribution, Telegram replay и read consistency probes; runtime execution учитывается отдельно.
+- [x] Добавить browser smoke в CI: экран входа/регистрации, связи label/control, минимальная длина пароля и отсутствие горизонтального переполнения на viewport 390×844 и 1280×900; Playwright Chromium PASS. Полные финансовые E2E-сценарии остаются отдельным открытым критерием.
 - [ ] Добавить браузерные E2E: вход, создание/изменение/удаление операции, перевод, бюджеты, цели, Telegram linking.
 - [x] Добавить dependency audit/security scan в CI с понятной политикой блокировки.
 - [x] Сохранить текущие регрессионные тесты; не удалять тест ради прохождения сборки.
@@ -838,7 +839,7 @@ HEAD до:
 | 1 | Восстановление исходников, инвентаризация проекта и первичный реестр аудита | Завершён |
 | 2 | Статический аудит backend: денежная целостность, связи, категории, повторы записей | Завершён на уровне статического анализа и CI: FC-01/02/04/06/13/20 исправлены и покрыты регрессиями; живые Apps Script runtime-проверки вынесены в этап 5 |
 | 3 | Аудит Telegram: парсер, повторы webhook, баланс и сценарии ошибок | Завершён: parser punctuation, точные суммы/границы, replay fingerprint, timeout и retry-сценарии покрыты CI. Зафиксирован at-least-once контракт ответа: редкий дубль подтверждения допустим, потеря подтверждения нежелательнее; exactly-once Bot API не гарантируется. Живой TEST GAS replay относится к этапу 5 |
-| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 282/282 regression tests проходят CI; TEST-only GAS integration/concurrency probes добавлены и собраны в единый bundle. Поведенческие тесты целей, Telegram parser boundary и категорий расширены. Остались browser E2E и live GAS acceptance |
+| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 282/282 regression tests проходят CI; Playwright Chromium smoke auth/mobile/desktop PASS; TEST-only GAS integration/concurrency probes добавлены и собраны в единый bundle. Остались полные финансовые browser E2E и live GAS acceptance |
 | 5 | Изолированная динамическая проверка в тестовом Apps Script и тестовой таблице | Подготовлены четыре self-contained runtime-пробы; отдельно уже PASS signup concurrency, stale transaction update и goal contribution retry. Единый acceptance batch с Telegram replay, optimistic read/write, monthly-plan и transaction insert ещё не запускался |
 | 6 | Исправление P1 backend: строгие деньги, категории, ссылки, идемпотентность | Завершён на уровне кода ветки и CI: FC-01/02/04/06/13/20 закрыты regression suite; live GAS runtime-приёмка учитывается отдельно на этапе 5 |
 | 7 | Исправление Telegram и повторной доставки webhook | В работе: parser punctuation, fingerprint, timeout/retry, строгая проверка backend response envelope и маппинг сигарет/кредитных расходов исправлены на ветке и покрыты CI; остаётся выполнить live TEST GAS replay. Неоднозначный sendMessage принят как at-least-once: возможен повтор текста, но финансовая запись защищена от дубля |
@@ -3612,3 +3613,10 @@ HEAD до:
 - CI [43713493843 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43713493843) на HEAD `c640c683187a562b3306ae9909dd5dc5520fb240`: **282/282 regression tests**, TypeScript/production build, preview smoke, dependency audit, Apps Script syntax checks и manifest validation прошли.
 - В активный checklist добавлен и закрыт один новый функциональный критерий по supplemental category seed/migration/Telegram mapping. Пересчёт по действующим разделам: этапы 0–6 — 154/215; UX-01 — 10/13; FC-14 — 4/4. Итого **168/232 = 72,4%**, открыто 64. Макроэтапы остаются **4/12 = 33,3%**.
 - Все изменения только в `ispravleniya`; существующие строки пользовательской таблицы не мигрировались и не менялись. Production GAS, основная Google Sheet, Vercel Production и Telegram webhook не затронуты.
+### 2026-11-15 — первый Playwright browser smoke в CI
+
+- Добавлен `tests/browser-e2e.cjs`: запускает production preview, открывает Chromium на viewport 390×844, проверяет страницу входа, доступные label/control, переключение вход/регистрация, HTML-ограничение пароля в 15 символов и отсутствие горизонтального переполнения; повторяет проверку на desktop 1280×900.
+- В CI добавлены установка Playwright Chromium и запуск browser smoke. Полные сценарии с реальным backend (вход, CRUD операций, перевод, бюджеты, цели, Telegram linking) не подменяются этим smoke и остаются открытыми.
+- CI [43713887904 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43713887904) на HEAD `4f6fd24392f607da863c40a09f2b95e4b6cfc8be`: browser smoke **PASS**; мобильная ширина viewport/document/body = 390/390/390, desktop = 1280/1280/1280; **282/282 regression tests**, build, preview smoke, dependency audit и Apps Script syntax checks прошли.
+- В FC-17 закрыт один отдельный критерий по browser smoke. Контрольный прогресс: этапы 0–6 — 155/216; UX-01 — 10/13; FC-14 — 4/4. Итого **169/233 = 72,5%**, открыто 64. Макроэтапы остаются **4/12 = 33,3%**; этап 4 не закрыт до полного финансового E2E и live GAS acceptance.
+- Изменения только в `ispravleniya`; production и реальные финансовые данные не затронуты.
