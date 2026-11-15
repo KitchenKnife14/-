@@ -31,14 +31,48 @@ const volatilePendingStorage: KeyValueStorage = {
 export function getPendingStorage(
   getPersistentStorage: () => KeyValueStorage = () => window.localStorage,
 ): KeyValueStorage {
+  let persistent: KeyValueStorage
   try {
-    const storage = getPersistentStorage()
-    const probe = 'budget:pending-storage-probe'
-    storage.setItem(probe, '1')
-    storage.removeItem(probe)
-    return storage
+    persistent = getPersistentStorage()
   } catch {
     return volatilePendingStorage
+  }
+  let useVolatile = false
+  return {
+    getItem(key) {
+      if (useVolatile) return volatilePendingStorage.getItem(key)
+      try {
+        return persistent.getItem(key)
+      } catch {
+        useVolatile = true
+        return volatilePendingStorage.getItem(key)
+      }
+    },
+    setItem(key, value) {
+      if (useVolatile) {
+        volatilePendingStorage.setItem(key, value)
+        return
+      }
+      try {
+        persistent.setItem(key, value)
+      } catch {
+        // getOrCreate reads first; if that read succeeded and there was no record,
+        // falling back here cannot replace an existing persistent pending ID.
+        useVolatile = true
+        volatilePendingStorage.setItem(key, value)
+      }
+    },
+    removeItem(key) {
+      if (useVolatile) {
+        volatilePendingStorage.removeItem(key)
+        return
+      }
+      try {
+        persistent.removeItem(key)
+      } catch {
+        // Keep the persistent record: a later retry will safely reuse its ID.
+      }
+    },
   }
 }
 
