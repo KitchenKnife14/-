@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
@@ -19,6 +19,7 @@ export default function CalendarPage() {
   const [txs, setTxs] = useState<Transaction[]>([])
   const [recurring, setRecurring] = useState<RecurringPayment[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const loadSequence = useRef(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<View>('month')
@@ -32,6 +33,7 @@ export default function CalendarPage() {
 
   const load = useCallback(async () => {
     if (!familyId) return
+    const requestId = ++loadSequence.current
     setLoading(true); setError(null)
     try {
       const categoryMigration = ensureSupplementalCategories(familyId)
@@ -41,13 +43,17 @@ export default function CalendarPage() {
         googleSheets.from('recurring_payments').select('*').eq('family_id', familyId).eq('active', true),
         googleSheets.from('categories').select('*').eq('family_id', familyId),
       ])
+      if (requestId !== loadSequence.current) return
       if (tRes.error) throw tRes.error; if (rRes.error) throw rRes.error; if (cRes.error) throw cRes.error
       setTxs(tRes.data as Transaction[]); setRecurring(rRes.data as RecurringPayment[]); setCategories(cRes.data as Category[])
-    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
-    finally { setLoading(false) }
+    } catch (e) { if (requestId === loadSequence.current) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
+    finally { if (requestId === loadSequence.current) setLoading(false) }
   }, [familyId, range.start, range.end])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void load()
+    return () => { loadSequence.current += 1 }
+  }, [load])
   useEffect(() => {
     if (!familyId) return
     const channel = googleSheets
