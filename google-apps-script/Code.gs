@@ -1540,7 +1540,7 @@ function telegramWebhook_(req){
     let description=text.replace(amountMatch[0],' ').replace(/^(?:добавь|запиши|расход|потратил|потратила|доход|получил|получила)[\s,.:;!?—–-]+/i,' ').replace(/\s+/g,' ').trim();
     // Accept natural punctuation after operation markers: "Доход: 500" and "Расход — 500".
     const markerBoundary='(?=$|[\\s,.:;!?—–-])';
-    const isIncome=new RegExp('(?:^|\\s)(?:доход|получил|получила|зарплата|поступило|премия|бонус|подработка|фриланс|возврат|компенсация|кэшбек|продал|продажа|проценты)'+markerBoundary,'i').test(text);
+    const isIncome=new RegExp('(?:^|\\s)(?:доход|получил|получила|зарплата|поступило|премия|бонус|подработка|фриланс|возврат|компенсация|кэшбек|продал|продажа|проценты(?!\\s+(?:по\\s+)?(?:кредит|займ)))'+markerBoundary,'i').test(text);
     const explicitExpense=new RegExp('(?:^|\\s)(?:расход|потратил|потратила|купил|купила|оплатил|оплатила|покупка)'+markerBoundary,'i').test(text);
     if(!description&&isIncome)description='Доход';
     if(!description&&explicitExpense)description='Расход';
