@@ -199,10 +199,16 @@ function runMonthlyPlanConcurrencyTest() {
         delete ROWS_CACHE.monthly_plans;
         delete ROWS_CACHE.families;
         delete ROWS_CACHE.profiles;
+        SpreadsheetApp.flush();
+        delete ROWS_CACHE.monthly_plans;
+        delete ROWS_CACHE.families;
+        delete ROWS_CACHE.profiles;
+        remainingAuth=authRows_().some(function(row){return String(row.email)===emailA||String(row.email)===emailB;});
+        remainingPlan=rows_('monthly_plans').some(function(row){return String(row.id)===planId;});
+        remainingFamily=familyId&&rows_('families').some(function(row){return String(row.id)===familyId;});
+        remainingUsers=[userA,userB].filter(Boolean).some(function(uid){return rows_('profiles').some(function(row){return String(row.id)===uid;});});
         if(remainingAuth||remainingPlan||remainingFamily||remainingUsers) {
-          throw new Error('После cleanup остались синтетические TEST-записи: '+
-            JSON.stringify({auth:!!remainingAuth,plan:!!remainingPlan,family:!!remainingFamily,users:!!remainingUsers,
-              userA:userA||null,userB:userB||null,familyId:familyId||null,planId:planId}));
+          throw new Error('После cleanup остались синтетические TEST-записи: '+JSON.stringify({auth:!!remainingAuth,plan:!!remainingPlan,family:!!remainingFamily,users:!!remainingUsers,userA:userA||null,userB:userB||null,familyId:familyId||null,planId:planId}));
         }
         report.cleanup='PASS';
       } catch(error) {
