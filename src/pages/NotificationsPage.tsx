@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { createRequestSequence } from '../lib/requestSequence'
 import { googleSheets } from '../lib/googleSheets'
 import type { AppNotification } from '../lib/types'
 import { formatDateInMoscow } from '../lib/dates'
@@ -9,28 +10,28 @@ export default function NotificationsPage() {
   const { family } = useAuth()
   const familyId = family?.id
   const [items, setItems] = useState<AppNotification[]>([])
-  const loadSequence = useRef(0)
+  const loadSequence = useRef(createRequestSequence())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
 
   const load = useCallback(async () => {
     if (!familyId) return
-    const requestId = ++loadSequence.current
+    const requestId = loadSequence.current.begin()
     setLoading(true); setError(null)
     try {
       const q = googleSheets.from('notifications').select('*').eq('family_id', familyId).order('created_at', { ascending: false })
       const { data, error: err } = filter === 'unread' ? await q.eq('read', false) : await q
-      if (requestId !== loadSequence.current) return
+      if (!loadSequence.current.isCurrent(requestId)) return
       if (err) throw err
       setItems(data as AppNotification[])
-    } catch (e) { if (requestId === loadSequence.current) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
+    } catch (e) { if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
     finally { if (requestId === loadSequence.current) setLoading(false) }
   }, [familyId, filter])
 
   useEffect(() => {
     void load()
-    return () => { loadSequence.current += 1 }
+    return () => { loadSequence.current.invalidate() }
   }, [load])
   useEffect(() => {
     if (!familyId) return
