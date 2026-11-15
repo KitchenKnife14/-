@@ -5,7 +5,7 @@ import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO, monthsUntilDate } from '../lib/dates'
 import Modal from '../components/Modal'
-import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
 
 const STATUS_LABELS: Record<string, string> = { active: 'Активная', paused: 'Пауза', done: 'Достигнута', cancelled: 'Отменена' }
@@ -189,7 +189,7 @@ function GoalForm({ open, onClose, onSaved, familyId, editing }: {
         const { data: authData } = await googleSheets.auth.getUser()
         const userId = authData.user?.id
         if (!userId) throw new Error('Сессия завершена. Войдите снова.')
-        const storage = window.localStorage
+        const storage = getPendingStorage()
         const requestPayload = { family_id: familyId, ...payload, create_purchase: createPurchase }
         const pendingKey = pendingMutationStorageKey('goals', familyId, userId, 'create-with-purchase')
         const fingerprint = await fingerprintTransactionPayload(requestPayload)
@@ -249,7 +249,7 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
       const familyId = goal.family_id
       if (!userId || !familyId) throw new Error('Не удалось определить участника или семью')
       const payload = { goal_id: goal.id, amount_kopecks: amt, contribution_date: date, note: note.trim(), created_by: userId }
-      const storage = window.localStorage
+      const storage = getPendingStorage()
       const pendingKey = pendingMutationStorageKey('goal_contributions', familyId, userId, goal.id)
       const fingerprint = await fingerprintTransactionPayload(payload)
       await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('goal_contributions').insert({ ...payload, id }))
