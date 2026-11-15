@@ -42,3 +42,15 @@ test('TransactionsPage ignores stale list responses and invalidates in-flight lo
   assert.match(source, /if \(requestId === loadSequence\.current\) setLoading\(false\)/)
   assert.match(source, /return \(\) => \{ loadSequence\.current \+= 1 \}/)
 })
+
+for (const file of ['DashboardPage.tsx', 'CalendarPage.tsx', 'NotificationsPage.tsx', 'PlanningPage.tsx']) {
+  test(`${file} ignores stale asynchronous list responses`, () => {
+    const source = fs.readFileSync(path.join(root, 'src/pages', file), 'utf8')
+    assert.match(source, /const loadSequence = useRef\(0\)/)
+    assert.match(source, /const requestId = \+\+loadSequence\.current/)
+    assert.match(source, /if \(requestId !== loadSequence\.current\) return/)
+    assert.match(source, /requestId === loadSequence\.current\) setError/)
+    assert.match(source, /requestId === loadSequence\.current\) setLoading\(false\)/)
+    assert.match(source, /return \(\) => \{ loadSequence\.current \+= 1 \}/)
+  })
+}
