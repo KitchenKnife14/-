@@ -1149,15 +1149,15 @@ function cleanupFailedMonthlyPlanFixture() {
   }):[];
   if(planRows.length)deleteRows_('monthly_plans',planRows);
   if(family.length===1) {
-    monthlyPlanRemoveRows_('categories',function(row){return String(row.family_id)===familyId;});
-    monthlyPlanRemoveRows_('accounts',function(row){return String(row.family_id)===familyId;});
-    monthlyPlanRemoveRows_('family_members',function(row){return String(row.family_id)===familyId;});
-    monthlyPlanRemoveRows_('families',function(row){return String(row.id)===familyId;});
+    removeRows('categories',function(row){return String(row.family_id)===familyId;});
+    removeRows('accounts',function(row){return String(row.family_id)===familyId;});
+    removeRows('family_members',function(row){return String(row.family_id)===familyId;});
+    removeRows('families',function(row){return String(row.id)===familyId;});
   } else if(userIds.length) {
-    monthlyPlanRemoveRows_('family_members',function(row){return userIds.indexOf(String(row.user_id))!==-1;});
+    removeRows('family_members',function(row){return userIds.indexOf(String(row.user_id))!==-1;});
   }
   userIds.forEach(function(uid){
-    monthlyPlanRemoveRows_('profiles',function(row){return String(row.id)===uid;});
+    removeRows('profiles',function(row){return String(row.id)===uid;});
   });
   auth.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
   var allProps=props.getProperties();
