@@ -837,13 +837,13 @@ HEAD до:
 | 1 | Восстановление исходников, инвентаризация проекта и первичный реестр аудита | Завершён |
 | 2 | Статический аудит backend: денежная целостность, связи, категории, повторы записей | Завершён на уровне статического анализа и CI: FC-01/02/04/06/13/20 исправлены и покрыты регрессиями; живые Apps Script runtime-проверки вынесены в этап 5 |
 | 3 | Аудит Telegram: парсер, повторы webhook, баланс и сценарии ошибок | Завершён: parser punctuation, точные суммы/границы, replay fingerprint, timeout и retry-сценарии покрыты CI. Зафиксирован at-least-once контракт ответа: редкий дубль подтверждения допустим, потеря подтверждения нежелательнее; exactly-once Bot API не гарантируется. Живой TEST GAS replay относится к этапу 5 |
-| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 280/280 regression tests проходят CI; TEST-only GAS integration/concurrency probes добавлены и собраны в единый bundle. Поведенческие тесты целей и Telegram parser boundary расширены. Остались browser E2E и live GAS acceptance |
+| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 281/281 regression tests проходят CI; TEST-only GAS integration/concurrency probes добавлены и собраны в единый bundle. Поведенческие тесты целей и Telegram parser boundary расширены. Остались browser E2E и live GAS acceptance |
 | 5 | Изолированная динамическая проверка в тестовом Apps Script и тестовой таблице | Подготовлены четыре self-contained runtime-пробы; отдельно уже PASS signup concurrency, stale transaction update и goal contribution retry. Единый acceptance batch с Telegram replay, optimistic read/write, monthly-plan и transaction insert ещё не запускался |
 | 6 | Исправление P1 backend: строгие деньги, категории, ссылки, идемпотентность | Завершён на уровне кода ветки и CI: FC-01/02/04/06/13/20 закрыты regression suite; live GAS runtime-приёмка учитывается отдельно на этапе 5 |
-| 7 | Исправление Telegram и повторной доставки webhook | В работе: parser punctuation, fingerprint и timeout/retry исправлены на ветке и покрыты CI; остаётся выполнить live TEST GAS replay. Неоднозначный sendMessage принят как at-least-once: возможен повтор текста, но финансовая запись защищена от дубля |
+| 7 | Исправление Telegram и повторной доставки webhook | В работе: parser punctuation, fingerprint, timeout/retry и строгая проверка backend response envelope исправлены на ветке и покрыты CI; остаётся выполнить live TEST GAS replay. Неоднозначный sendMessage принят как at-least-once: возможен повтор текста, но финансовая запись защищена от дубля |
 | 8 | Авторизация, безопасность, ScriptLock, изоляция семей и производительность | Реализован optimistic read lane для allow-listed чтений без ожидания ScriptLock; все записи сохраняют сериализацию. CI покрывает overlap/retry и fail-closed. Остались реальные TEST GAS замеры lock wait/p50/p95 и приёмка runtime |
 | 9 | Frontend: автор/ответственный, мобильная компоновка, доступность и UX | В работе: фильтры категорий, предупреждение о недостоверном остатке, FC-23 и безопасный retry lifecycle финансовых форм усилены; desktop/iPhone browser test, автор/ответственный и safe area остаются открыты |
-| 10 | Зависимости, typecheck, сборка, unit/integration/browser tests | В работе: branch CI проходит typecheck/build/smoke и 276/276 unit/regression tests; browser/iPhone и live GAS integration ещё не пройдены |
+| 10 | Зависимости, typecheck, сборка, unit/integration/browser tests | В работе: branch CI проходит typecheck/build/smoke и 281/281 unit/regression tests; browser/iPhone и live GAS integration ещё не пройдены |
 | 11 | Сквозная регрессия, резервная копия и проверка восстановления | Не начат |
 | 12 | Подготовка безопасного выпуска и единый список ручных Production-действий | Не начат |
 
@@ -3582,3 +3582,11 @@ HEAD до:
 - Это проверяет явный предел `telegramWebhook_()` до серверной записи и защищает от случайного расширения диапазона или округления.
 - CI [43712356412 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43712356412) на HEAD `8653d1b091a620b6216442457e71b4124ab4ec15`: **280/280 regression tests**, build, preview smoke, dependency audit и Apps Script syntax checks прошли.
 - Контрольные счётчики не меняются: **165/229 (72,1%)**, макроэтапы **4/12 (33,3%)**. Это усиление теста существующего критерия, а не новый закрытый пункт.
+### 2026-11-15 — защита webhook от некорректного ответа Apps Script
+
+- Исправлен `telegram-webhook/handler.ts`: раньше валидный JSON вида `{}` или `{data:{skip:false}}` мог быть принят как успешный ответ без отправки сообщения в Telegram. Теперь handler требует полный `{data,error}` envelope, валидный `data.skip=true` либо полноценную пару `chat_id` + непустой `text`; malformed error envelope также возвращает 502.
+- Исправлены тестовые фикстуры: они теперь соответствуют реальному контракту Apps Script `postResult_`, который всегда возвращает и `data`, и `error`.
+- Добавлен тест на пять malformed envelope вариантов; проверено, что ни один из них не подтверждается Telegram как успешная обработка и `sendMessage` не вызывается.
+- CI [43712598150 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43712598150) на HEAD `8cb6bbe225fab7f64f660f6f1d21a47167433730`: **281/281 regression tests**, TypeScript/production build, preview smoke, dependency audit, Apps Script syntax checks и manifest validation прошли.
+- Контрольные счётчики не меняются: **165/229 (72,1%)**, макроэтапы **4/12 (33,3%)**. Это дополнительное исправление reliability в этапе 7 и расширение тестов этапа 4; новых пунктов плана пока не закрыто.
+- Изменения только в `ispravleniya`; Production, опубликованный webhook, основная таблица и основной GAS-проект не затронуты.
