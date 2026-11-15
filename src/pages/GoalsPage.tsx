@@ -4,6 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO, monthsUntilDate } from '../lib/dates'
+import { getGoalSectionLabel, sortGoalsForDisplay } from '../lib/goalSorting'
 import Modal from '../components/Modal'
 import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
@@ -69,14 +70,7 @@ export default function GoalsPage() {
     const q = search.trim().toLocaleLowerCase('ru-RU')
     return !q || `${g.name} ${g.description || ''}`.toLocaleLowerCase('ru-RU').includes(q)
   })
-  const sortedGoals = useMemo(() => [...goals].sort((a, b) => {
-    const group = (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1)
-    if (group) return group
-    const priority = Number(a.priority || 3) - Number(b.priority || 3)
-    if (priority) return priority
-    const date = String(a.target_date || '9999-12-31').localeCompare(String(b.target_date || '9999-12-31'))
-    return date || String(a.created_at || '').localeCompare(String(b.created_at || ''))
-  }), [goals])
+  const sortedGoals = useMemo(() => sortGoalsForDisplay(goals), [goals])
   // Build section boundaries from the filtered order, not the unfiltered list.
   const visibleSortedGoals = sortedGoals.filter((g) => filteredGoals.some((f) => f.id === g.id))
 
@@ -112,11 +106,7 @@ export default function GoalsPage() {
             const remaining = g.target_kopecks - g.saved_kopecks
             const monthsLeft = g.target_date ? monthsUntilDate(g.target_date) : null
             const monthlyNeeded = monthsLeft && monthsLeft > 0 ? Math.round(remaining / monthsLeft) : null
-            const sectionLabel = index === 0
-              ? (g.status === 'active' ? 'Активные цели' : 'Неактивные цели')
-              : g.status !== 'active' && visibleSortedGoals[index - 1].status === 'active'
-                ? 'Неактивные цели'
-                : null
+            const sectionLabel = getGoalSectionLabel(visibleSortedGoals, index)
             return (
               <div key={g.id}>
                 {sectionLabel && <div className={`text-xs font-semibold uppercase tracking-wide text-slate-500 ${index === 0 ? 'pb-1' : 'pb-1 pt-3'}`}>{sectionLabel}</div>}
