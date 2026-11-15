@@ -123,19 +123,62 @@ test('generic pending mutation IDs are isolated by table, family, user and form 
   assert.equal(new Set(ids).size, 4)
 })
 
-test('generic pending mutation reuses ID after lost response and clears only after confirmed success', async () => {
-  const { pendingMutationStorageKey, getOrCreatePendingMutationId, clearPendingMutation } = await loadPendingModule()
+test('generic pending mutation reuses ID after uncertain result and clears only after confirmed success', async () => {
+  const { pendingMutationStorageKey, runPendingMutation } = await loadPendingModule()
+  const storage = createStorage()
+  let generated = 0
+  let observedId = ''
+  const createId = () => `op_${String(++generated).padStart(32, '0')}`
+  const key = pendingMutationStorageKey('planned_purchases','family-a','user-a')
+  await assert.rejects(
+    runPendingMutation(storage,key,'c'.repeat(64),createId,async id => {
+      observedId = id
+      throw new Error('network timeout')
+    },1000),
+    /network timeout/,
+  )
+  const retry = await runPendingMutation(storage,key,'c'.repeat(64),createId,async id => {
+    assert.equal(id,observedId)
+    return { data: { id }, error: null }
+  },2000)
+  assert.equal(retry.data.id,observedId)
+  assert.equal(generated,1)
+  assert.equal(storage.getItem(key),null)
+})
+
+test('generic pending mutation blocks changed payload after uncertain result', async () => {
+  const { pendingMutationStorageKey, runPendingMutation, PendingTransactionConflictError } = await loadPendingModule()
+  const storage = createStorage()
+  const createId = () => `op_${'1'.repeat(32)}`
+  const key = pendingMutationStorageKey('accounts','family-a','user-a')
+  await assert.rejects(
+    runPendingMutation(storage,key,'a'.repeat(64),createId,async () => { throw new Error('network timeout') },1000),
+    /network timeout/,
+  )
+  await assert.rejects(
+    runPendingMutation(storage,key,'b'.repeat(64),createId,async () => ({ error: null }),2000),
+    PendingTransactionConflictError,
+  )
+})
+
+test('generic pending mutation clears ID only after a definitive backend rejection', async () => {
+  const { pendingMutationStorageKey, runPendingMutation } = await loadPendingModule()
   const storage = createStorage()
   let generated = 0
   const createId = () => `op_${String(++generated).padStart(32, '0')}`
-  const key = pendingMutationStorageKey('planned_purchases','family-a','user-a')
-  const first = getOrCreatePendingMutationId(storage,key,'c'.repeat(64),createId,1000)
-  const retry = getOrCreatePendingMutationId(storage,key,'c'.repeat(64),createId,2000)
-  assert.equal(first,retry)
-  assert.equal(generated,1)
-  clearPendingMutation(storage,key,first)
-  const nextIntent = getOrCreatePendingMutationId(storage,key,'c'.repeat(64),createId,3000)
-  assert.notEqual(nextIntent,first)
+  const key = pendingMutationStorageKey('budgets','family-a','user-a')
+  await assert.rejects(
+    runPendingMutation(storage,key,'a'.repeat(64),createId,async () => {
+      const error = new Error('validation rejected')
+      error.name = 'BackendRequestError'
+      throw error
+    },1000),
+    /validation rejected/,
+  )
+  assert.equal(storage.getItem(key),null)
+  const corrected = await runPendingMutation(storage,key,'b'.repeat(64),createId,async id => ({ data: { id }, error: null }),2000)
+  assert.ok(corrected.data.id)
+  assert.equal(generated,2)
 })
 
 
@@ -143,6 +186,6 @@ test('category create form keeps a stable pending ID for an uncertain insert', (
   const source = fs.readFileSync(path.join(__dirname, '../src/pages/CategoriesPage.tsx'), 'utf8')
   assert.match(source, /pendingMutationStorageKey\('categories'/)
   assert.match(source, /fingerprintTransactionPayload\(insertPayload\)/)
+  assert.match(source, /runPendingMutation\(storage, pendingKey, fingerprint/)
   assert.match(source, /from\('categories'\)\.insert\(\{ \.\.\.insertPayload, id \}\)/)
-  assert.match(source, /clearPendingMutation\(storage, pendingKey, id\)/)
 })
