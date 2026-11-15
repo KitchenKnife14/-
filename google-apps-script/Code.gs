@@ -1499,7 +1499,7 @@ function telegramWebhook_(req){
     if(!link)throw new Error('Сначала привяжите аккаунт в приложении и отправьте /link КОД.');
     const member=rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
     if(!member)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
-    if(/(?:^|\s)(?:перевод|перевести|перевёл|перевел|перевела|перекинул|перекинула)(?=\s|$)/i.test(text))throw new Error('Переводы через Telegram пока не поддерживаются. Создайте перевод в приложении, указав оба счёта.');
+    if(/(?:^|\s)(?:перевод|перевести|перевёл|перевел|перевела|перекинул|перекинула)(?=$|[\s,.:;!?])/i.test(text))throw new Error('Переводы через Telegram пока не поддерживаются. Создайте перевод в приложении, указав оба счёта.');
     const amountMatch=text.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?:\s*(?:₽|руб(?:лей|ля|ль|\.?)?|р\.?))?(?=\s|$)/i);
     if(!amountMatch)throw new Error('Не нашёл сумму. Пример: Проезд 45 рублей.');
     const numericTokens=text.match(/\d+(?:[.,]\d{1,2})?/g)||[];
