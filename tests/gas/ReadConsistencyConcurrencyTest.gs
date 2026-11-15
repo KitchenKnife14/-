@@ -137,7 +137,8 @@ function runReadConsistencyConcurrencyTest() {
       var result = readConsistencyTestParse_(responses[j], 'parallel read '+j);
       if (result.error || !Array.isArray(result.data) || result.data.length !== 2 ||
           result.data.some(function(item){return item.error;})) {
-        throw new Error('Параллельное чтение '+j+' завершилось ошибкой.');
+        throw new Error('Параллельное чтение '+j+' завершилось ошибкой: '+
+          JSON.stringify({outerError:result.error||null,data:result.data||null}));
       }
       var purchases=result.data[0].data, transactions=result.data[1].data;
       if (!Array.isArray(purchases) || purchases.length !== 1 || !Array.isArray(transactions)) {
