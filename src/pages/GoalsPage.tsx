@@ -252,10 +252,7 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
       const storage = window.localStorage
       const pendingKey = pendingMutationStorageKey('goal_contributions', familyId, userId, goal.id)
       const fingerprint = await fingerprintTransactionPayload(payload)
-      const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
-      const { error: err } = await googleSheets.from('goal_contributions').insert({ ...payload, id })
-      if (err) throw err
-      clearPendingMutation(storage, pendingKey, id)
+      await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('goal_contributions').insert({ ...payload, id }))
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
     finally { setSaving(false) }
