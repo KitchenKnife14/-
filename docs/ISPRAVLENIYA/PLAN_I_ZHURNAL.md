@@ -3698,3 +3698,14 @@ HEAD до:
 - Перед новым batch требуется обновить только `RuntimeAcceptanceBundle.gs` в TEST GAS, выполнить `cleanupLatestFailedMonthlyPlanFixture()` и проверить `result=PASS`, `cleanup=PASS`, все `verified_remaining=false`. Только после этого запускать `runIsolatedRuntimeAcceptanceBatch()`. Не менять Code.gs, guard или deployment.
 - Runtime monthly-plan stale-update результат остаётся **не подтверждённым**: прошлый запуск оборвался в cleanup, поэтому нельзя засчитать тест как PASS. Transaction-insert probe в этом batch не запускался.
 - Прогресс не меняется: **171/234 = 73,1%**, макроэтапы **4/12 = 33,3%**. Изменения только в `ispravleniya`; Production и основные финансовые данные не затрагивались.
+
+
+### 2026-11-15 — третий повтор TEST GAS batch: auth cleanup не подтверждена
+
+- Telegram duplicate/retry: `PASS`, cleanup `PASS`.
+- Optimistic read/write consistency: `PASS` (16 параллельных чтений, 21 522 мс), cleanup `PASS`.
+- Monthly-plan concurrent stale update: batch остановлен на cleanup. План и семья удалены, но в служебном листе `_auth` остались две synthetic auth-записи. Это не доказывает отказ stale-update логики: тест оборвался до штатного завершения отчёта. Четвёртая transaction-insert проверка не запускалась.
+- В `RuntimeAcceptanceBundle.gs` устранена зависимость удаления synthetic auth-строк от ранее снятого `authRows_()` snapshot: добавлена функция `monthlyPlanDeleteSyntheticAuthRows_()`, которая непосредственно перед удалением сканирует актуальный столбец email листа `_auth`, удаляет только два точных synthetic email текущего monthly-plan fixture снизу вверх и выполняет flush. Та же функция используется в основном monthly-plan cleanup.
+- Добавлена TEST-guarded recovery-функция `cleanupLatestFailedMonthlyPlanFixture()` для точного suffix `c4c8cab147c74f1cb9d87540ef684349`. Она удаляет только соответствующие synthetic plan/family/profile/auth/session записи и проверяет остаток после сброса caches.
+- Следующий ручной шаг: заменить только `RuntimeAcceptanceBundle.gs` в TEST GAS, сохранить, запустить `cleanupLatestFailedMonthlyPlanFixture()`. Прислать JSON-отчёт. Не запускать batch до подтверждения `cleanup=PASS` и всех `verified_remaining=false`. После подтверждения повторить `runIsolatedRuntimeAcceptanceBatch()`.
+- Прогресс без изменений: **171/234 = 73,1%**, макроэтапы **4/12 = 33,3%**. M-04 остаётся открытым. Только ветка `ispravleniya`; Production, `main`, основная таблица, Production GAS, Vercel Production и Telegram webhook не затрагивались.
