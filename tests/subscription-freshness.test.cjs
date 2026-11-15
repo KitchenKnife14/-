@@ -35,12 +35,12 @@ test('goal section headings follow the filtered visible order', () => {
 
 test('TransactionsPage ignores stale list responses and invalidates in-flight loads on cleanup', () => {
   const source = fs.readFileSync(path.join(root, 'src/pages', 'TransactionsPage.tsx'), 'utf8')
-  assert.match(source, /const loadSequence = useRef\(0\)/)
-  assert.match(source, /const requestId = \+\+loadSequence\.current/)
-  assert.match(source, /if \(requestId !== loadSequence\.current\) return/)
-  assert.match(source, /if \(requestId === loadSequence\.current\) setError/)
-  assert.match(source, /if \(requestId === loadSequence\.current\) setLoading\(false\)/)
-  assert.match(source, /return \(\) => \{ loadSequence\.current \+= 1 \}/)
+  assert.match(source, /const loadSequence = useRef\(createRequestSequence\(\)\)/)
+  assert.match(source, /const requestId = loadSequence\.current\.begin\(\)/)
+  assert.match(source, /if \(!loadSequence\.current\.isCurrent\(requestId\)\) return/)
+  assert.match(source, /if \(loadSequence\.current\.isCurrent\(requestId\)\) setError/)
+  assert.match(source, /if \(loadSequence\.current\.isCurrent\(requestId\)\) setLoading\(false\)/)
+  assert.match(source, /return \(\) => \{ loadSequence\.current\.invalidate\(\) \}/)
 })
 
 for (const file of ['DashboardPage.tsx', 'CalendarPage.tsx', 'NotificationsPage.tsx', 'PlanningPage.tsx']) {
