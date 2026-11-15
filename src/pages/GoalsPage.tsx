@@ -4,7 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import type { Goal, GoalContribution } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO, monthsUntilDate } from '../lib/dates'
-import { getGoalSectionLabel, sortGoalsForDisplay } from '../lib/goalSorting'
+import { filterAndSortGoals, getGoalSectionLabel } from '../lib/goalSorting'
 import Modal from '../components/Modal'
 import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 import { Plus, Pencil, Trash2, Target, History, Pause, Play, Check } from 'lucide-react'
@@ -63,16 +63,12 @@ export default function GoalsPage() {
 
   const totalTarget = goals.filter((g) => g.status === 'active').reduce((s, g) => s + g.target_kopecks, 0)
   const totalSaved = goals.filter((g) => g.status === 'active').reduce((s, g) => s + g.saved_kopecks, 0)
-  const filteredGoals = goals.filter((g) => {
-    if (statusFilter !== 'all' && g.status !== statusFilter) return false
-    if (priorityFilter !== 'all' && String(g.priority) !== priorityFilter) return false
-    if (participantFilter && g.responsible_user_id !== participantFilter) return false
-    const q = search.trim().toLocaleLowerCase('ru-RU')
-    return !q || `${g.name} ${g.description || ''}`.toLocaleLowerCase('ru-RU').includes(q)
-  })
-  const sortedGoals = useMemo(() => sortGoalsForDisplay(goals), [goals])
-  // Build section boundaries from the filtered order, not the unfiltered list.
-  const visibleSortedGoals = sortedGoals.filter((g) => filteredGoals.some((f) => f.id === g.id))
+  const visibleSortedGoals = useMemo(() => filterAndSortGoals(goals, {
+    status: statusFilter,
+    priority: priorityFilter,
+    participantId: participantFilter,
+    search,
+  }), [goals, statusFilter, priorityFilter, participantFilter, search])
 
   return (
     <div className="space-y-4">
@@ -97,7 +93,7 @@ export default function GoalsPage() {
       )}
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : goals.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500"><Target size={24} className="mx-auto mb-2 text-slate-300" />Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.</div>
-      ) : filteredGoals.length === 0 ? (
+      ) : visibleSortedGoals.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500">По заданным фильтрам целей нет.</div>
       ) : (
         <div className="space-y-2">
