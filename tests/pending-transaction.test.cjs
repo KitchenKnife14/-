@@ -25,6 +25,12 @@ test('pending storage falls back to a page-session store when browser storage is
   const fallback = getPendingStorage(() => { throw new Error('storage denied') })
   fallback.setItem('pending-key', 'pending-value')
   assert.equal(fallback.getItem('pending-key'), 'pending-value')
+  const afterRemount = getPendingStorage(() => ({
+    getItem() { return null },
+    setItem() { throw new Error('quota exceeded') },
+    removeItem() {},
+  }))
+  assert.equal(afterRemount.getItem('pending-key'), 'pending-value')
   const persistent = createStorage()
   assert.equal(getPendingStorage(() => persistent), persistent)
 })
