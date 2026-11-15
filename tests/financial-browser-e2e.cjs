@@ -233,7 +233,7 @@ async function main() {
     await page.getByLabel('Название', { exact: true }).fill('E2E отпуск')
     await page.getByLabel('Описание').fill('Проверка создания цели')
     await page.getByLabel('Сумма цели, ₽').fill('85000')
-    await page.getByLabel('Приоритет').selectOption('2')
+    await page.getByLabel('Приоритет', { exact: true }).selectOption('2')
     await page.getByRole('button', { name: 'Сохранить' }).click()
     await page.getByText('E2E отпуск', { exact: true }).waitFor()
     assert.equal(state.goals.length, 1)
