@@ -10,9 +10,9 @@ const javascript = ts.transpile(source, {
   module: ts.ModuleKind.CommonJS,
   target: ts.ScriptTarget.ES2022,
 })
-const module = { exports: {} }
-vm.runInNewContext(javascript, { module, exports: module.exports }, { filename: 'goalSorting.ts' })
-const { sortGoalsForDisplay, getGoalSectionLabel } = module.exports
+const loadedModule = { exports: {} }
+vm.runInNewContext(javascript, { module: loadedModule, exports: loadedModule.exports }, { filename: 'goalSorting.ts' })
+const { sortGoalsForDisplay, getGoalSectionLabel } = loadedModule.exports
 
 function goal(id, overrides = {}) {
   return {
