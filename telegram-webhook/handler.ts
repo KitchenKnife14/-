@@ -129,8 +129,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (data.skip === true) {
         reply = data
       } else {
-        if ((typeof data.chat_id !== 'string' && typeof data.chat_id !== 'number') ||
-            typeof data.text !== 'string' || data.text.length === 0) {
+        const validChatId = typeof data.chat_id === 'string'
+          ? data.chat_id.trim().length > 0 && data.chat_id.trim() !== '0'
+          : typeof data.chat_id === 'number' && Number.isSafeInteger(data.chat_id) && data.chat_id !== 0
+        if (!validChatId || typeof data.text !== 'string' || data.text.trim().length === 0) {
           throw new Error('Apps Script returned an incomplete Telegram reply')
         }
         reply = data
