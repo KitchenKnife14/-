@@ -29,6 +29,33 @@ test('pending storage falls back to a page-session store when browser storage is
   assert.equal(getPendingStorage(() => persistent), persistent)
 })
 
+test('pending storage falls back after a persistent write failure without losing the current request', async () => {
+  const { getPendingStorage } = await loadPendingModule()
+  const fallback = getPendingStorage(() => ({
+    getItem() { return null },
+    setItem() { throw new Error('quota exceeded') },
+    removeItem() {},
+  }))
+  fallback.setItem('pending-key', 'pending-value')
+  assert.equal(fallback.getItem('pending-key'), 'pending-value')
+})
+
+test('failed persistent cleanup keeps the original ID available for a safe retry', async () => {
+  const { getPendingStorage, getOrCreatePendingMutationId, clearPendingMutation } = await loadPendingModule()
+  const persistent = createStorage()
+  const guarded = getPendingStorage(() => ({
+    getItem: key => persistent.getItem(key),
+    setItem: (key, value) => persistent.setItem(key, value),
+    removeItem() { throw new Error('storage removal denied') },
+  }))
+  const key = 'pending-remove-failure'
+  const createId = () => `op_${'a'.repeat(32)}`
+  const first = getOrCreatePendingMutationId(guarded, key, 'a'.repeat(64), createId, 1000)
+  clearPendingMutation(guarded, key, first)
+  const retry = getOrCreatePendingMutationId(guarded, key, 'a'.repeat(64), createId, 2000)
+  assert.equal(retry, first)
+})
+
 test('pending transaction ID is reused for the same payload across form remounts', async () => {
   const { getOrCreatePendingTransactionId } = await loadPendingModule()
   const storage = createStorage()
