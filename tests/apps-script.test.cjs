@@ -4342,6 +4342,17 @@ test('Telegram link retry remains successful if update cache write fails after t
   assert.equal(h.context.rows_('telegram_links').filter(row => row.telegram_user_id === '730').length, 1);
 });
 
+test('Telegram update fingerprint preserves special JSON keys without prototype mutation', () => {
+  const h = makeHarness();
+  const fingerprint = h.context.telegramUpdateFingerprint_;
+  const ordinary = JSON.parse('{"update_id":91,"message":{"text":"same"}}');
+  const withProtoKey = JSON.parse('{"update_id":91,"message":{"text":"same","__proto__":{"text":"different"}}}');
+  const reordered = JSON.parse('{"message":{"__proto__":{"text":"different"},"text":"same"},"update_id":91}');
+  assert.notEqual(fingerprint(ordinary), fingerprint(withProtoKey));
+  assert.equal(fingerprint(withProtoKey), fingerprint(reordered));
+  assert.equal(Object.prototype.text, undefined);
+});
+
 test('Telegram replay cache rejects a different payload that reuses an update_id', () => {
   const h = makeHarness();
   const user = h.signup('telegram-update-id-collision@example.com');
