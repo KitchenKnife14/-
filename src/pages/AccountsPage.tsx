@@ -4,7 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { calculateAccountBalances } from '../lib/accountBalances.js'
-import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 import { Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import Modal from '../components/Modal'
 
@@ -79,7 +79,7 @@ export default function AccountsPage() {
         const { data: authData } = await googleSheets.auth.getUser()
         const userId = authData.user?.id
         if (!userId) throw new Error('Сессия завершена. Войдите снова.')
-        const storage = window.localStorage
+        const storage = getPendingStorage()
         const pendingKey = pendingMutationStorageKey('accounts', family.id, userId)
         const fingerprint = await fingerprintTransactionPayload(payload)
         result = await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('accounts').insert({ ...payload, id }))
