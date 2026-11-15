@@ -230,7 +230,7 @@ async function main() {
     await page.goto(baseUrl + '/goals', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Финансовые цели' }).waitFor()
     await page.getByRole('button', { name: 'Цель' }).click()
-    await page.getByLabel('Название').fill('E2E отпуск')
+    await page.getByLabel('Название', { exact: true }).fill('E2E отпуск')
     await page.getByLabel('Описание').fill('Проверка создания цели')
     await page.getByLabel('Сумма цели, ₽').fill('85000')
     await page.getByLabel('Приоритет').selectOption('2')
