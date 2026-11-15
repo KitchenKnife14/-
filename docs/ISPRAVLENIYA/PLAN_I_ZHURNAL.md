@@ -3688,3 +3688,13 @@ HEAD до:
 - Обновлён runbook: [TEST-ENV-READINESS.md](https://github.com/KitchenKnife14/-/blob/ispravleniya/docs/ISPRAVLENIYA/TEST-ENV-READINESS.md). Следующий ручной шаг — заменить только `RuntimeAcceptanceBundle.gs` в TEST GAS, запустить `cleanupFailedMonthlyPlanFixture()`, подтвердить все `verified_remaining=false`, затем повторить batch. `Code.gs`, `IsolatedTestGuard.gs` и deployment не менять.
 - На HEAD `c721efa42056a1b0b0322612c2685bb5ce840f05` Vercel status checks сообщают `build-rate-limit`; успешный GitHub Actions run для этих последних коммитов пока не подтверждён. Не объявлять CI зелёным.
 - Детальный прогресс остаётся **171/234 = 73,1%**, макроэтапы **4/12 = 33,3%**. M-04 не закрыт; три успешные runtime-пробы из предыдущего запуска не компенсируют cleanup failure и не засчитываются как завершённый batch.
+
+
+### 2026-11-15 — второй повтор TEST GAS batch: monthly-plan cleanup helper mismatch
+
+- В очередном TEST batch Telegram duplicate/retry завершился `PASS` с `cleanup=PASS`; optimistic read/write consistency завершился `PASS` (16 параллельных чтений, 21 514 мс).
+- Monthly-plan probe дошёл до cleanup, но остановился с `removeRows is not defined`. Проверка исходного модуля `MonthlyPlanConcurrencyTest.gs` показала, что там используется локальная `monthlyPlanRemoveRows_`; ошибка находилась в переносимом runtime bundle, где пять вызовов остались под старым именем `removeRows`. Это дефект тестовой обвязки, а не подтверждённый отказ конкурентного обновления.
+- В bundle исправлены все пять вызовов очистки на `monthlyPlanRemoveRows_`. Добавлена отдельная TEST-guarded recovery-функция `cleanupLatestFailedMonthlyPlanFixture()`, ограниченная только синтетическим suffix `16169d60785f4b9981640d68f142f927` и allowlisted TEST GAS/Spreadsheet.
+- Перед новым batch требуется обновить только `RuntimeAcceptanceBundle.gs` в TEST GAS, выполнить `cleanupLatestFailedMonthlyPlanFixture()` и проверить `result=PASS`, `cleanup=PASS`, все `verified_remaining=false`. Только после этого запускать `runIsolatedRuntimeAcceptanceBatch()`. Не менять Code.gs, guard или deployment.
+- Runtime monthly-plan stale-update результат остаётся **не подтверждённым**: прошлый запуск оборвался в cleanup, поэтому нельзя засчитать тест как PASS. Transaction-insert probe в этом batch не запускался.
+- Прогресс не меняется: **171/234 = 73,1%**, макроэтапы **4/12 = 33,3%**. Изменения только в `ispravleniya`; Production и основные финансовые данные не затрагивались.
