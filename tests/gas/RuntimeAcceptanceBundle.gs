@@ -771,13 +771,13 @@ function runMonthlyPlanConcurrencyTest() {
 
         monthlyPlanRemoveRows_('monthly_plans',function(row){return String(row.id)===planId;});
         if(familyId) {
-          removeRows('categories',function(row){return String(row.family_id)===familyId;});
-          removeRows('accounts',function(row){return String(row.family_id)===familyId;});
-          removeRows('family_members',function(row){return String(row.family_id)===familyId;});
-          removeRows('families',function(row){return String(row.id)===familyId;});
+          monthlyPlanRemoveRows_('categories',function(row){return String(row.family_id)===familyId;});
+          monthlyPlanRemoveRows_('accounts',function(row){return String(row.family_id)===familyId;});
+          monthlyPlanRemoveRows_('family_members',function(row){return String(row.family_id)===familyId;});
+          monthlyPlanRemoveRows_('families',function(row){return String(row.id)===familyId;});
         }
         [userA,userB].filter(Boolean).forEach(function(uid) {
-          removeRows('profiles',function(row){return String(row.id)===uid;});
+          monthlyPlanRemoveRows_('profiles',function(row){return String(row.id)===uid;});
         });
         authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
 
@@ -1137,6 +1137,66 @@ function cleanupFailedMonthlyPlanFixture() {
   assertIsolatedGasTestEnvironment_(props,confirmation,url);
   function removeRows(table,predicate){var matches=rows_(table).filter(predicate);if(matches.length)deleteRows_(table,matches);}
   var suffix='c9b44a7e653b4b90b366d4bc9a710d83';
+  var planId='monthrace_'+suffix;
+  var emailA='monthly-plan-a+'+suffix+'@example.test';
+  var emailB='monthly-plan-b+'+suffix+'@example.test';
+  var auth=authRows_().filter(function(row){return String(row.email)===emailA||String(row.email)===emailB;});
+  var userIds=auth.map(function(row){return String(row.id);});
+  var planRows=rows_('monthly_plans').filter(function(row){return String(row.id)===planId;});
+  var familyId=planRows.length?String(planRows[0].family_id||''):'';
+  var family=familyId?rows_('families').filter(function(row){
+    return String(row.id)===familyId&&String(row.name)==='TEST monthly plan '+suffix;
+  }):[];
+  if(family.length===1) {
+    var familyMembers=rows_('family_members').filter(function(row){return String(row.family_id)===familyId;});
+    userIds=userIds.concat(familyMembers.map(function(row){return String(row.user_id);}),[String(family[0].created_by||'')])
+      .filter(function(uid,index,all){return !!uid&&all.indexOf(uid)===index;});
+  }
+  if(planRows.length)deleteRows_('monthly_plans',planRows);
+  if(family.length===1) {
+    removeRows('categories',function(row){return String(row.family_id)===familyId;});
+    removeRows('accounts',function(row){return String(row.family_id)===familyId;});
+    removeRows('family_members',function(row){return String(row.family_id)===familyId;});
+    removeRows('families',function(row){return String(row.id)===familyId;});
+  } else if(userIds.length) {
+    removeRows('family_members',function(row){return userIds.indexOf(String(row.user_id))!==-1;});
+  }
+  userIds.forEach(function(uid){
+    removeRows('profiles',function(row){return String(row.id)===uid;});
+  });
+  auth.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
+  var allProps=props.getProperties();
+  Object.keys(allProps).forEach(function(key){
+    if(key.indexOf('session:')!==0)return;
+    try {
+      var session=JSON.parse(allProps[key]);
+      if(userIds.indexOf(String(session.userId))!==-1)props.deleteProperty(key);
+    } catch (_) {}
+  });
+  SpreadsheetApp.flush();
+  ROWS_CACHE={};
+  var remaining={
+    plan:rows_('monthly_plans').some(function(row){return String(row.id)===planId;}),
+    auth:authRows_().some(function(row){return String(row.email)===emailA||String(row.email)===emailB;}),
+    users:userIds.some(function(uid){return rows_('profiles').some(function(row){return String(row.id)===uid;});}),
+    family:family.length===1&&rows_('families').some(function(row){return String(row.id)===familyId;})
+  };
+  if(Object.keys(remaining).some(function(key){return remaining[key];})) {
+    throw new Error('Recovery cleanup не подтверждён: '+JSON.stringify(remaining));
+  }
+  var report={result:'PASS',cleanup:'PASS',fixture:'exact synthetic TEST-only monthly-plan fixture',plan_id:planId,synthetic_auth_rows_found:auth.length,family_id:familyId||null,verified_remaining:remaining};
+  Logger.log(JSON.stringify(report));
+  return report;
+}
+
+
+function cleanupLatestFailedMonthlyPlanFixture() {
+  var props=PropertiesService.getScriptProperties();
+  var url=String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL')||'').trim();
+  var confirmation=String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM')||'');
+  assertIsolatedGasTestEnvironment_(props,confirmation,url);
+  function removeRows(table,predicate){var matches=rows_(table).filter(predicate);if(matches.length)deleteRows_(table,matches);}
+  var suffix='16169d60785f4b9981640d68f142f927';
   var planId='monthrace_'+suffix;
   var emailA='monthly-plan-a+'+suffix+'@example.test';
   var emailB='monthly-plan-b+'+suffix+'@example.test';
