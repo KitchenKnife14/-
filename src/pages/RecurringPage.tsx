@@ -172,7 +172,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, members, 
       const storage = window.localStorage
       const pendingKey = pendingMutationStorageKey('recurring_payments', familyId, userId)
       const fingerprint = await fingerprintTransactionPayload(payload)
-      await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('recurring_payments').insert({ ...payload, id }))
+      await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('recurring_payments').insert({ ...payload, id }))
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
     finally { setSaving(false) }
