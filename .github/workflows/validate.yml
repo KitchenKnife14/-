@@ -26,12 +26,16 @@ jobs:
         run: npm audit --audit-level=high
       - name: TypeScript and production build
         run: npm run build
+        env:
+          VITE_GOOGLE_APPS_SCRIPT_URL: https://test-gas.invalid/exec
       - name: Production preview smoke test
         run: node tests/vite-preview-smoke.cjs
       - name: Install Chromium for browser smoke
         run: npx --yes playwright@1.56.1 install --with-deps chromium
       - name: Browser E2E smoke test
         run: npx --yes --package=playwright@1.56.1 -c 'NODE_PATH="$(dirname "$(dirname "$(readlink -f "$(command -v playwright)")")")" node tests/browser-e2e.cjs'
+      - name: Financial CRUD and transfer browser E2E
+        run: npx --yes --package=playwright@1.56.1 -c 'NODE_PATH="$(dirname "$(dirname "$(readlink -f "$(command -v playwright)")")")" node tests/financial-browser-e2e.cjs'
       - name: All regression tests
         run: npm test
       - name: Apps Script syntax check
