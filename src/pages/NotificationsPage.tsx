@@ -26,7 +26,7 @@ export default function NotificationsPage() {
       if (err) throw err
       setItems(data as AppNotification[])
     } catch (e) { if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
-    finally { if (requestId === loadSequence.current) setLoading(false) }
+    finally { if (loadSequence.current.isCurrent(requestId)) setLoading(false) }
   }, [familyId, filter])
 
   useEffect(() => {
