@@ -1,6 +1,6 @@
 # Family Cash — план исправлений и журнал работ
 
-> Статус: план и исправления ведутся в рабочей ветке ispravleniya; Production не затрагивался. Текущий контрольный прогресс активного плана: 169 из 233 критериев закрыто (72.5%); 64 открыто. Методика: учитываются действующие разделы этапов 0–6, отдельный UX-01 и все четыре критерия FC-14; исторические чекбоксы в журнале, архивные инструкции и очередь ручных действий в знаменатель не входят. Это прогресс плана стабилизации, а не процент готовности приложения.
+> Статус: план и исправления ведутся в рабочей ветке ispravleniya; Production не затрагивался. Текущий контрольный прогресс активного плана: 170 из 233 критериев закрыто (73.0%); 63 открыто. Методика: учитываются действующие разделы этапов 0–6, отдельный UX-01 и все четыре критерия FC-14; исторические чекбоксы в журнале, архивные инструкции и очередь ручных действий в знаменатель не входят. Это прогресс плана стабилизации, а не процент готовности приложения.
 > Дата фиксации плана: 2026-11-09.
 > Рабочая ветка: `ispravleniya`.
 > Базовый Production-коммит: `a7f105df927a54fe7351fc928b896fe473714386`.
@@ -396,7 +396,7 @@
 - [x] Проверить useEffect dependencies и callback `load()` — статически проверены зависимости пяти callback и realtime effects.
 - [ ] Проверить смену месяца, фильтров и счетов после подписки.
 - [x] Убедиться, что callback не использует устаревшие фильтры — load замыкает актуальные значения, subscription пересоздаётся при изменении зависимостей.
-- [ ] Добавить тесты/ручные сценарии на переключение периода и обновление данных.
+- [x] Добавить тесты/ручные сценарии на переключение периода и обновление данных. Добавлен `createRequestSequence` с тестами конкурирующих запросов/инвалидации; source integration tests проверяют подключение guard во всех пяти страницах. Ручная проверка реального браузера остаётся отдельно.
 
 ### FRONT-02 — HTTP/API response validation
 Файл: `src/lib/googleSheets.ts`.
@@ -839,13 +839,13 @@ HEAD до:
 | 1 | Восстановление исходников, инвентаризация проекта и первичный реестр аудита | Завершён |
 | 2 | Статический аудит backend: денежная целостность, связи, категории, повторы записей | Завершён на уровне статического анализа и CI: FC-01/02/04/06/13/20 исправлены и покрыты регрессиями; живые Apps Script runtime-проверки вынесены в этап 5 |
 | 3 | Аудит Telegram: парсер, повторы webhook, баланс и сценарии ошибок | Завершён: parser punctuation, точные суммы/границы, replay fingerprint, timeout и retry-сценарии покрыты CI. Зафиксирован at-least-once контракт ответа: редкий дубль подтверждения допустим, потеря подтверждения нежелательнее; exactly-once Bot API не гарантируется. Живой TEST GAS replay относится к этапу 5 |
-| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 285/285 regression tests проходят CI; Playwright Chromium smoke auth/mobile/desktop PASS; TEST-only GAS integration/concurrency probes добавлены и собраны в единый bundle. Остались полные финансовые browser E2E и live GAS acceptance |
+| 4 | Полная матрица регрессионных тестов и воспроизведение дефектов | В работе: 292/292 regression tests проходят CI; Playwright Chromium smoke auth/mobile/desktop PASS; TEST-only GAS integration/concurrency probes добавлены и собраны в единый bundle. Остались полные финансовые browser E2E и live GAS acceptance |
 | 5 | Изолированная динамическая проверка в тестовом Apps Script и тестовой таблице | Подготовлены четыре self-contained runtime-пробы; отдельно уже PASS signup concurrency, stale transaction update и goal contribution retry. Единый acceptance batch с Telegram replay, optimistic read/write, monthly-plan и transaction insert ещё не запускался |
 | 6 | Исправление P1 backend: строгие деньги, категории, ссылки, идемпотентность | Завершён на уровне кода ветки и CI: FC-01/02/04/06/13/20 закрыты regression suite; live GAS runtime-приёмка учитывается отдельно на этапе 5 |
 | 7 | Исправление Telegram и повторной доставки webhook | В работе: parser punctuation, fingerprint, timeout/retry, строгая проверка backend response envelope и маппинг сигарет/кредитных расходов исправлены на ветке и покрыты CI; остаётся выполнить live TEST GAS replay. Неоднозначный sendMessage принят как at-least-once: возможен повтор текста, но финансовая запись защищена от дубля |
 | 8 | Авторизация, безопасность, ScriptLock, изоляция семей и производительность | Реализован optimistic read lane для allow-listed чтений без ожидания ScriptLock; все записи сохраняют сериализацию. CI покрывает overlap/retry и fail-closed. Остались реальные TEST GAS замеры lock wait/p50/p95 и приёмка runtime |
 | 9 | Frontend: автор/ответственный, мобильная компоновка, доступность и UX | В работе: фильтры категорий, предупреждение о недостоверном остатке, FC-23 и безопасный retry lifecycle финансовых форм усилены; desktop/iPhone browser test, автор/ответственный и safe area остаются открыты |
-| 10 | Зависимости, typecheck, сборка, unit/integration/browser tests | В работе: branch CI проходит typecheck/build/smoke, Playwright auth/responsive smoke и 285/285 unit/regression tests; полные финансовые E2E, iPhone и live GAS integration ещё не пройдены |
+| 10 | Зависимости, typecheck, сборка, unit/integration/browser tests | В работе: branch CI проходит typecheck/build/smoke, Playwright auth/responsive smoke и 292/292 unit/regression tests; полные финансовые E2E, iPhone и live GAS integration ещё не пройдены |
 | 11 | Сквозная регрессия, резервная копия и проверка восстановления | Не начат |
 | 12 | Подготовка безопасного выпуска и единый список ручных Production-действий | Не начат |
 
@@ -3628,3 +3628,12 @@ HEAD до:
 - Добавлен regression test для stale-response guard. CI [43715071931 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43715071931) на HEAD `37018daa8f0c050da22f32081a038891703c0ba6`: **285/285 regression tests**, TypeScript/production build, dependency audit, Vite preview smoke, Playwright Chromium smoke (390×844 и 1280×900), Apps Script syntax checks и manifest validation прошли.
 - Контрольные показатели не меняются: **169/233 = 72,5%**, открыто 64; макроэтапы **4/12 = 33,3%**. Эти исправления усиливают уже открытый этап 4 и не закрывают его до финансовых E2E и live GAS acceptance.
 - Изменения только в `ispravleniya`; `main`, Production, рабочая таблица, основной GAS-проект, Vercel Production и опубликованный Telegram webhook не затронуты.
+### 2026-11-15 — защита от устаревших ответов во всех пяти разделах
+
+- Добавлен общий `src/lib/requestSequence.ts`: `begin()` выдаёт ID запроса, `isCurrent()` разрешает применение результата только последнего запроса, `invalidate()` инвалидирует незавершённые запросы при cleanup.
+- Подключён к `TransactionsPage`, `DashboardPage`, `CalendarPage`, `NotificationsPage` и `PlanningPage`. Защищены не только массивы данных, но и error/loading state: старый запрос не может затереть новый список, показать устаревшую ошибку или преждевременно снять индикатор загрузки.
+- Добавлены 3 поведенческих теста самого sequence helper и integration source tests для всех пяти страниц; всего CI **292/292 regression tests PASS**.
+- CI [43715884702 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43715884702) на HEAD `9c041cb25e291bc81674e5829dfbc9c257d1fbc6`: TypeScript/production build, dependency audit, Vite preview smoke, Playwright Chromium auth/responsive smoke, Apps Script syntax checks и manifest validation прошли.
+- В FRONT-01 закрыт критерий добавления тестов для обновления данных при смене периода/фильтров. Реальная ручная browser/device проверка остаётся открытой.
+- Контрольный прогресс: **170/233 = 73,0%**, открыто 63; макроэтапы **4/12 = 33,3%**. Этап 4 остаётся в работе до полных финансовых E2E и live GAS acceptance.
+- Изменения только в `ispravleniya`; Production, `main`, основная Google Sheet, основной GAS, Vercel Production и опубликованный Telegram webhook не затронуты.
