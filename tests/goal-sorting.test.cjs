@@ -12,7 +12,7 @@ const javascript = ts.transpile(source, {
 })
 const loadedModule = { exports: {} }
 vm.runInNewContext(javascript, { module: loadedModule, exports: loadedModule.exports }, { filename: 'goalSorting.ts' })
-const { sortGoalsForDisplay, getGoalSectionLabel } = loadedModule.exports
+const { sortGoalsForDisplay, getGoalSectionLabel, filterAndSortGoals } = loadedModule.exports
 
 function goal(id, overrides = {}) {
   return {
@@ -79,4 +79,30 @@ test('goal section label appears exactly once when active and inactive goals are
 test('empty and out-of-range goal section positions have no heading', () => {
   assert.equal(getGoalSectionLabel([], 0), null)
   assert.equal(getGoalSectionLabel([goal('active')], 1), null)
+})
+
+test('goal filters are applied before section rendering and preserve the same sort order', () => {
+  const input = [
+    goal('inactive-match', { status: 'paused', priority: 1, responsible_user_id: 'u1', description: 'Машина' }),
+    goal('active-other', { priority: 1, responsible_user_id: 'u2', name: 'Отпуск' }),
+    goal('active-match', { priority: 2, responsible_user_id: 'u1', name: 'Машина' }),
+    goal('inactive-other', { status: 'done', priority: 2, responsible_user_id: 'u1', name: 'Ремонт' }),
+  ]
+  const filtered = filterAndSortGoals(input, {
+    status: 'all',
+    priority: 'all',
+    participantId: 'u1',
+    search: 'машина',
+  })
+  assert.deepEqual(Array.from(filtered, item => item.id), ['active-match', 'inactive-match'])
+  assert.equal(getGoalSectionLabel(filtered, 0), 'Активные цели')
+  assert.equal(getGoalSectionLabel(filtered, 1), 'Неактивные цели')
+})
+
+test('goal filter defaults retain every goal and ignore empty search', () => {
+  const input = [
+    goal('inactive', { status: 'paused' }),
+    goal('active', { priority: 1 }),
+  ]
+  assert.deepEqual(Array.from(filterAndSortGoals(input), item => item.id), ['active', 'inactive'])
 })
