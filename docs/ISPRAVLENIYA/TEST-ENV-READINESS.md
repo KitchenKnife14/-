@@ -55,23 +55,17 @@ Batch не использует реальные Telegram Bot API, Vercel, Produ
 
 Read-consistency probe теперь выводит тело вложенного ошибочного ответа, а monthly-plan cleanup повторно проверяет листы после `SpreadsheetApp.flush()` и сброса локальных caches. Это диагностические изменения; они не меняют бизнес-логику приложения.
 
-## 5. Единое ручное действие M-04 после восстановления
+## 5. Следующие ручные действия после восстановления
 
-Выполнить после точечной очистки:
+Поскольку TEST `Code.gs` уже был обновлён и batch уже запускался, повторно менять `Code.gs`, `IsolatedTestGuard.gs` или Web App deployment не нужно.
 
-1. Открыть именно отдельный TEST Apps Script project, привязанный к TEST-таблице. Не открывать основной проект «Семейный бюджет».
-2. В файле `Code.gs` заменить содержимое на актуальный файл из ветки `ispravleniya`: [google-apps-script/Code.gs](https://github.com/KitchenKnife14/-/blob/ispravleniya/google-apps-script/Code.gs).
-3. Существующий `IsolatedTestGuard.gs` оставить без изменений. Не заменять его старой версией и не удалять.
-4. Создать один новый файл Apps Script с именем `RuntimeAcceptanceBundle.gs` и вставить в него полное содержимое: [RuntimeAcceptanceBundle.gs](https://github.com/KitchenKnife14/-/blob/ispravleniya/tests/gas/RuntimeAcceptanceBundle.gs). Не добавлять отдельно `RuntimeAcceptanceBatch.gs` и четыре individual probe files.
-5. Сохранить проект. В разделе **Развернуть → Управление развертываниями** отредактировать существующее TEST Web App deployment, выбрать новую версию и развернуть. Не создавать новый URL и не менять Production deployment.
-6. В списке функций выбрать точное имя `runIsolatedRuntimeAcceptanceBatch` и запустить один раз.
-7. Открыть журнал выполнения и сохранить полный JSON-отчёт.
+1. В TEST Apps Script открыть существующий `RuntimeAcceptanceBundle.gs`.
+2. Полностью заменить содержимое актуальной версией из [ветки ispravleniya](https://github.com/KitchenKnife14/-/blob/ispravleniya/tests/gas/RuntimeAcceptanceBundle.gs).
+3. Сохранить файл.
+4. Запустить `cleanupFailedMonthlyPlanFixture()` один раз. Продолжать только при `result=PASS`, `cleanup=PASS` и всех `verified_remaining=false`.
+5. После подтверждённой очистки запустить `runIsolatedRuntimeAcceptanceBatch()` и прислать полный JSON из журнала.
 
-Ожидаемый успешный итог: `completed=4`, `passed=4`, `failed=0`, `result="PASS"`; у каждого из четырёх вложенных отчётов должны быть `result="PASS"` и `cleanup="PASS"`.
-
-Если функция не появилась в списке после сохранения, сначала проверить, что весь bundle вставлен в правильный TEST project и сохранён. Не создавать отдельные копии функций вручную и не запускать individual probes по одному.
-
-Если любой тест завершился FAIL или cleanup не PASS — не повторять batch вслепую. Нужен отчёт выполнения, после чего разбирается конкретный сбой и состояние синтетических данных.
+Новый deployment не требуется: изменения в bundle относятся к тестовым функциям и прямой очистке TEST-таблицы; backend `Code.gs` не менялся.
 
 ## 6. CI и границы доказательств
 
