@@ -6,7 +6,7 @@ import type { RecurringPayment, Category, Account, FamilyMember, Profile } from 
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { formatDate, todayISO } from '../lib/dates'
 import Modal from '../components/Modal'
-import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
 import { Plus, Check, Pause, Play, Trash2, Repeat } from 'lucide-react'
 
 const FREQ_LABELS: Record<string, string> = { daily: 'Ежедневно', weekly: 'Еженедельно', monthly: 'Ежемесячно', yearly: 'Ежегодно', custom: 'По интервалу' }
@@ -172,10 +172,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, members, 
       const storage = window.localStorage
       const pendingKey = pendingMutationStorageKey('recurring_payments', familyId, userId)
       const fingerprint = await fingerprintTransactionPayload(payload)
-      const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
-      const { error: err } = await googleSheets.from('recurring_payments').insert({ ...payload, id })
-      if (err) throw err
-      clearPendingMutation(storage, pendingKey, id)
+      await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('recurring_payments').insert({ ...payload, id }))
       onSaved(); onClose()
     } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка сохранения') }
     finally { setSaving(false) }
