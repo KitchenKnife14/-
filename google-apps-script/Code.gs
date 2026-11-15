@@ -64,7 +64,9 @@ function requestLockMode_(request){
     if(action==='rpc')return ['get_table_revision','get_telegram_link_status','get_my_context'].includes(String(request.name||''));
     if(action==='batch'){
       if(!Array.isArray(request.requests)||request.requests.length===0)return false;
-      return request.requests.every(isRead);
+      // batch_ rejects nested batches; classify them as writes as well so malformed
+      // nesting never enters the optimistic read lane.
+      return request.requests.every(item=>!!item&&item.action!=='batch'&&isRead(item));
     }
     return false;
   };
