@@ -40,7 +40,7 @@ test('goal display order keeps active goals first, then priority and target date
     goal('inactive-low', { status: 'done', priority: 5 }),
   ]
   const sorted = sortGoalsForDisplay(input)
-  assert.deepEqual(sorted.map(item => item.id), [
+  assert.deepEqual(Array.from(sorted, item => item.id), [
     'active-sooner',
     'active-later',
     'active-low',
