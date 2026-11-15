@@ -42,7 +42,7 @@ export function getPendingStorage(
     getItem(key) {
       if (useVolatile) return volatilePendingStorage.getItem(key)
       try {
-        return persistent.getItem(key)
+        return persistent.getItem(key) ?? volatilePendingStorage.getItem(key)
       } catch {
         useVolatile = true
         return volatilePendingStorage.getItem(key)
@@ -55,6 +55,7 @@ export function getPendingStorage(
       }
       try {
         persistent.setItem(key, value)
+        volatilePendingStorage.removeItem(key)
       } catch {
         // getOrCreate reads first; if that read succeeded and there was no record,
         // falling back here cannot replace an existing persistent pending ID.
@@ -69,6 +70,7 @@ export function getPendingStorage(
       }
       try {
         persistent.removeItem(key)
+        volatilePendingStorage.removeItem(key)
       } catch {
         // Keep the persistent record: a later retry will safely reuse its ID.
       }
