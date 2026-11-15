@@ -1437,6 +1437,27 @@ test('new families receive all 87 default categories including cigarettes and cr
   assert.deepEqual(children.filter(x=>x.parent_id===credits.id).map(x=>x.name).sort(),[
     'Комиссии по кредиту','Погашение основного долга','Проценты по кредиту'
   ]);
+
+  const supplementalNames = new Set([
+    'Сигареты','Кредиты','Погашение основного долга','Проценты по кредиту','Комиссии по кредиту',
+  ]);
+  const legacyRows = h.context.rows_('categories').filter(row =>
+    String(row.family_id) === f.id && supplementalNames.has(row.name)
+  );
+  h.context.deleteRows_('categories', legacyRows);
+  assert.equal(legacyRows.length, 5);
+  const migrated = h.call({
+    action: 'rpc', token: user.token, name: 'ensure_supplemental_categories',
+    params: { p_family_id: f.id },
+  });
+  assert.equal(migrated.error, null, migrated.error?.message);
+  assert.equal(migrated.data.added, 5);
+  const retried = h.call({
+    action: 'rpc', token: user.token, name: 'ensure_supplemental_categories',
+    params: { p_family_id: f.id },
+  });
+  assert.equal(retried.error, null, retried.error?.message);
+  assert.equal(retried.data.added, 0);
 });
 test('v3 get_my_context returns profile, memberships and first family',()=>{const h=makeHarness(),u=h.signup('ctx-v3@example.com'),f=h.call({action:'createFamily',token:u.token,name:'Контекст',display_name:'Новое имя'}).data,r=h.call({action:'rpc',token:u.token,name:'get_my_context',params:{}});assert.equal(r.error,null,r.error?.message);assert.equal(r.data.profile.display_name,'Новое имя');assert.equal(r.data.members.length,1);assert.equal(r.data.family.id,f.id);});
 test('v3 create_family and join_family_by_invite save display names',()=>{const h=makeHarness(),o=h.signup('owner-v3@example.com'),p=h.signup('partner-v3@example.com'),f=h.call({action:'rpc',token:o.token,name:'create_family',params:{p_name:'Семья v3',p_display_name:'Владелец'}});assert.equal(f.error,null,f.error?.message);const j=h.call({action:'rpc',token:p.token,name:'join_family_by_invite',params:{p_invite_code:f.data.invite_code,p_display_name:'Партнёр'}});assert.equal(j.error,null,j.error?.message);const c=h.call({action:'rpc',token:p.token,name:'get_my_context',params:{}});assert.equal(c.data.profile.display_name,'Партнёр');assert.equal(c.data.family.id,f.data.id);});
