@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { calculateRealizedTotals } from '../lib/realizedTotals'
@@ -33,11 +33,13 @@ export default function TransactionsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<TransactionDraft | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
+  const loadSequence = useRef(0)
 
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
 
   const load = useCallback(async () => {
     if (!familyId) return
+    const requestId = ++loadSequence.current
     setLoading(true)
     setError(null)
     try {
@@ -54,6 +56,7 @@ export default function TransactionsPage() {
         googleSheets.from('categories').select('*').eq('family_id', familyId),
         googleSheets.from('accounts').select('*').eq('family_id', familyId),
       ])
+      if (requestId !== loadSequence.current) return
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
       if (accountRes.error) throw accountRes.error
@@ -61,13 +64,16 @@ export default function TransactionsPage() {
       setCategories(catRes.data as Category[])
       setAccounts(accountRes.data as Account[])
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка загрузки')
+      if (requestId === loadSequence.current) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
-      setLoading(false)
+      if (requestId === loadSequence.current) setLoading(false)
     }
   }, [familyId, dateFrom, dateTo, range.start, range.end])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void load()
+    return () => { loadSequence.current += 1 }
+  }, [load])
   useEffect(() => {
     if (!familyId) return
     const channel = googleSheets
