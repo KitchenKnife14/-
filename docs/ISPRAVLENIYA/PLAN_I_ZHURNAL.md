@@ -3532,3 +3532,14 @@ HEAD до:
 - CI на HEAD 5614fd48c2ae5951ea7114cb4c642e271493d391 — [43709590870 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43709590870): **273/273 regression tests**, TypeScript/production build, preview smoke, dependency audit, Apps Script syntax checks (включая Telegram probe и runtime bundle), manifest validation.
 - Чек-лист: 188/292 = 64.38% (64.4%), 104 открытых; макроэтапы остаются 3/12 (25.0%). Live TEST GAS runtime, браузерная проверка и exactly-once отправка Telegram confirmation этим изменением не подтверждены.
 - Все изменения только в ispravleniya. Production, main, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не менялись.
+
+### 2026-11-15 — дополнительное усиление Telegram fingerprint и LOCK-01 классификатора
+
+- В канонизации Telegram update payload заменён обычный объект `{}` на объект без прототипа (`Object.create(null)`). Это сохраняет JSON-ключ `__proto__` как обычные данные: прежний вариант мог интерпретировать его как setter прототипа и исключить из сериализованного fingerprint.
+- Добавлен регрессионный тест: payload с `__proto__` имеет отдельный fingerprint; перестановка ключей сохраняет fingerprint; глобальный Object.prototype не изменяется.
+- В `requestLockMode_()` закрыт пограничный случай вложенного `batch`: обработчик `batch_()` не поддерживает вложенные пакеты, поэтому классификатор теперь принудительно отправляет такую некорректную структуру в write lane, а не в optimistic read lane.
+- Добавлен тест классификатора для вложенного batch. Существующие правила остаются: чистые allow-listed чтения — read candidate; неизвестные действия, записи, смешанные и некорректные пакеты — write.
+- Изменённые файлы: `google-apps-script/Code.gs`, `tests/apps-script.test.cjs`. Коммиты: `09401303708d137ead1bd222f7d3475764401062`, `a56333895f14db3a74a6fb9ee3e3b2310a9e40dc`, `64b56ce059377291044b685f54468fdff35cfe67`, `3e6e9ab4e9419646b449a0a7711d89070a4c01a2`.
+- GitHub Actions [43710167704 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43710167704) на HEAD `64b56ce059377291044b685f54468fdff35cfe67`: **274/274 regression tests**, TypeScript/production build, preview smoke, dependency audit, Apps Script source + test syntax, runtime bundle syntax и manifest validation прошли.
+- Прогресс контрольного чек-листа не увеличен: **188/292 (64.4%), 104 открытых**; макроэтапы **3/12 (25.0%)**. Эти исправления укрепляют уже существующие критерии, но не заменяют живые GAS runtime и browser проверки.
+- Изменения только в `ispravleniya`. Production, `main`, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не менялись.
