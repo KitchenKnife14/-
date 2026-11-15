@@ -6,7 +6,7 @@ import type { Budget, Category, Transaction } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
 import Modal from '../components/Modal'
-import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation, getPendingStorage } from '../lib/pendingTransaction'
 import { Plus, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react'
 
 export default function BudgetsPage() {
@@ -161,7 +161,7 @@ function BudgetForm({ open, onClose, onSaved, categories, familyId, userId, mont
         if (err) throw err
       } else {
         if (!userId) throw new Error('Сессия завершена. Войдите снова.')
-        const storage = window.localStorage
+        const storage = getPendingStorage()
         const pendingKey = pendingMutationStorageKey('budgets', familyId, userId)
         const fingerprint = await fingerprintTransactionPayload(payload)
         await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, async id => await googleSheets.from('budgets').insert({ ...payload, id }))
