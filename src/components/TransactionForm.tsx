@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
+import { BackendRequestError } from '../lib/googleSheets'
 import Modal from './Modal'
 import type { Account, Category, TxType } from '../lib/types'
 import { parseRublesToKopecks } from '../lib/money'
@@ -154,6 +155,11 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
       onSaved()
       onClose()
     } catch (e) {
+      if (!editing && e instanceof BackendRequestError && pendingInsertRef.current) {
+        const pending = pendingInsertRef.current
+        try { clearPendingTransaction(window.localStorage, pending.key, pending.id) } catch { /* Storage may be unavailable. */ }
+        pendingInsertRef.current = null
+      }
       setError(e instanceof Error ? e.message : 'Ошибка сохранения')
     } finally {
       setSaving(false)
