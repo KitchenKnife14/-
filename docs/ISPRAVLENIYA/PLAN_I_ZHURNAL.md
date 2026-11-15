@@ -3677,3 +3677,14 @@ HEAD до:
 - Живой batch ещё не запускался; никакой runtime PASS по четырём новым probes не заявляется. Требуемый результат — `completed=4, passed=4, failed=0, result=PASS` и `cleanup=PASS` для каждого теста.
 - CI [43725670975 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43725670975) на HEAD `af858cf4775278e6796bb4fe35574b4da08ee90b`: build, regression suite, browser smoke, financial E2E, dependency audit, Apps Script syntax checks и manifest validation прошли.
 - Детальный план: **171/234 = 73,1%**, открыто 63; макроэтапы **4/12 = 33,3%**. Следующий шаг после автономной подготовки — один запуск M-04; Production, `main`, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не затрагиваются.
+
+
+### 2026-11-15 — разбор повторного TEST GAS batch: остановка из-за cleanup
+
+- Второй live batch: Telegram duplicate/retry — `PASS`, `cleanup=PASS`; optimistic read/write — `FAIL` на одном из 16 параллельных чтений; monthly-plan stale update — `FAIL`, очистка не подтверждена; batch корректно остановился до transaction-insert probe.
+- Orphaned fixture зафиксирован по точному ID `monthrace_c9b44a7e653b4b90b366d4bc9a710d83`. В `RuntimeAcceptanceBundle.gs` добавлена TEST-guarded recovery-функция `cleanupFailedMonthlyPlanFixture()`, ограниченная этим plan ID, двумя synthetic emails и семьёй с точным TEST-именем. Она не затрагивает Production и обычные семейные данные.
+- В read-consistency probe добавлена выдача полного содержимого вложенного ошибочного ответа, чтобы следующий запуск указал конкретную API-ошибку, а не только номер параллельного чтения.
+- В monthly-plan cleanup добавлены `SpreadsheetApp.flush()`, сброс локальных caches и повторное чтение листов перед финальной проверкой. В отчёт добавлена разбивка оставшихся auth/plan/family/profile записей.
+- Обновлён runbook: [TEST-ENV-READINESS.md](https://github.com/KitchenKnife14/-/blob/ispravleniya/docs/ISPRAVLENIYA/TEST-ENV-READINESS.md). Следующий ручной шаг — заменить только `RuntimeAcceptanceBundle.gs` в TEST GAS, запустить `cleanupFailedMonthlyPlanFixture()`, подтвердить все `verified_remaining=false`, затем повторить batch. `Code.gs`, `IsolatedTestGuard.gs` и deployment не менять.
+- На HEAD `c721efa42056a1b0b0322612c2685bb5ce840f05` Vercel status checks сообщают `build-rate-limit`; успешный GitHub Actions run для этих последних коммитов пока не подтверждён. Не объявлять CI зелёным.
+- Детальный прогресс остаётся **171/234 = 73,1%**, макроэтапы **4/12 = 33,3%**. M-04 не закрыт; три успешные runtime-пробы из предыдущего запуска не компенсируют cleanup failure и не засчитываются как завершённый batch.
