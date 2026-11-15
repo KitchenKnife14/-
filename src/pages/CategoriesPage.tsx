@@ -5,7 +5,7 @@ import type { Category, CategoryKind } from '../lib/types'
 import Modal from '../components/Modal'
 import { Plus, Pencil, Archive, Folder } from 'lucide-react'
 import { ensureSupplementalCategories } from '../lib/categories'
-import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
 
 export default function CategoriesPage() {
   const { family } = useAuth()
@@ -189,10 +189,7 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, f
         const scope = parentId ? `parent:${parentId}` : 'root'
         const pendingKey = pendingMutationStorageKey('categories', familyId, userId, scope)
         const fingerprint = await fingerprintTransactionPayload(insertPayload)
-        const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
-        const { error: err } = await googleSheets.from('categories').insert({ ...insertPayload, id })
-        if (err) throw err
-        clearPendingMutation(storage, pendingKey, id)
+        await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('categories').insert({ ...insertPayload, id }))
       }
       onSaved()
       onClose()
