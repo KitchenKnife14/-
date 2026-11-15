@@ -107,10 +107,39 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       throw new Error('Apps Script returned a non-JSON response')
     }
 
+    if (!result || typeof result !== 'object' || Array.isArray(result) ||
+        !Object.prototype.hasOwnProperty.call(result, 'data') ||
+        !Object.prototype.hasOwnProperty.call(result, 'error')) {
+      throw new Error('Apps Script returned an invalid response envelope')
+    }
+
     const chatId = update.message?.chat?.id
-    const reply = result.error
-      ? { chat_id: chatId, text: result.error.message || 'Не удалось обработать сообщение.' }
-      : result.data
+    let reply: BackendReply | undefined
+    if (result.error) {
+      if (typeof result.error !== 'object' || Array.isArray(result.error)) {
+        throw new Error('Apps Script returned an invalid error envelope')
+      }
+      reply = {
+        chat_id: chatId,
+        text: typeof result.error.message === 'string' && result.error.message
+          ? result.error.message
+          : 'Не удалось обработать сообщение.',
+      }
+    } else {
+      const data = result.data
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('Apps Script returned an invalid data envelope')
+      }
+      if (data.skip === true) {
+        reply = data
+      } else {
+        if ((typeof data.chat_id !== 'string' && typeof data.chat_id !== 'number') ||
+            typeof data.text !== 'string' || data.text.length === 0) {
+          throw new Error('Apps Script returned an incomplete Telegram reply')
+        }
+        reply = data
+      }
+    }
 
     if (reply?.chat_id && reply.text && !reply.skip) {
       const telegramResponse = await fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
