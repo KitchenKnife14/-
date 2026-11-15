@@ -1419,7 +1419,9 @@ function telegramUpdateFingerprint_(update){
   function canonical_(value){
     if(Array.isArray(value))return value.map(canonical_);
     if(value&&typeof value==='object'){
-      const result={};
+      // A null-prototype object preserves JSON keys such as __proto__ as data.
+      // A normal {} would treat that key as a prototype setter and omit it from JSON.stringify.
+      const result=Object.create(null);
       Object.keys(value).sort().forEach(key=>{result[key]=canonical_(value[key]);});
       return result;
     }
