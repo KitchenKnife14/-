@@ -178,7 +178,7 @@ test('webhook forwards backend replies to Telegram and acknowledges success', as
   const handler = setup(async (url, options) => {
     calls.push({ url, options });
     if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
-      return { ok: true, text: async () => JSON.stringify({ data: { chat_id: 123, text: 'Записал расход' } }) };
+      return { ok: true, text: async () => JSON.stringify({ data: { chat_id: 123, text: 'Записал расход' }, error: null }) };
     }
     return { ok: true, json: async () => ({ ok: true }) };
   });
@@ -195,7 +195,7 @@ test('webhook sends a safe backend error message to Telegram', async () => {
   const sent = [];
   const handler = setup(async (url, options) => {
     if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
-      return { ok: true, text: async () => JSON.stringify({ error: { message: 'Не понял сумму' } }) };
+      return { ok: true, text: async () => JSON.stringify({ data: null, error: { message: 'Не понял сумму' } }) };
     }
     sent.push(JSON.parse(options.body));
     return { ok: true, json: async () => ({ ok: true }) };
@@ -211,7 +211,7 @@ test('webhook acknowledges skipped updates without sending Telegram messages', a
   let telegramCalls = 0;
   const handler = setup(async url => {
     if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
-      return { ok: true, text: async () => JSON.stringify({ data: { skip: true } }) };
+      return { ok: true, text: async () => JSON.stringify({ data: { skip: true }, error: null }) };
     }
     telegramCalls++;
     return { ok: true, json: async () => ({ ok: true }) };
@@ -225,7 +225,7 @@ test('webhook acknowledges skipped updates without sending Telegram messages', a
 test('webhook returns 502 when Telegram rejects sendMessage', async () => {
   const handler = setup(async url => {
     if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
-      return { ok: true, text: async () => JSON.stringify({ data: { chat_id: 123, text: 'Ответ' } }) };
+      return { ok: true, text: async () => JSON.stringify({ data: { chat_id: 123, text: 'Ответ' }, error: null }) };
     }
     return { ok: false, json: async () => ({ ok: false, description: 'blocked' }) };
   });
@@ -247,6 +247,7 @@ test('webhook retries an uncertain send at-least-once with the same update and r
         ok: true,
         text: async () => JSON.stringify({
           data: { chat_id: 123, text: 'Записал расход: 45,00 ₽ — Проезд' },
+          error: null,
         }),
       };
     }
@@ -307,7 +308,7 @@ test('webhook applies a separate timeout to Telegram sendMessage', async () => {
   const handler = setup(async (url, options) => {
     if (url === ENV.TELEGRAM_APPS_SCRIPT_URL) {
       assert.equal(options.signal.aborted, false);
-      return { ok: true, text: async () => JSON.stringify({ data: { chat_id: 123, text: 'Ответ' } }) };
+      return { ok: true, text: async () => JSON.stringify({ data: { chat_id: 123, text: 'Ответ' }, error: null }) };
     }
     assert.equal(options.signal.aborted, true);
     throw new Error('Telegram request aborted');
