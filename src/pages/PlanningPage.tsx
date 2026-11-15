@@ -43,7 +43,7 @@ export default function PlanningPage() {
       if (pRes.error) throw pRes.error; if (cRes.error) throw cRes.error; if (tRes.error) throw tRes.error
       setPlans(pRes.data as MonthlyPlan[]); setCategories(cRes.data as Category[]); setTxs(tRes.data as Transaction[])
     } catch (e) { if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
-    finally { if (requestId === loadSequence.current) setLoading(false) }
+    finally { if (loadSequence.current.isCurrent(requestId)) setLoading(false) }
   }, [familyId, monthDate, range.start, range.end])
 
   useEffect(() => {
