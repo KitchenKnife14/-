@@ -3984,7 +3984,12 @@ test('Telegram refuses to record transfers as expenses and accepts an income wit
   });
   assert.equal(linked.error, null, linked.error?.message);
 
-  for (const [update_id, text] of [[7502, 'Перевод 500 рублей'], [7503, 'Перевёл 500 рублей']]) {
+  for (const [update_id, text] of [
+    [7502, 'Перевод 500 рублей'],
+    [7503, 'Перевёл 500 рублей'],
+    [7504, 'Перевод: 500 рублей'],
+    [7506, 'Перевод — 500 рублей'],
+  ]) {
     const result = h.call({
       action: 'telegramWebhook', telegramSecret: 'transfer-income-secret-0123456789abcdef',
       update: { update_id, message: { chat: { id: 750, type: 'private' }, from: { id: 750 }, text } },
