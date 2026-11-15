@@ -3003,6 +3003,17 @@ test('request lock classifier keeps mutations and unknown actions fail-closed', 
   }
 });
 
+test('request lock classifier rejects nested batches from the optimistic read lane', () => {
+  const h = makeHarness();
+  const classify = h.context.requestLockMode_;
+  assert.equal(classify({ action: 'batch', requests: [
+    { action: 'query', table: 'transactions', mode: 'select' },
+    { action: 'batch', requests: [
+      { action: 'query', table: 'transactions', mode: 'select' }
+    ]}
+  ]}), 'write');
+});
+
 test('request lock classifier treats mixed or malformed batches as writes', () => {
   const h = makeHarness();
   const classify = h.context.requestLockMode_;
