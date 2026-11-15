@@ -3652,3 +3652,10 @@ HEAD до:
 - Добавлен regression test на один anchor на букву и согласованность цели навигации. CI [43716124152 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43716124152): **292/292 regression tests**, build, dependency audit, Vite preview smoke, Playwright Chromium auth/responsive smoke и Apps Script syntax/manifest checks прошли.
 - Прогресс без изменения: **170/233 = 73,0%**, макроэтапы **4/12 = 33,3%**. Изменение исправляет UI-дефект, но не закрывает новый критерий плана.
 - Изменения только в `ispravleniya`; Production и реальные финансовые данные не затрагивались.
+### 2026-11-15 — устранены дублирующиеся ID в алфавитной навигации категорий
+
+- Исправлен `CategoriesPage.tsx`: DOM-якорь `category-letter-X` теперь создаётся только на первой корневой категории соответствующей буквы; повторяющиеся ID больше не появляются.
+- Добавлен `tests/category-navigation.test.cjs`, проверяющий единственный anchor на букву и соответствие навигационных кнопок целевому ID.
+- CI [43716124152 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/43716124152): **292/292 regression tests**, typecheck/build, dependency audit, Vite preview smoke, Playwright Chromium auth/responsive smoke, Apps Script syntax checks и manifest validation прошли.
+- Прогресс остаётся **170/233 = 73,0%**, макроэтапы **4/12 = 33,3%**. Это дополнительный UI hotfix внутри текущего этапа, без закрытия нового критерия.
+- Изменения только в `ispravleniya`; Production и реальные финансовые данные не затронуты.
