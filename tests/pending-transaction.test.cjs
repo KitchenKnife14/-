@@ -31,14 +31,30 @@ test('pending transaction ID is reused for the same payload across form remounts
   assert.equal(generated, 1)
 })
 
-test('changed payload gets a new request ID', async () => {
-  const { getOrCreatePendingTransactionId } = await loadPendingModule()
+test('changed payload cannot replace an operation with an uncertain result', async () => {
+  const { getOrCreatePendingTransactionId, PendingTransactionConflictError } = await loadPendingModule()
   const storage = createStorage()
   let generated = 0
   const createId = () => `tx_${String(++generated).padStart(32, '0')}`
   const first = getOrCreatePendingTransactionId(storage, 'family-a:user-a', 'a'.repeat(64), createId, 1000)
-  const changed = getOrCreatePendingTransactionId(storage, 'family-a:user-a', 'b'.repeat(64), createId, 2000)
-  assert.notEqual(first, changed)
+  assert.throws(
+    () => getOrCreatePendingTransactionId(storage, 'family-a:user-a', 'b'.repeat(64), createId, 2000),
+    PendingTransactionConflictError,
+  )
+  assert.equal(getOrCreatePendingTransactionId(storage, 'family-a:user-a', 'a'.repeat(64), createId, 3000), first)
+  assert.equal(generated, 1)
+})
+
+test('a definitively rejected pending operation can be cleared before correcting its payload', async () => {
+  const { getOrCreatePendingTransactionId, clearPendingTransaction } = await loadPendingModule()
+  const storage = createStorage()
+  let generated = 0
+  const createId = () => `tx_${String(++generated).padStart(32, '0')}`
+  const key = 'family-a:user-a'
+  const first = getOrCreatePendingTransactionId(storage, key, 'a'.repeat(64), createId, 1000)
+  clearPendingTransaction(storage, key, first)
+  const corrected = getOrCreatePendingTransactionId(storage, key, 'b'.repeat(64), createId, 2000)
+  assert.notEqual(first, corrected)
   assert.equal(generated, 2)
 })
 
