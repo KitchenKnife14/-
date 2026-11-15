@@ -116,15 +116,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const chatId = update.message?.chat?.id
     let reply: BackendReply | undefined
     if (result.error) {
-      if (typeof result.error !== 'object' || Array.isArray(result.error)) {
+      if (typeof result.error !== 'object' || Array.isArray(result.error) ||
+          typeof result.error.message !== 'string' || result.error.message.length === 0) {
         throw new Error('Apps Script returned an invalid error envelope')
       }
-      reply = {
-        chat_id: chatId,
-        text: typeof result.error.message === 'string' && result.error.message
-          ? result.error.message
-          : 'Не удалось обработать сообщение.',
-      }
+      reply = { chat_id: chatId, text: result.error.message }
     } else {
       const data = result.data
       if (!data || typeof data !== 'object' || Array.isArray(data)) {
