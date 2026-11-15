@@ -4,7 +4,7 @@ import { googleSheets } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
 import { formatRubles, parseRublesToKopecks } from '../lib/money'
 import { calculateAccountBalances } from '../lib/accountBalances.js'
-import { clearPendingMutation, fingerprintTransactionPayload, getOrCreatePendingMutationId, pendingMutationStorageKey } from '../lib/pendingTransaction'
+import { fingerprintTransactionPayload, pendingMutationStorageKey, runPendingMutation } from '../lib/pendingTransaction'
 import { Plus, Pencil, Archive, Wallet } from 'lucide-react'
 import Modal from '../components/Modal'
 
@@ -82,9 +82,7 @@ export default function AccountsPage() {
         const storage = window.localStorage
         const pendingKey = pendingMutationStorageKey('accounts', family.id, userId)
         const fingerprint = await fingerprintTransactionPayload(payload)
-        const id = getOrCreatePendingMutationId(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`)
-        result = await googleSheets.from('accounts').insert({ ...payload, id })
-        if (!result.error) clearPendingMutation(storage, pendingKey, id)
+        result = await runPendingMutation(storage, pendingKey, fingerprint, () => `op_${crypto.randomUUID().replace(/-/g, '')}`, id => googleSheets.from('accounts').insert({ ...payload, id }))
       }
       if (result.error) throw result.error
       setModalOpen(false)
