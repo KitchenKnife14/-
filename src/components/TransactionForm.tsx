@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { googleSheets } from '../lib/googleSheets'
-import { BackendRequestError } from '../lib/googleSheets'
+import { BackendRequestError, googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
 import type { Account, Category, TxType } from '../lib/types'
 import { parseRublesToKopecks } from '../lib/money'
