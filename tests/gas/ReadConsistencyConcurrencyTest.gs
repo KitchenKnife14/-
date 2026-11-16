@@ -132,9 +132,32 @@ function runReadConsistencyConcurrencyTest() {
       throw new Error('Подтверждение покупки не завершилось: ' + writerResult.error.message);
     }
 
+    // A writer can briefly hold ScriptLock while all overlapping readers fall
+    // back from optimistic reads. Retry only explicit lock timeouts after the
+    // writer has completed; never retry malformed responses or data errors.
+    var lockTimeoutRetries=0;
+    var readerResults=responses.slice(1).map(function(response,index) {
+      return readConsistencyTestParse_(response,'parallel read '+(index+1));
+    });
+    for (var retryRound=1;retryRound<=3;retryRound++) {
+      var retryIndexes=[];
+      readerResults.forEach(function(result,index) {
+        if(result.error&&/Lock timeout: another process was holding the lock for too long/i.test(String(result.error.message||''))) {
+          retryIndexes.push(index);
+        }
+      });
+      if(!retryIndexes.length)break;
+      Utilities.sleep(250*Math.pow(2,retryRound-1));
+      var retryResponses=UrlFetchApp.fetchAll(retryIndexes.map(function(index){return reader;}));
+      retryIndexes.forEach(function(index,retryIndex) {
+        readerResults[index]=readConsistencyTestParse_(retryResponses[retryIndex],'parallel read retry '+(index+1));
+        lockTimeoutRetries++;
+      });
+    }
+
     var beforeCount=0, afterCount=0;
-    for (var j=1;j<responses.length;j++) {
-      var result = readConsistencyTestParse_(responses[j], 'parallel read '+j);
+    for (var j=0;j<readerResults.length;j++) {
+      var result = readerResults[j];
       if (result.error || !Array.isArray(result.data) || result.data.length !== 2 ||
           result.data.some(function(item){return item.error;})) {
         throw new Error('Параллельное чтение '+j+' завершилось ошибкой: '+
@@ -172,6 +195,7 @@ function runReadConsistencyConcurrencyTest() {
     }
 
     report.parallel_read_requests=16;
+    report.lock_timeout_retries=lockTimeoutRetries;
     report.before_snapshots=beforeCount;
     report.after_snapshots=afterCount;
     report.fetch_all_elapsed_ms=elapsed;
