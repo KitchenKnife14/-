@@ -33,9 +33,14 @@ function runTransactionConcurrencyTest() {
       payload:JSON.stringify(body),muteHttpExceptions:true
     }),label||'request');
   }
+  function transactionConcurrencyFreshRows_(table) {
+    delete ROWS_CACHE[table];
+    return rows_(table);
+  }
   function transactionConcurrencyRemoveRows_(table,predicate) {
-    var matches=rows_(table).filter(predicate);
+    var matches=transactionConcurrencyFreshRows_(table).filter(predicate);
     if(matches.length)deleteRows_(table,matches);
+    delete ROWS_CACHE[table];
   }
 
   try {
@@ -147,7 +152,10 @@ function runTransactionConcurrencyTest() {
         [userA,userB].filter(Boolean).forEach(function(uid) {
           transactionConcurrencyRemoveRows_('profiles',function(row){return String(row.id)===uid;});
         });
-        authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
+        var authCleanup=monthlyPlanDeleteSyntheticAuthRows_([emailA,emailB]);
+        if(authCleanup.remaining!==0) {
+          throw new Error('Не удалось удалить точные synthetic auth rows: '+JSON.stringify(authCleanup));
+        }
 
         var allProps=props.getProperties();
         Object.keys(allProps).forEach(function(key) {
@@ -158,18 +166,27 @@ function runTransactionConcurrencyTest() {
           } catch (_) {}
         });
 
-        var remainingAuth=authRows_().some(function(row) {
+        SpreadsheetApp.flush();
+        var remainingAuth=authRows_().filter(function(row) {
           return String(row.email)===emailA||String(row.email)===emailB;
-        });
-        var remainingFamily=familyId&&rows_('families').some(function(row){return String(row.id)===familyId;});
+        }).length;
+        var remainingFamily=transactionConcurrencyFreshRows_('families').some(function(row){return String(row.id)===familyId;});
         var remainingUsers=[userA,userB].filter(Boolean).some(function(uid) {
-          return rows_('profiles').some(function(row){return String(row.id)===uid;});
+          return transactionConcurrencyFreshRows_('profiles').some(function(row){return String(row.id)===uid;});
         });
-        var remainingTransactions=rows_('transactions').some(function(row) {
+        var remainingTransactions=transactionConcurrencyFreshRows_('transactions').filter(function(row) {
           return String(row.id)===idA||String(row.id)===idB;
-        });
-        if(remainingAuth||remainingFamily||remainingUsers||remainingTransactions) {
-          throw new Error('После cleanup остались синтетические TEST-записи.');
+        }).map(function(row){return String(row.id);});
+        var remainingMembers=familyId&&transactionConcurrencyFreshRows_('family_members').some(function(row){return String(row.family_id)===familyId;});
+        var remainingCategories=familyId&&transactionConcurrencyFreshRows_('categories').some(function(row){return String(row.family_id)===familyId;});
+        var remainingAccounts=familyId&&transactionConcurrencyFreshRows_('accounts').some(function(row){return String(row.family_id)===familyId;});
+        if(remainingAuth||remainingFamily||remainingUsers||remainingTransactions.length||remainingMembers||remainingCategories||remainingAccounts) {
+          throw new Error('После cleanup остались синтетические TEST-записи: '+JSON.stringify({
+            auth:remainingAuth,family:!!remainingFamily,users:!!remainingUsers,
+            transactions:remainingTransactions,members:!!remainingMembers,
+            categories:!!remainingCategories,accounts:!!remainingAccounts,
+            userA:userA||null,userB:userB||null,familyId:familyId||null
+          }));
         }
         report.cleanup='PASS';
       } catch(error) {
