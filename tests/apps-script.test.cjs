@@ -5150,14 +5150,13 @@ test('one-click TEST GAS runtime batch runs only isolated self-cleaning probes',
 });
 
 
-test('multi-user TEST GAS probes delete synthetic auth rows bottom-up without shifting later rows', () => {
-  for (const path of [
-    'tests/gas/MonthlyPlanConcurrencyTest.gs',
-    'tests/gas/TransactionConcurrencyTest.gs',
-  ]) {
-    const source = fs.readFileSync(path, 'utf8');
-    assert.ok(source.includes('authMatches.sort(function(a,b){return b.row-a.row;})'), path);
-  }
+test('multi-user TEST GAS probes delete only exact synthetic auth rows safely', () => {
+  const monthlyPlan = fs.readFileSync('tests/gas/MonthlyPlanConcurrencyTest.gs', 'utf8');
+  assert.ok(monthlyPlan.includes('monthlyPlanDeleteSyntheticAuthRows_([emailA,emailB])'));
+  assert.ok(monthlyPlan.includes("sh.getRange(2,2,last-1,1).getValues()"));
+  assert.ok(monthlyPlan.includes("cleanupLatestFailedMonthlyPlanFixture"));
+  const transaction = fs.readFileSync('tests/gas/TransactionConcurrencyTest.gs', 'utf8');
+  assert.ok(transaction.includes('authMatches.sort(function(a,b){return b.row-a.row;})'));
 });
 
 
