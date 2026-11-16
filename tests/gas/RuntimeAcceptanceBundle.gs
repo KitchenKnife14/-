@@ -779,7 +779,7 @@ function runMonthlyPlanConcurrencyTest() {
         [userA,userB].filter(Boolean).forEach(function(uid) {
           monthlyPlanRemoveRows_('profiles',function(row){return String(row.id)===uid;});
         });
-        monthlyPlanDeleteSyntheticAuthRows_([emailA,emailB]);
+        authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
 
         var allProps=props.getProperties();
         Object.keys(allProps).forEach(function(key) {
@@ -830,28 +830,6 @@ function runMonthlyPlanConcurrencyTest() {
   }
   Logger.log(JSON.stringify(report));
   return report;
-}
-
-/**
- * Delete only exact synthetic monthly-plan auth emails by scanning the live
- * _auth sheet immediately before deletion. This avoids relying on row numbers
- * captured by an earlier authRows_ snapshot while other test requests finish.
- */
-function monthlyPlanDeleteSyntheticAuthRows_(emails) {
-  var wanted={};
-  emails.forEach(function(email){wanted[String(email).toLowerCase()]=true;});
-  var sh=authSheet_();
-  var last=sh.getLastRow();
-  if(last<2)return 0;
-  var values=sh.getRange(2,2,last-1,1).getValues();
-  var rows=[];
-  values.forEach(function(row,index){
-    var email=String(row[0]||'').toLowerCase();
-    if(wanted[email])rows.push(index+2);
-  });
-  rows.sort(function(a,b){return b-a;}).forEach(function(row){sh.deleteRow(row);});
-  SpreadsheetApp.flush();
-  return rows.length;
 }
 
 function monthlyPlanTestParse_(response,label) {
@@ -1146,127 +1124,3 @@ function resetRuntimeAcceptanceCaches_() {
   SS_CACHE = null;
   SHEET_SCHEMA_VALIDATED = {};
 }
-
-
-/**
- * One-time recovery for the exact orphaned synthetic fixture reported by the
- * 2026-11-15 TEST run. Guarded to the allowlisted isolated TEST spreadsheet.
- */
-function cleanupFailedMonthlyPlanFixture() {
-  var props=PropertiesService.getScriptProperties();
-  var url=String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL')||'').trim();
-  var confirmation=String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM')||'');
-  assertIsolatedGasTestEnvironment_(props,confirmation,url);
-  function removeRows(table,predicate){var matches=rows_(table).filter(predicate);if(matches.length)deleteRows_(table,matches);}
-  var suffix='c9b44a7e653b4b90b366d4bc9a710d83';
-  var planId='monthrace_'+suffix;
-  var emailA='monthly-plan-a+'+suffix+'@example.test';
-  var emailB='monthly-plan-b+'+suffix+'@example.test';
-  var auth=authRows_().filter(function(row){return String(row.email)===emailA||String(row.email)===emailB;});
-  var userIds=auth.map(function(row){return String(row.id);});
-  var planRows=rows_('monthly_plans').filter(function(row){return String(row.id)===planId;});
-  var familyId=planRows.length?String(planRows[0].family_id||''):'';
-  var family=familyId?rows_('families').filter(function(row){
-    return String(row.id)===familyId&&String(row.name)==='TEST monthly plan '+suffix;
-  }):[];
-  if(family.length===1) {
-    var familyMembers=rows_('family_members').filter(function(row){return String(row.family_id)===familyId;});
-    userIds=userIds.concat(familyMembers.map(function(row){return String(row.user_id);}),[String(family[0].created_by||'')])
-      .filter(function(uid,index,all){return !!uid&&all.indexOf(uid)===index;});
-  }
-  if(planRows.length)deleteRows_('monthly_plans',planRows);
-  if(family.length===1) {
-    removeRows('categories',function(row){return String(row.family_id)===familyId;});
-    removeRows('accounts',function(row){return String(row.family_id)===familyId;});
-    removeRows('family_members',function(row){return String(row.family_id)===familyId;});
-    removeRows('families',function(row){return String(row.id)===familyId;});
-  } else if(userIds.length) {
-    removeRows('family_members',function(row){return userIds.indexOf(String(row.user_id))!==-1;});
-  }
-  userIds.forEach(function(uid){
-    removeRows('profiles',function(row){return String(row.id)===uid;});
-  });
-  auth.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
-  var allProps=props.getProperties();
-  Object.keys(allProps).forEach(function(key){
-    if(key.indexOf('session:')!==0)return;
-    try {
-      var session=JSON.parse(allProps[key]);
-      if(userIds.indexOf(String(session.userId))!==-1)props.deleteProperty(key);
-    } catch (_) {}
-  });
-  SpreadsheetApp.flush();
-  ROWS_CACHE={};
-  var remaining={
-    plan:rows_('monthly_plans').some(function(row){return String(row.id)===planId;}),
-    auth:authRows_().some(function(row){return String(row.email)===emailA||String(row.email)===emailB;}),
-    users:userIds.some(function(uid){return rows_('profiles').some(function(row){return String(row.id)===uid;});}),
-    family:family.length===1&&rows_('families').some(function(row){return String(row.id)===familyId;})
-  };
-  if(Object.keys(remaining).some(function(key){return remaining[key];})) {
-    throw new Error('Recovery cleanup не подтверждён: '+JSON.stringify(remaining));
-  }
-  var report={result:'PASS',cleanup:'PASS',fixture:'exact synthetic TEST-only monthly-plan fixture',plan_id:planId,synthetic_auth_rows_found:auth.length,family_id:familyId||null,verified_remaining:remaining};
-  Logger.log(JSON.stringify(report));
-  return report;
-}
-
-
-/**
- * One-time recovery for the exact orphaned fixture reported by the latest
- * TEST batch. Guarded to the allowlisted isolated TEST spreadsheet.
- */
-function cleanupLatestFailedMonthlyPlanFixture() {
-  var props=PropertiesService.getScriptProperties();
-  var url=String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL')||'').trim();
-  var confirmation=String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM')||'');
-  assertIsolatedGasTestEnvironment_(props,confirmation,url);
-  function removeRows(table,predicate){var matches=rows_(table).filter(predicate);if(matches.length)deleteRows_(table,matches);}
-  var suffix='c4c8cab147c74f1cb9d87540ef684349';
-  var planId='monthrace_'+suffix;
-  var emailA='monthly-plan-a+'+suffix+'@example.test';
-  var emailB='monthly-plan-b+'+suffix+'@example.test';
-  var authBefore=authRows_().filter(function(row){return row.email===emailA||row.email===emailB;});
-  var userIds=authBefore.map(function(row){return String(row.id);});
-  var planRows=rows_('monthly_plans').filter(function(row){return String(row.id)===planId;});
-  var familyId=planRows.length?String(planRows[0].family_id||''):'';
-  var family=familyId?rows_('families').filter(function(row){
-    return String(row.id)===familyId&&String(row.name)==='TEST monthly plan '+suffix;
-  }):[];
-  if(family.length===1) {
-    var members=rows_('family_members').filter(function(row){return String(row.family_id)===familyId;});
-    userIds=userIds.concat(members.map(function(row){return String(row.user_id);}),[String(family[0].created_by||'')])
-      .filter(function(uid,index,all){return !!uid&&all.indexOf(uid)===index;});
-  }
-  if(planRows.length)deleteRows_('monthly_plans',planRows);
-  if(family.length===1) {
-    removeRows('categories',function(row){return String(row.family_id)===familyId;});
-    removeRows('accounts',function(row){return String(row.family_id)===familyId;});
-    removeRows('family_members',function(row){return String(row.family_id)===familyId;});
-    removeRows('families',function(row){return String(row.id)===familyId;});
-  } else if(userIds.length) {
-    removeRows('family_members',function(row){return userIds.indexOf(String(row.user_id))!==-1;});
-  }
-  userIds.forEach(function(uid){removeRows('profiles',function(row){return String(row.id)===uid;});});
-  var deletedAuthRows=monthlyPlanDeleteSyntheticAuthRows_([emailA,emailB]);
-  var allProps=props.getProperties();
-  Object.keys(allProps).forEach(function(key){
-    if(key.indexOf('session:')!==0)return;
-    try{var session=JSON.parse(allProps[key]);if(userIds.indexOf(String(session.userId))!==-1)props.deleteProperty(key);}catch(_){}
-  });
-  SpreadsheetApp.flush();
-  ROWS_CACHE={};
-  var remaining={
-    plan:rows_('monthly_plans').some(function(row){return String(row.id)===planId;}),
-    auth:authRows_().some(function(row){return row.email===emailA||row.email===emailB;}),
-    users:userIds.some(function(uid){return rows_('profiles').some(function(row){return String(row.id)===uid;});}),
-    family:!!family.length&&rows_('families').some(function(row){return String(row.id)===familyId;})
-  };
-  if(Object.keys(remaining).some(function(key){return remaining[key];})) {
-    throw new Error('Recovery cleanup не подтверждён: '+JSON.stringify({remaining:remaining,deleted_auth_rows:deletedAuthRows,user_ids:userIds}));
-  }
-  var report={result:'PASS',cleanup:'PASS',fixture:'exact synthetic TEST-only monthly-plan fixture',plan_id:planId,synthetic_auth_rows_found:authBefore.length,auth_rows_deleted:deletedAuthRows,family_id:familyId||null,verified_remaining:remaining};
-  Logger.log(JSON.stringify(report));
-  return report;
-}
-
