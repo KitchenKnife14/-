@@ -176,7 +176,10 @@ function runMonthlyPlanConcurrencyTest() {
         [userA,userB].filter(Boolean).forEach(function(uid) {
           monthlyPlanRemoveRows_('profiles',function(row){return String(row.id)===uid;});
         });
-        authMatches.sort(function(a,b){return b.row-a.row;}).forEach(function(row){authSheet_().deleteRow(row.row);});
+        var authCleanup=monthlyPlanDeleteSyntheticAuthRows_([emailA,emailB]);
+        if(authCleanup.remaining!==0) {
+          throw new Error('Не удалось удалить все точные synthetic auth rows: '+JSON.stringify(authCleanup));
+        }
 
         var allProps=props.getProperties();
         Object.keys(allProps).forEach(function(key) {
@@ -225,6 +228,82 @@ function runMonthlyPlanConcurrencyTest() {
     throw new Error('Очистка TEST monthly-plan fixtures не подтверждена: '+cleanupErrors.join('; ')+
       '. Plan ID: '+planId);
   }
+  Logger.log(JSON.stringify(report));
+  return report;
+}
+
+
+/**
+ * Delete only the exact synthetic TEST auth emails. Row numbers are read from
+ * the live _auth email column immediately before deletion and removed bottom-up.
+ * This deliberately avoids stale row indexes captured by authRows_ earlier.
+ */
+function monthlyPlanDeleteSyntheticAuthRows_(emails) {
+  var targets={};
+  (emails||[]).forEach(function(email) {
+    var normalized=String(email||'').trim().toLowerCase();
+    if(normalized)targets[normalized]=true;
+  });
+  var sh=authSheet_();
+  var last=sh.getLastRow();
+  var values=last>=2?timedSheetRead_(function(){return sh.getRange(2,2,last-1,1).getValues();}):[];
+  var rows=[];
+  values.forEach(function(row,index) {
+    var email=String(row[0]||'').trim().toLowerCase();
+    if(targets[email])rows.push(index+2);
+  });
+  rows.sort(function(a,b){return b-a;}).forEach(function(rowNumber) {
+    timedSheetWrite_(function(){sh.deleteRow(rowNumber);});
+  });
+  var afterLast=sh.getLastRow();
+  var after=afterLast>=2?timedSheetRead_(function(){return sh.getRange(2,2,afterLast-1,1).getValues();}):[];
+  var remaining=after.filter(function(row) {
+    return !!targets[String(row[0]||'').trim().toLowerCase()];
+  }).length;
+  return {matched:rows.length,deleted:rows.length,remaining:remaining};
+}
+
+/**
+ * One-time recovery for the exact synthetic fixture left by the failed
+ * 2026-11-15 TEST monthly-plan run. No other auth rows are eligible.
+ */
+function cleanupLatestFailedMonthlyPlanFixture() {
+  var props=PropertiesService.getScriptProperties();
+  var url=String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL')||'').trim();
+  var confirmation=String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM')||'');
+  assertIsolatedGasTestEnvironment_(props,confirmation,url);
+  var suffix='c4c8cab147c74f1cb9d87540ef684349';
+  var emails=[
+    'monthly-plan-a+'+suffix+'@example.test',
+    'monthly-plan-b+'+suffix+'@example.test'
+  ];
+  var before=authRows_().filter(function(row){return emails.indexOf(String(row.email).toLowerCase())!==-1;});
+  var userIds=before.map(function(row){return String(row.id);});
+  var cleanup=monthlyPlanDeleteSyntheticAuthRows_(emails);
+  var allProps=props.getProperties();
+  Object.keys(allProps).forEach(function(key) {
+    if(key.indexOf('session:')!==0)return;
+    try {
+      var session=JSON.parse(allProps[key]);
+      if(userIds.indexOf(String(session.userId))!==-1)props.deleteProperty(key);
+    } catch (_) {}
+  });
+  var remaining=authRows_().filter(function(row){return emails.indexOf(String(row.email).toLowerCase())!==-1;});
+  if(remaining.length||cleanup.remaining!==0) {
+    throw new Error('Recovery не завершён: '+JSON.stringify({
+      matched_before:before.length,deleted:cleanup.deleted,
+      remaining_auth:remaining.length,emails:emails
+    }));
+  }
+  var report={
+    test:'monthly-plan failed fixture auth cleanup recovery',
+    fixture:'exact synthetic TEST-only emails',
+    matched_before:before.length,
+    deleted:cleanup.deleted,
+    verified_remaining:{auth:false},
+    result:'PASS',
+    cleanup:'PASS'
+  };
   Logger.log(JSON.stringify(report));
   return report;
 }
