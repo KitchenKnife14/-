@@ -5156,7 +5156,9 @@ test('multi-user TEST GAS probes delete only exact synthetic auth rows safely', 
   assert.ok(monthlyPlan.includes("sh.getRange(2,2,last-1,1).getValues()"));
   assert.ok(monthlyPlan.includes("cleanupLatestFailedMonthlyPlanFixture"));
   const transaction = fs.readFileSync('tests/gas/TransactionConcurrencyTest.gs', 'utf8');
-  assert.ok(transaction.includes('authMatches.sort(function(a,b){return b.row-a.row;})'));
+  assert.ok(transaction.includes('monthlyPlanDeleteSyntheticAuthRows_([emailA,emailB])'));
+  assert.ok(transaction.includes('cleanupLatestFailedTransactionConcurrencyFixture'));
+  assert.ok(transaction.includes('transactionConcurrencyFreshRows_'));
 });
 
 
