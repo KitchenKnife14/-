@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/googleSheets'
 import type { MonthlyPlan, Category, Transaction } from '../lib/types'
 import { formatRubles } from '../lib/money'
-import { monthRange, monthLabel, firstDayOfMonth } from '../lib/dates'
+import { monthRange, monthLabel, firstDayOfMonth, currentMoscowMonth } from '../lib/dates'
 import Modal from '../components/Modal'
 import { Plus, ChevronLeft, ChevronRight, Copy, Trash2 } from 'lucide-react'
 
@@ -16,7 +16,7 @@ export default function PlanningPage() {
   const [txs, setTxs] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [cursor, setCursor] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() })
+  const [cursor, setCursor] = useState(currentMoscowMonth)
   const [showForm, setShowForm] = useState(false)
 
   const monthDate = firstDayOfMonth(cursor.year, cursor.month)
