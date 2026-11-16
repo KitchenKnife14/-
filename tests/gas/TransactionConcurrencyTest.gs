@@ -220,3 +220,86 @@ function transactionConcurrencyParse_(response,label) {
   }
   return parsed;
 }
+
+/**
+ * One-time recovery for the exact synthetic transaction fixture left by the
+ * failed 2026-11-16 TEST runtime acceptance batch. No other rows are eligible.
+ */
+function cleanupLatestFailedTransactionConcurrencyFixture() {
+  var props=PropertiesService.getScriptProperties();
+  var url=String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL')||'').trim();
+  var confirmation=String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM')||'');
+  assertIsolatedGasTestEnvironment_(props,confirmation,url);
+  var suffix='68700ec94e5e4ffc997323a9575ce8ad';
+  var emailA='transaction-race-a+'+suffix+'@example.test';
+  var emailB='transaction-race-b+'+suffix+'@example.test';
+  var idA='txrace_a_'+suffix,idB='txrace_b_'+suffix;
+  var familyName='TEST transaction race '+suffix;
+  var authMatches=authRows_().filter(function(row) {
+    return String(row.email)===emailA||String(row.email)===emailB;
+  });
+  var userA=authMatches.filter(function(row){return String(row.email)===emailA;});
+  var userB=authMatches.filter(function(row){return String(row.email)===emailB;});
+  var userIds=[userA.length===1?String(userA[0].id):'',userB.length===1?String(userB[0].id):''].filter(Boolean);
+  delete ROWS_CACHE.families;
+  var familyMatches=rows_('families').filter(function(row) {
+    return String(row.name)===familyName&&(!userIds.length||userIds.indexOf(String(row.created_by))!==-1);
+  });
+  if(familyMatches.length>1)throw new Error('Recovery остановлен: найдено больше одной семьи с точным TEST-именем.');
+  var familyId=familyMatches.length===1?String(familyMatches[0].id):'';
+  function removeExact(table,predicate) {
+    delete ROWS_CACHE[table];
+    var matches=rows_(table).filter(predicate);
+    if(matches.length)deleteRows_(table,matches);
+    delete ROWS_CACHE[table];
+  }
+  removeExact('transactions',function(row){return String(row.id)===idA||String(row.id)===idB;});
+  if(familyId) {
+    ['categories','accounts','family_members'].forEach(function(table) {
+      removeExact(table,function(row){return String(row.family_id)===familyId;});
+    });
+    removeExact('families',function(row){return String(row.id)===familyId;});
+  }
+  userIds.forEach(function(uid) {
+    removeExact('profiles',function(row){return String(row.id)===uid;});
+  });
+  var authCleanup=monthlyPlanDeleteSyntheticAuthRows_([emailA,emailB]);
+  var allProps=props.getProperties();
+  Object.keys(allProps).forEach(function(key) {
+    if(key.indexOf('session:')!==0)return;
+    try {
+      var session=JSON.parse(allProps[key]);
+      if(userIds.indexOf(String(session.userId))!==-1)props.deleteProperty(key);
+    } catch (_) {}
+  });
+  SpreadsheetApp.flush();
+  var remainingAuth=authRows_().filter(function(row){return row.email===emailA||row.email===emailB;}).length;
+  delete ROWS_CACHE.transactions;
+  var remainingTransactions=rows_('transactions').filter(function(row){return String(row.id)===idA||String(row.id)===idB;}).map(function(row){return String(row.id);});
+  delete ROWS_CACHE.families;
+  var remainingFamily=!!(familyId&&rows_('families').some(function(row){return String(row.id)===familyId;}));
+  var remainingUsers=[];
+  userIds.forEach(function(uid){delete ROWS_CACHE.profiles;if(rows_('profiles').some(function(row){return String(row.id)===uid;}))remainingUsers.push(uid);});
+  delete ROWS_CACHE.family_members;
+  var remainingMembers=!!(familyId&&rows_('family_members').some(function(row){return String(row.family_id)===familyId;}));
+  delete ROWS_CACHE.categories;
+  var remainingCategories=!!(familyId&&rows_('categories').some(function(row){return String(row.family_id)===familyId;}));
+  delete ROWS_CACHE.accounts;
+  var remainingAccounts=!!(familyId&&rows_('accounts').some(function(row){return String(row.family_id)===familyId;}));
+  if(authCleanup.remaining!==0||remainingAuth||remainingTransactions.length||remainingFamily||remainingUsers.length||remainingMembers||remainingCategories||remainingAccounts) {
+    throw new Error('Recovery не завершён: '+JSON.stringify({
+      auth:remainingAuth,transactions:remainingTransactions,family:remainingFamily,
+      users:remainingUsers,members:remainingMembers,categories:remainingCategories,
+      accounts:remainingAccounts,auth_cleanup:authCleanup
+    }));
+  }
+  var report={
+    test:'transaction concurrency failed fixture recovery',
+    fixture:'exact synthetic TEST-only emails and transaction IDs',
+    matched_auth_before:authMatches.length,deleted_auth:authCleanup.deleted,
+    verified_remaining:{auth:false,transactions:[],family:false,users:[],members:false,categories:false,accounts:false},
+    result:'PASS',cleanup:'PASS'
+  };
+  Logger.log(JSON.stringify(report));
+  return report;
+}
