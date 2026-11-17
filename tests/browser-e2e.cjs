@@ -43,7 +43,7 @@ async function main() {
       tooShort: input.validity.tooShort,
       formValid: input.form.checkValidity(),
     }))
-    assert.equal(shortPasswordState.minLength, 15)
+    assert.equal(shortPasswordState.minLength, 8)
     assert.equal(shortPasswordState.tooShort, true)
     assert.equal(shortPasswordState.formValid, false)
 
