@@ -11,6 +11,14 @@ import { Link } from 'react-router-dom'
 import TransactionForm from '../components/TransactionForm'
 import { ensureSupplementalCategories } from '../lib/categories'
 
+function requireRows<T extends object>(value: unknown, label: string): T[] {
+  if (!Array.isArray(value)) throw new Error(`${label}: сервер вернул некорректный список`)
+  if (value.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) {
+    throw new Error(`${label}: сервер вернул некорректную запись`)
+  }
+  return value as T[]
+}
+
 export default function DashboardPage() {
   const { family, session } = useAuth()
   const familyId = family?.id
@@ -55,9 +63,9 @@ export default function DashboardPage() {
       if (txRes.error) throw new Error(`Операции: ${txRes.error.message}`)
       if (catRes.error) throw new Error(`Категории: ${catRes.error.message}`)
       if (accountRes.error) throw new Error(`Счета: ${accountRes.error.message}`)
-      setTxs(txRes.data as Transaction[])
-      setCategories(catRes.data as Category[])
-      setAccounts(accountRes.data as Account[])
+      setTxs(requireRows<Transaction>(txRes.data, 'Операции'))
+      setCategories(requireRows<Category>(catRes.data, 'Категории'))
+      setAccounts(requireRows<Account>(accountRes.data, 'Счета'))
     } catch (e) {
       if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
