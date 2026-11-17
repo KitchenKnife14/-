@@ -65,16 +65,16 @@ export default function Modal({ open, onClose, title, children }: Props) {
 
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 md:items-center md:p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center px-[max(8px,env(safe-area-inset-left))] pt-[max(8px,env(safe-area-inset-top))] pb-[max(8px,env(safe-area-inset-bottom))] md:items-center md:p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="relative max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface shadow-[0_16px_48px_rgba(32,42,35,0.16)] md:max-w-lg md:rounded-2xl">
-        <div className="sticky top-0 flex items-center justify-between border-b border-line bg-surface px-5 py-4">
-          <h2 id={titleId} className="font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" aria-label="Закрыть">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="relative w-full min-w-0 max-w-[min(100%,36rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-16px)] overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface shadow-[0_16px_48px_rgba(32,42,35,0.16)] md:max-h-[min(90dvh,48rem)]">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 sm:px-5 sm:py-4">
+          <h2 id={titleId} className="min-w-0 break-words font-semibold text-slate-900">{title}</h2>
+          <button onClick={onClose} className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-canvas hover:text-slate-700" aria-label="Закрыть">
             <X size={20} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="min-w-0 p-4 sm:p-5">{children}</div>
       </div>
     </div>
   )
