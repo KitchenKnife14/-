@@ -149,8 +149,39 @@ async function main() {
     await authPage.waitForURL('http://127.0.0.1:4173/')
     assert.equal(new URL(authPage.url()).origin, baseUrl, 'hostile backslash path must remain on the app origin')
 
-    // Exercise the mobile More menu, invite code, Telegram destination, and logout.
+    // Exercise the transaction dialog at common iPhone widths; it must remain inside the visual viewport.
     await authPage.setViewportSize({ width: 390, height: 844 })
+    await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    await authPage.getByRole('button', { name: 'Добавить операцию' }).click()
+    const transactionDialog = authPage.getByRole('dialog', { name: 'Новая операция' })
+    await transactionDialog.waitFor()
+    for (const width of [390, 320]) {
+      await authPage.setViewportSize({ width, height: 640 })
+      const dialogBounds = await transactionDialog.evaluate(element => {
+        const rect = element.getBoundingClientRect()
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+          viewportWidth: document.documentElement.clientWidth,
+          viewportHeight: document.documentElement.clientHeight,
+          contentWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+        }
+      })
+      assert.ok(dialogBounds.left >= -1, `Dialog extends beyond left viewport edge: ${JSON.stringify(dialogBounds)}`)
+      assert.ok(dialogBounds.right <= dialogBounds.viewportWidth + 1, `Dialog extends beyond right viewport edge: ${JSON.stringify(dialogBounds)}`)
+      assert.ok(dialogBounds.top >= -1, `Dialog extends beyond top viewport edge: ${JSON.stringify(dialogBounds)}`)
+      assert.ok(dialogBounds.bottom <= dialogBounds.viewportHeight + 1, `Dialog extends beyond bottom viewport edge: ${JSON.stringify(dialogBounds)}`)
+      assert.ok(dialogBounds.contentWidth <= dialogBounds.clientWidth + 1, `Dialog content causes horizontal overflow: ${JSON.stringify(dialogBounds)}`)
+    }
+    await authPage.getByRole('button', { name: 'Закрыть' }).click()
+    await authPage.setViewportSize({ width: 390, height: 844 })
+
+    // Exercise the mobile More menu, invite code, Telegram destination, and logout.
     await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
     await authPage.getByRole('button', { name: 'Открыть дополнительные разделы' }).click()
     await authPage.getByText('TEST-INVITE', { exact: true }).last().waitFor()
