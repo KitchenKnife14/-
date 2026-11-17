@@ -3926,3 +3926,18 @@ HEAD до:
 - Ограничение: фактическое управление фокусом проверено браузерным E2E для диалога операции; для остальных форм добавлена статическая защита от регрессии, но не отдельный полный сценарий открытия каждой формы. Safari/iPhone/VoiceOver не проверялись.
 - Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**. Ни один полный критерий плана не закрыт только за счёт этого расширения тестов.
 - Изменения только в `ispravleniya`; Production, `main`, Google Sheets, GAS, Vercel Production, Telegram webhook и реальные данные не затрагивались.
+
+
+### 2026-11-17 — сквозные проверки четырёх финансовых форм
+
+- Расширен `tests/financial-browser-e2e.cjs`; состояние тестового API дополнено массивами `recurring_payments` и `planned_purchases`.
+- Добавлен сценарий создания счёта: тип savings, отрицательный стартовый остаток `-25.50`; в synthetic state ожидается `starting_balance_kopecks=-2550`.
+- Добавлен сценарий создания категории расхода с пользовательским значком; проверяются сохранённые значения `name` и `kind`.
+- Добавлен сценарий регулярного платежа: пользователь вводит custom interval 14 дней и ошибочный end_date раньше start_date; проверяется видимая ошибка и нулевое число записей. После исправления end_date проверяются одна созданная запись, amount_kopecks=1234, frequency=custom, custom_interval_days=14, обе даты.
+- Добавлен сценарий планируемой покупки: FTP URL блокируется до insert; после замены на HTTPS проверяются запись, estimated_kopecks=34567, priority=2, URL и desired_date.
+- Первый CI #44173420246 завершился failure на тестовом селекторе: `getByLabel('Тип')` совпал с двумя полями на странице. Селекторы уточнены как `getByRole('dialog').getByLabel('Тип')`; приложение не менялось.
+- Финальный CI [44173673008 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44173673008), HEAD `f76aa4147f3429129acba7cfebb913cb8e5c6aef`: все 31 шага завершены, **304/304 regression tests**, Browser E2E и Financial CRUD/transfer E2E PASS, TypeScript и production build PASS.
+- E2E итоговый объект: transactions=1, budgets=1, goals=1, accounts=3, categories=4, recurring_payments=1, planned_purchases=1. Это количество строк в изолированном fixture после сценария, не production-данные.
+- Ограничение покрытия: создание и проверка указанных правил подтверждены. Полный update/delete/archive для каждой сущности, RPC-подтверждение recurring payment и confirm purchase не покрыты этим дополнением. Live TEST GAS не вызывался.
+- Прогресс остаётся **172/227 (75,8%)**, **4/12 (33,3%)**. Полный критерий макроэтапа №4 не закрыт.
+- Все изменения только в ветке `ispravleniya`; `main`, Production, основная таблица, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не затронуты.
