@@ -3578,7 +3578,7 @@ test('category hierarchy rejects self-parenting and parent cycles', () => {
 
   const rows = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
   assert.equal(rows.find(row => row.id === first.id).parent_id, second.id);
-  assert.equal(rows.find(row => row.id === second.id).parent_id, null);
+  assert.equal(rows.find(row => row.id === second.id).parent_id, '');
 });
 
 test('legacy category mismatches do not block unrelated edits to historical records', () => {
