@@ -464,7 +464,7 @@ async function main() {
     await purchaseConfirmDialog.getByLabel('Списать со счёта').selectOption('account-cash')
     await purchaseConfirmDialog.getByRole('button', { name: 'Подтвердить покупку' }).click()
     await page.getByRole('dialog').waitFor({ state: 'detached' })
-    await page.getByText('Куплено', { exact: true }).waitFor()
+    await page.locator('.badge').filter({ hasText: 'Куплено' }).waitFor()
     assert.equal(state.planned_purchases[0].status, 'bought')
     assert.equal(state.planned_purchases[0].linked_transaction_id, 'purchase_' + state.planned_purchases[0].id)
     assert.equal(state.transactions.length, 3, 'confirming a planned purchase must create one expense')
