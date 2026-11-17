@@ -272,6 +272,15 @@ async function main() {
     assert.equal(state.accounts.length, 3)
     assert.equal(state.accounts[2].starting_balance_kopecks, -2550)
     assert.equal(state.accounts[2].kind, 'savings')
+    const accountCard = page.locator('.card').filter({ hasText: 'E2E накопительный' }).first()
+    await accountCard.getByRole('button', { name: 'Редактировать счёт' }).click()
+    await page.getByLabel('Название', { exact: true }).fill('E2E накопительный изменён')
+    await page.getByLabel('Начальный остаток, ₽').fill('-30.75')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E накопительный изменён', { exact: true }).waitFor()
+    assert.equal(state.accounts.length, 3, 'editing an account must not create a duplicate')
+    assert.equal(state.accounts[2].name, 'E2E накопительный изменён')
+    assert.equal(state.accounts[2].starting_balance_kopecks, -3075)
 
     await page.goto(baseUrl + '/categories', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Категории' }).waitFor()
@@ -284,6 +293,13 @@ async function main() {
     assert.equal(state.categories.length, 4)
     assert.equal(state.categories[3].name, 'E2E транспорт')
     assert.equal(state.categories[3].kind, 'expense')
+    const categoryCard = page.locator('.card').filter({ hasText: 'E2E транспорт' }).first()
+    await categoryCard.getByRole('button', { name: 'Изменить' }).click()
+    await page.getByLabel('Название', { exact: true }).fill('E2E транспорт изменён')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E транспорт изменён', { exact: true }).waitFor()
+    assert.equal(state.categories.length, 4, 'editing a category must not create a duplicate')
+    assert.equal(state.categories[3].name, 'E2E транспорт изменён')
 
     await page.goto(baseUrl + '/recurring', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Регулярные платежи' }).waitFor()
@@ -306,6 +322,14 @@ async function main() {
     assert.equal(state.recurring_payments[0].custom_interval_days, 14)
     assert.equal(state.recurring_payments[0].start_date, '2026-11-18')
     assert.equal(state.recurring_payments[0].end_date, '2026-12-18')
+    const recurringCard = page.locator('.card').filter({ hasText: 'E2E интернет' }).first()
+    await recurringCard.getByRole('button', { name: 'Пауза' }).click()
+    await page.getByText('E2E интернет', { exact: true }).waitFor()
+    assert.equal(state.recurring_payments[0].active, false)
+    const pausedRecurringCard = page.locator('.card').filter({ hasText: 'E2E интернет' }).first()
+    await pausedRecurringCard.getByRole('button', { name: 'Возобновить' }).click()
+    await page.getByText('E2E интернет', { exact: true }).waitFor()
+    assert.equal(state.recurring_payments[0].active, true)
 
     await page.goto(baseUrl + '/purchases', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Планируемые покупки' }).waitFor()
@@ -326,6 +350,16 @@ async function main() {
     assert.equal(state.planned_purchases[0].priority, 2)
     assert.equal(state.planned_purchases[0].url, 'https://example.com/item')
     assert.equal(state.planned_purchases[0].desired_date, '2026-12-01')
+    const purchaseCard = page.locator('.card').filter({ hasText: 'E2E наушники' }).first()
+    await purchaseCard.locator('button[title="Изменить"]').click()
+    await page.getByLabel('Название').fill('E2E наушники изменены')
+    await page.getByLabel('Ориентировочная стоимость, ₽').fill('400.00')
+    await page.getByLabel('Комментарий').fill('Проверка редактирования')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E наушники изменены', { exact: true }).waitFor()
+    assert.equal(state.planned_purchases.length, 1, 'editing a purchase must not create a duplicate')
+    assert.equal(state.planned_purchases[0].estimated_kopecks, 40000)
+    assert.equal(state.planned_purchases[0].comment, 'Проверка редактирования')
 
     process.stdout.write(JSON.stringify({
       result: 'PASS',
@@ -336,10 +370,10 @@ async function main() {
         'transaction delete removes the row',
         'budget create persists the monthly limit in kopecks',
         'goal create uses the create_goal_with_purchase RPC contract',
-        'account create preserves a negative opening balance in integer kopecks',
-        'category create persists the selected type and icon',
-        'recurring payment rejects an end date before the start date and saves custom intervals',
-        'planned purchase rejects non-HTTP(S) URLs and saves a valid purchase in kopecks',
+        'account create and edit preserve negative opening balances in integer kopecks',
+        'category create and edit persist changes without duplicate rows',
+        'recurring payment validates date range, saves custom intervals, and can pause/resume',
+        'planned purchase validates URLs, saves a valid purchase, and edits it without duplication',
       ],
       persisted: {
         transactions: state.transactions.length,
