@@ -34,8 +34,11 @@ export default function DashboardPage() {
     setLoading(true)
     setError(null)
     try {
-      const [, txRes, catRes, accountRes] = await Promise.all([
-        ensureSupplementalCategories(familyId),
+      const [supplementalResult, txRes, catRes, accountRes] = await Promise.all([
+        ensureSupplementalCategories(familyId).then(
+          () => ({ error: null as Error | null }),
+          (cause: unknown) => ({ error: new Error(`Категории: ${cause instanceof Error ? cause.message : String(cause)}`) }),
+        ),
         googleSheets
           .from('transactions')
           .select('*')
@@ -48,9 +51,10 @@ export default function DashboardPage() {
         googleSheets.from('accounts').select('*').eq('family_id', familyId),
       ])
       if (!loadSequence.current.isCurrent(requestId)) return
-      if (txRes.error) throw txRes.error
-      if (catRes.error) throw catRes.error
-      if (accountRes.error) throw accountRes.error
+      if (supplementalResult.error) throw supplementalResult.error
+      if (txRes.error) throw new Error(`Операции: ${txRes.error.message}`)
+      if (catRes.error) throw new Error(`Категории: ${catRes.error.message}`)
+      if (accountRes.error) throw new Error(`Счета: ${accountRes.error.message}`)
       setTxs(txRes.data as Transaction[])
       setCategories(catRes.data as Category[])
       setAccounts(accountRes.data as Account[])
