@@ -71,7 +71,7 @@ export default function AuthPage() {
             </div>
             <div>
               <label className="label" htmlFor={`${fieldId}-password`}>Пароль</label>
-              <input id={`${fieldId}-password`} className="input" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} disabled={loading} required minLength={mode === 'signup' ? 15 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Минимум 15 символов' : 'Введите пароль'} />
+              <input id={`${fieldId}-password`} className="input" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} disabled={loading} required minLength={mode === 'signup' ? 8 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Минимум 8 символов' : 'Введите пароль'} />
             </div>
             {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
             <button type="submit" disabled={loading} className="btn-primary w-full">
