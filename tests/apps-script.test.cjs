@@ -1994,6 +1994,46 @@ test('monthly and yearly recurring dates preserve the original calendar anchor',
   assert.equal(h.context.nextDate_('2027-02-28', 'yearly', null, '2024-02-29'), '2028-02-29');
 });
 
+
+test('planned purchase confirmation rejects an archived category without creating a transaction', () => {
+  const h = makeHarness();
+  const user = h.signup('planned-purchase-archived-category@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Архив категории покупки' }).data;
+  const root = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .find(row => row.kind === 'expense' && !row.parent_id);
+  const category = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: family.id, parent_id: root.id, name: 'Категория покупки', kind: 'expense' },
+  }).data[0];
+  const created = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Запланированная покупка', category_id: category.id, estimated_kopecks: 4500, status: 'planned' },
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const purchase = created.data[0];
+  const archived = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true },
+  });
+  assert.equal(archived.error, null, archived.error?.message);
+
+  const currentPurchase = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }],
+  }).data[0];
+  const result = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_account_id: '', p_operation_date: '2026-11-17', p_expected_purchase: currentPurchase },
+  });
+  assert.match(result.error?.message || '', /архивную категорию/i);
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
+  const unchanged = h.call({
+    action: 'query', token: user.token, table: 'planned_purchases', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: purchase.id }],
+  }).data[0];
+  assert.equal(unchanged.status, 'planned');
+  assert.equal(unchanged.linked_transaction_id, '');
+});
 test('confirming a planned purchase can debit a selected active family account', () => {
   const h = makeHarness();
   seedTable(h, 'transactions');
