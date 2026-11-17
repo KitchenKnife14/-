@@ -122,7 +122,7 @@ export default function Layout() {
         </main>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
         {moreOpen && (
           <>
             <button type="button" aria-label="Закрыть меню" className="fixed inset-0 z-0 bg-black/20" onClick={() => setMoreOpen(false)} />
