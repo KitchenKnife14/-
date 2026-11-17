@@ -242,6 +242,16 @@ test('request metrics never log attacker-controlled unknown action values', () =
   assert.equal(logs[0].includes('secret-marker'), false);
 });
 
+test('signup accepts an ordinary 8-character password and rejects shorter passwords', () => {
+  const h = makeHarness();
+  const short = h.call({ action: 'signup', email: 'short-password@example.com', password: '1234567' });
+  assert.match(short.error.message, /минимум 8 символов/);
+  const normal = h.call({ action: 'signup', email: 'normal-password@example.com', password: '12345678' });
+  assert.equal(normal.error, null, normal.error?.message);
+  const signin = h.call({ action: 'signin', email: 'normal-password@example.com', password: '12345678' });
+  assert.equal(signin.error, null, signin.error?.message);
+});
+
 test('signup and signin return the token and user in the API data envelope', () => {
   const h = makeHarness();
   const signup = h.call({ action: 'signup', email: 'auth-shape@example.com', password: 'correct-horse-battery' });
