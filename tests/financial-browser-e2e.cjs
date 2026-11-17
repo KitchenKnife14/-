@@ -117,30 +117,49 @@ function rpc(name, params) {
   if (name === 'ensure_supplemental_categories') return { added: 0 }
   if (name === 'get_table_revision') return String(sequence)
   if (name === 'create_goal_with_purchase') {
-    const goal = {
-      id: 'goal-' + (++sequence),
-      family_id: params.p_family_id,
-      name: params.p_name,
-      description: params.p_description,
-      target_kopecks: params.p_target_kopecks,
-      saved_kopecks: 0,
-      target_date: params.p_target_date,
-      priority: params.p_priority,
-      status: 'active',
-      created_at: new Date().toISOString(),
-    }
-    state.goals.push(goal)
-    if (params.p_create_purchase) {
-      state.planned_purchases.push({
-        id: 'purchase-' + sequence,
+    const goalId = 'goal_' + params.p_request_id
+    let goal = state.goals.find(row => row.id === goalId)
+    if (!goal) {
+      goal = {
+        id: goalId,
         family_id: params.p_family_id,
         name: params.p_name,
+        description: params.p_description,
         target_kopecks: params.p_target_kopecks,
+        saved_kopecks: 0,
+        target_date: params.p_target_date || null,
         priority: params.p_priority,
-        goal_id: goal.id,
-      })
+        status: 'active',
+        responsible_user_id: userId,
+        created_at: new Date().toISOString(),
+      }
+      state.goals.push(goal)
     }
-    return goal
+    let purchaseId = null
+    if (params.p_create_purchase) {
+      purchaseId = 'purchase_' + params.p_request_id
+      if (!state.planned_purchases.some(row => row.id === purchaseId)) {
+        state.planned_purchases.push({
+          id: purchaseId,
+          family_id: params.p_family_id,
+          name: params.p_name,
+          category_id: null,
+          estimated_kopecks: params.p_target_kopecks,
+          priority: params.p_priority,
+          desired_month: params.p_target_date ? params.p_target_date.slice(0, 7) + '-01' : null,
+          desired_date: params.p_target_date || null,
+          url: '',
+          comment: params.p_description || '',
+          status: 'planned',
+          responsible_user_id: userId,
+          goal_id: goal.id,
+          linked_transaction_id: '',
+          created_by: userId,
+          created_at: new Date().toISOString(),
+        })
+      }
+    }
+    return { goal_id: goalId, purchase_id: purchaseId }
   }
   if (name === 'confirm_planned_purchase') {
     const purchase = state.planned_purchases.find(row => row.id === params.p_purchase_id)
@@ -372,6 +391,23 @@ async function main() {
     await updatedGoalCard.locator('button[title="История"]').click()
     await page.getByRole('dialog').getByText('E2E взнос', { exact: true }).waitFor()
 
+    await page.getByRole('button', { name: 'Цель' }).click()
+    const linkedGoalDialog = page.getByRole('dialog')
+    await linkedGoalDialog.getByLabel('Название', { exact: true }).fill('E2E авто покупка')
+    await linkedGoalDialog.getByLabel('Описание').fill('Автоматически связанная покупка')
+    await linkedGoalDialog.getByLabel('Сумма цели, ₽').fill('25000')
+    await linkedGoalDialog.getByLabel('Приоритет', { exact: true }).selectOption('1')
+    await linkedGoalDialog.getByRole('checkbox').check()
+    await linkedGoalDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E авто покупка', { exact: true }).waitFor()
+    assert.equal(state.goals.length, 2)
+    assert.equal(state.planned_purchases.length, 1)
+    assert.equal(state.planned_purchases[0].name, 'E2E авто покупка')
+    assert.equal(state.planned_purchases[0].estimated_kopecks, 2500000)
+    assert.equal(state.planned_purchases[0].priority, 1)
+    assert.equal(state.planned_purchases[0].goal_id, state.goals[1].id)
+    assert.equal(state.planned_purchases[0].comment, 'Автоматически связанная покупка')
+
     await page.goto(baseUrl + '/accounts', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Счета' }).waitFor()
     await page.getByRole('button', { name: 'Добавить счёт' }).click()
@@ -471,6 +507,10 @@ async function main() {
 
     await page.goto(baseUrl + '/purchases', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Планируемые покупки' }).waitFor()
+    const autoPurchaseCard = page.locator('.card').filter({ hasText: 'E2E авто покупка' }).first()
+    await autoPurchaseCard.locator('button[title="Удалить"]').click()
+    await page.getByText('E2E авто покупка', { exact: true }).waitFor({ state: 'detached' })
+    assert.equal(state.planned_purchases.length, 0, 'auto-created purchase can be managed from the purchases page')
     await page.getByRole('button', { name: 'Добавить' }).click()
     await page.getByLabel('Название').fill('E2E наушники')
     await page.getByLabel('Ориентировочная стоимость, ₽').fill('345.67')
@@ -532,7 +572,7 @@ async function main() {
         'transaction delete removes the row',
         'budget create persists the monthly limit in kopecks',
         'monthly plan upsert updates the same family/month/category/type key without duplicates',
-        'goal create and contribution validate positive kopecks and preserve the goal link and history note',
+        'goal create and contribution validate positive kopecks, preserve history, and optionally create a linked planned purchase',
         'account create, edit, archive, and restore preserve negative opening balances in integer kopecks',
         'category create, edit, and archive persist changes without duplicate rows',
         'recurring payment validates dates, saves custom intervals, pauses, resumes, confirms one operation, and detaches on delete',
