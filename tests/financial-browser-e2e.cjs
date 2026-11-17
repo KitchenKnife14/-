@@ -83,16 +83,17 @@ function query(payload) {
     return payload.returning ? selected : null
   }
   if (payload.mode === 'delete') {
-    const ids = new Set(selected)
-    state[payload.table] = rows.filter(row => !ids.has(row))
+    const selectedRows = new Set(selected)
+    const selectedIds = new Set(selected.map(row => row.id))
+    state[payload.table] = rows.filter(row => !selectedRows.has(row))
     if (payload.table === 'recurring_payments') {
       for (const transaction of state.transactions) {
-        if (ids.has(transaction.parent_recurring_id)) transaction.parent_recurring_id = ''
+        if (selectedIds.has(transaction.parent_recurring_id)) transaction.parent_recurring_id = ''
       }
     }
     if (payload.table === 'transactions') {
       for (const purchase of state.planned_purchases) {
-        if (ids.has(purchase.linked_transaction_id)) {
+        if (selectedIds.has(purchase.linked_transaction_id)) {
           purchase.linked_transaction_id = ''
           if (purchase.status === 'bought') purchase.status = 'planned'
         }
