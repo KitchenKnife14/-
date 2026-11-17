@@ -3981,3 +3981,16 @@ HEAD до:
 - Важно: эти новые UI сценарии используют mock API. GAS RPC logic не изменялась. Серверные тесты подтверждения, повторной доставки, частичного сбоя и конкуренции остаются отдельной проверкой Apps Script; live TEST GAS не запускался.
 - Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
 - Изменения только в `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не затрагивались.
+
+
+### 2026-11-17 — E2E месячного планирования и составного upsert
+
+- В `tests/financial-browser-e2e.cjs` добавлен `monthly_plans` в synthetic state и сценарий создания/повторного сохранения одной плановой строки.
+- Первый ввод: расход, категория «Продукты», 5000 ₽, заметка «E2E план». Второй ввод использует ту же семью, текущий месяц, категорию и тип, но сумму 7000 ₽ и новую заметку.
+- Проверяется, что после повторного сохранения остаётся ровно одна строка, planned_kopecks=700000 и note обновлена. Это подтверждает UI-контракт upsert по composite key без дублирования.
+- Mock query upsert изменён: `onConflict` разбирается на список колонок и сравнивается по каждой; при insert без ID создаётся ID fixture-строки. Дубликат ключа в initial state был удалён ранее.
+- CI [44177940961 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44177940961) на commit `749c37c869825def38522a5667e3ec6d95d6ec52`: 31/31 шагов PASS, **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript и production build PASS.
+- Итог fixture: transactions=3, budgets=1, monthly_plans=1, goals=1, accounts=3, categories=4, recurring_payments=0, planned_purchases=1.
+- Ограничение: это проверка фронтенда и mock-контракта; атомарность/уникальность composite upsert в реальном Sheet/GAS не заявляется как проверенная.
+- Прогресс остаётся **172/227 (75,8%)**, **4/12 (33,3%)**.
+- Только ветка `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не менялись.
