@@ -4005,3 +4005,17 @@ HEAD до:
 - Ограничение: browser fixture проверяет форму/запись/историю, но не вычисляет реальное `saved_kopecks` так, как это делает backend. Не считать пересчёт GAS доказанным этим UI тестом.
 - Прогресс остаётся **172/227 (75,8%)**, **4/12 (33,3%)**.
 - Изменения только в `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не затрагивались.
+
+
+### 2026-11-17 — E2E автоматического создания покупки из финансовой цели
+
+- Добавлен браузерный сценарий включения checkbox «Добавить также в планируемые покупки» при создании цели.
+- Проверяется создание второй цели и одной связанной покупки: одинаковое имя, сумма 2500000 копеек, приоритет 1, описание как комментарий, корректный `goal_id`, статус planned.
+- Mock `create_goal_with_purchase` приведён к фактическому контракту GAS: deterministic `goal_<request_id>` и `purchase_<request_id>`, `estimated_kopecks`, связь goal_id, responsible_user_id, desired_date/month, comment, linked_transaction_id, return `{goal_id,purchase_id}`. Повторный вызов с тем же request_id не добавляет вторую запись в fixture.
+- Созданная покупка появляется в разделе «Планируемые покупки» и удаляется там отдельным UI действием; последующие тесты создания/покупки продолжаются на чистом planned_purchases state.
+- Первый CI #44179075270 завершился failure на последовательности UI: окно истории цели осталось открытым, поэтому кнопка создания новой цели была видна, но заблокирована модальным слоем. Тест теперь закрывает history modal через Escape и ждёт detach.
+- Повторный CI [44179491260 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44179491260) на commit `564732ab1293285bec455de7615e0d6f4ee26107`: все 31 шага PASS, **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build PASS.
+- Итог fixture: goals=2, planned_purchases=1 после удаления авто-созданной записи и последующих тестов покупки; транзакций=3. Все данные синтетические.
+- Ограничение: mock контракт соответствует GAS RPC, но это не live GAS acceptance; реальные retries/partial failures проверяются серверным тестовым набором отдельно.
+- Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
+- Только ветка `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не менялись.
