@@ -3806,3 +3806,14 @@ HEAD до:
 - Это закрывает добавление browser UI E2E для входа и Telegram linking в FC-17. Это **не** подтверждает авторизацию на реальном TEST GAS и не заменяет live runtime acceptance этапа 5.
 - Контрольный общий прогресс не меняется: **100/267 (37,5%)**, 167 открытых критериев; макроэтап **№4 из 12** остаётся активным. TEST GAS не обновлялся; полный Runtime Acceptance Batch повторно не запускался.
 - Изменён только тестовый файл и журнал в ветке `ispravleniya`. `main`, Production, основная таблица, Production GAS, Vercel Production и действующий Telegram webhook не затронуты.
+
+
+### 2026-11-17 — browser E2E: история маршрутов и прямые ссылки
+
+- В `tests/browser-e2e.cjs` расширен уже существующий сценарий авторизованного пользователя: после привязки Telegram проверяются переход на главную, browser back/forward, открытие `/telegram` прямым URL, перезагрузка страницы на deep link и перенаправление неизвестного SPA-пути на внутреннюю главную.
+- Тест использует тот же изолированный синтетический API fixture. Он не обращается к реальному GAS, Google Sheets, Telegram или финансовым данным.
+- CI [44123548786 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44123548786) на commit `535e3fb19047eb5c3bd2670d912883be1266cb43`: **303/303 regression tests PASS**; browser smoke (включая login, Telegram, back/forward, deep link, reload и unknown path) PASS; financial CRUD/transfer browser E2E PASS; TypeScript/production build, dependency audit, Apps Script syntax checks и manifest validation PASS.
+- FC-18: автоматическая проверка соответствия всех 14 пунктов меню маршрутам уже есть в `tests/auth-routing.test.cjs`; теперь добавлена проверка браузерного back/forward, deep link и SPA fallback. Ручная проверка полного набора маршрутов и реальных сценариев на пользовательском устройстве остаётся открытой; пункты FC-18 не закрываются целиком только по CI.
+- TEST GAS не менялся. Последний live batch 4/4 PASS относится к предыдущему содержимому backend; текущий `Code.gs` после последующих исправлений ещё нужно перенести в изолированный TEST GAS и проверить отдельно. Полный batch в этой работе не запускался.
+- Общий контрольный показатель не изменён: **100/267 (37,5%)**, макроэтап **№4 из 12**. CI подтверждает браузерный маршрутный сценарий, но не закрывает ручную приёмку FC-18 и не доказывает runtime текущего backend.
+- Изменения только в `tests/browser-e2e.cjs` и журнале ветки `ispravleniya`. `main`, Production, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не затронуты.
