@@ -365,6 +365,22 @@ test('joinFamily validates membership before changing profile and remains idempo
   assert.ok(otherFamily.id);
 });
 
+test('family invite codes use long random tokens and rate-limit invalid guesses', () => {
+  const h = makeHarness();
+  const owner = h.signup('invite-throttle-owner@example.com');
+  const partner = h.signup('invite-throttle-partner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Защищённое приглашение' }).data;
+  assert.match(family.invite_code, /^[A-F0-9]{32}$/);
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const rejected = h.call({ action: 'joinFamily', token: partner.token, invite_code: 'F'.repeat(32) });
+    assert.match(rejected.error.message, /Код приглашения не найден/);
+  }
+  const limited = h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  assert.match(limited.error.message, /Слишком много попыток/);
+  assert.equal(h.context.rows_('family_members').some(row => row.user_id === partner.user.id), false);
+});
+
 test('joinFamily does not change the profile when the membership write fails', () => {
   const h = makeHarness();
   const owner = h.signup('join-write-owner@example.com');
@@ -2406,6 +2422,34 @@ test('new accounts store PBKDF2 hashes and legacy accounts migrate after success
 });
 
 
+test('Telegram link codes use long random tokens and rate-limit invalid guesses', () => {
+  const h = makeHarness();
+  const owner = h.signup('telegram-throttle-owner@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Защищённая привязка' }).data;
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret-0123456789abcdef01234567');
+  const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
+  assert.equal(generated.error, null, generated.error?.message);
+  assert.match(generated.data.code, /^[A-F0-9]{32}$/);
+
+  const sendLink = (updateId, code) => h.call({
+    action: 'telegramWebhook',
+    telegramSecret: 'test-backend-secret-0123456789abcdef01234567',
+    update: { update_id: updateId, message: {
+      chat: { id: 810, type: 'private' }, from: { id: 810 },
+      text: '/link ' + code
+    }}
+  });
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const rejected = sendLink(8100 + attempt, 'F'.repeat(32));
+    assert.match(rejected.error.message, /Код не найден/);
+  }
+  const limited = sendLink(8200, generated.data.code);
+  assert.match(limited.error.message, /Слишком много попыток/);
+  assert.equal(h.context.rows_('telegram_links').length, 0);
+  assert.ok(family.id);
+});
+
 test('Telegram one-time linking records transactions through the existing family authorization path', () => {
   const h = makeHarness();
   const owner = h.signup('telegram-owner@example.com');
@@ -2417,7 +2461,7 @@ test('Telegram one-time linking records transactions through the existing family
   props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
-  assert.equal(generated.data.code.length, 12);
+  assert.match(generated.data.code, /^[A-F0-9]{32}$/);
 
   const linked = h.call({
     action: 'telegramWebhook',
