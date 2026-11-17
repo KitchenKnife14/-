@@ -82,7 +82,7 @@ test('modal forms use the modal-managed initial focus target', () => {
     const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8')
     assert.doesNotMatch(source, /\bautoFocus\b/, file + ': native autoFocus can steal focus before Modal stores the opener')
     for (const id of expectedTargets) {
-      assert.match(source, new RegExp(`<[^>]+id=["']${id}["'][^>]*data-modal-autofocus`), file + ': missing modal focus target ' + id)
+      assert.match(source, new RegExp(`id=["']${id}["'][^\\n]*data-modal-autofocus`), file + ': missing modal focus target ' + id)
     }
   }
 })
