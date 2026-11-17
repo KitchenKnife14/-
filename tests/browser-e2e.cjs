@@ -220,6 +220,48 @@ async function main() {
 
     await authPage.close()
 
+    // Malformed dashboard row payloads must become a visible load error, not a render crash.
+    const invalidDataPage = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    const pageErrors = []
+    invalidDataPage.on('pageerror', error => pageErrors.push(error.message))
+    await invalidDataPage.route('https://test-gas.invalid/exec', async route => {
+      const payload = route.request().postDataJSON()
+      const resolveRequest = request => {
+        if (request.action === 'signin') return {
+          token: 'synthetic-invalid-data-session',
+          user: { id: 'invalid-data-user', email: 'invalid-data@example.com' },
+        }
+        if (request.action === 'rpc' && request.name === 'get_my_context') return {
+          profile: { id: 'invalid-data-user', display_name: 'Проверка данных' },
+          family: { id: 'invalid-data-family', name: 'Тестовая семья', invite_code: 'INVALID-DATA' },
+          members: [],
+          member_profiles: [{ id: 'invalid-data-user', display_name: 'Проверка данных' }],
+        }
+        if (request.action === 'rpc' && request.name === 'ensure_supplemental_categories') return { added: 0 }
+        if (request.action === 'rpc' && request.name === 'get_table_revision') return '1'
+        if (request.action === 'query' && request.table === 'transactions') return null
+        if (request.action === 'query' && ['categories', 'accounts'].includes(request.table)) return []
+        if (request.action === 'signout') return {}
+        throw new Error('Unexpected invalid-data E2E API request: ' + JSON.stringify(request))
+      }
+      const data = payload.action === 'batch'
+        ? payload.requests.map(request => ({ data: resolveRequest(request), error: null }))
+        : resolveRequest(payload)
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify({ data, error: null }),
+      })
+    })
+    await invalidDataPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    await invalidDataPage.getByLabel('Email').fill('invalid-data@example.com')
+    await invalidDataPage.getByLabel('Пароль').fill('correct-test-password')
+    await invalidDataPage.getByRole('button', { name: 'Войти' }).click()
+    await invalidDataPage.getByRole('alert').getByText('Операции: сервер вернул некорректный список', { exact: true }).waitFor()
+    assert.deepEqual(pageErrors, [], 'malformed dashboard payload must not cause an uncaught render error')
+    await invalidDataPage.close()
+
     process.stdout.write(JSON.stringify({
       result: 'PASS',
       checks: [
