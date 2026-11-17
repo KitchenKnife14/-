@@ -23,7 +23,6 @@ const state = {
   budgets: [],
   goals: [],
   goal_contributions: [],
-  planned_purchases: [],
 }
 let sequence = 0
 
@@ -86,6 +85,19 @@ function query(payload) {
   if (payload.mode === 'delete') {
     const ids = new Set(selected)
     state[payload.table] = rows.filter(row => !ids.has(row))
+    if (payload.table === 'recurring_payments') {
+      for (const transaction of state.transactions) {
+        if (ids.has(transaction.parent_recurring_id)) transaction.parent_recurring_id = ''
+      }
+    }
+    if (payload.table === 'transactions') {
+      for (const purchase of state.planned_purchases) {
+        if (ids.has(purchase.linked_transaction_id)) {
+          purchase.linked_transaction_id = ''
+          if (purchase.status === 'bought') purchase.status = 'planned'
+        }
+      }
+    }
     return payload.returning ? selected : null
   }
   throw new Error('Unsupported query mode in E2E fixture: ' + payload.mode)
@@ -127,6 +139,64 @@ function rpc(name, params) {
       })
     }
     return goal
+  }
+  if (name === 'confirm_planned_purchase') {
+    const purchase = state.planned_purchases.find(row => row.id === params.p_purchase_id)
+    if (!purchase) throw new Error('Планируемая покупка не найдена')
+    const transactionId = 'purchase_' + purchase.id
+    if (!state.transactions.some(row => row.id === transactionId)) {
+      state.transactions.push({
+        id: transactionId,
+        family_id: purchase.family_id,
+        type: 'expense',
+        amount_kopecks: purchase.estimated_kopecks,
+        operation_date: params.p_operation_date,
+        operation_time: null,
+        category_id: purchase.category_id || null,
+        account_id: params.p_account_id || null,
+        to_account_id: null,
+        description: purchase.name,
+        created_by: userId,
+        updated_by: userId,
+        responsible_user_id: purchase.responsible_user_id || purchase.created_by || userId,
+        planned: false,
+        parent_recurring_id: null,
+      })
+    }
+    purchase.status = 'bought'
+    purchase.linked_transaction_id = transactionId
+    return { transaction_id: transactionId }
+  }
+  if (name === 'confirm_recurring_payment') {
+    const recurring = state.recurring_payments.find(row => row.id === params.p_recurring_id)
+    if (!recurring) throw new Error('Регулярный платёж не найден')
+    const dueDate = params.p_expected_due_date
+    const transactionId = 'recurring_' + recurring.id + '_' + dueDate
+    if (!state.transactions.some(row => row.id === transactionId)) {
+      state.transactions.push({
+        id: transactionId,
+        family_id: recurring.family_id,
+        type: recurring.type,
+        amount_kopecks: recurring.amount_kopecks,
+        operation_date: params.p_operation_date,
+        operation_time: null,
+        category_id: recurring.category_id || null,
+        account_id: recurring.account_id || null,
+        to_account_id: null,
+        description: recurring.description,
+        created_by: userId,
+        updated_by: userId,
+        responsible_user_id: recurring.responsible_user_id || recurring.created_by || userId,
+        planned: false,
+        parent_recurring_id: recurring.id,
+      })
+    }
+    const next = new Date(dueDate + 'T12:00:00.000Z')
+    const days = recurring.frequency === 'custom' ? Math.max(1, Number(recurring.custom_interval_days) || 30) : recurring.frequency === 'weekly' ? 7 : recurring.frequency === 'daily' ? 1 : 30
+    next.setUTCDate(next.getUTCDate() + days)
+    recurring.next_due_date = next.toISOString().slice(0, 10)
+    if (recurring.end_date && recurring.next_due_date > recurring.end_date) recurring.active = false
+    return true
   }
   throw new Error('Unexpected RPC in financial E2E: ' + name)
 }
@@ -344,9 +414,19 @@ async function main() {
     await page.getByRole('button', { name: 'Пауза' }).waitFor()
     assert.equal(state.recurring_payments[0].active, true)
     const resumedRecurringCard = page.locator('.card').filter({ hasText: 'E2E интернет' }).first()
-    await resumedRecurringCard.locator('button[title="Удалить"]').click()
+    await resumedRecurringCard.locator('button[title="Подтвердить оплату"]').click()
+    const recurringConfirmDialog = page.getByRole('dialog')
+    await recurringConfirmDialog.getByRole('button', { name: 'Подтвердить' }).click()
+    await page.getByRole('dialog').waitFor({ state: 'detached' })
+    assert.equal(state.transactions.length, 2, 'confirming a recurring payment must create one operation')
+    assert.equal(state.transactions[1].id, 'recurring_' + state.recurring_payments[0].id + '_2026-11-18')
+    assert.equal(state.transactions[1].amount_kopecks, 1234)
+    assert.equal(state.transactions[1].parent_recurring_id, state.recurring_payments[0].id)
+    assert.equal(state.recurring_payments[0].next_due_date, '2026-12-02')
+    await page.locator('.card').filter({ hasText: 'E2E интернет' }).first().locator('button[title="Удалить"]').click()
     await page.getByText('E2E интернет', { exact: true }).waitFor({ state: 'detached' })
     assert.equal(state.recurring_payments.length, 0, 'deleting a recurring payment must remove only the selected fixture row')
+    assert.equal(state.transactions[1].parent_recurring_id, '', 'deleting a recurring payment must detach, not delete, its transaction')
 
     await page.goto(baseUrl + '/purchases', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Планируемые покупки' }).waitFor()
@@ -378,9 +458,29 @@ async function main() {
     assert.equal(state.planned_purchases[0].estimated_kopecks, 40000)
     assert.equal(state.planned_purchases[0].comment, 'Проверка редактирования')
     const editedPurchaseCard = page.locator('.card').filter({ hasText: 'E2E наушники изменены' }).first()
-    await editedPurchaseCard.locator('button[title="Удалить"]').click()
-    await page.getByText('E2E наушники изменены', { exact: true }).waitFor({ state: 'detached' })
-    assert.equal(state.planned_purchases.length, 0, 'deleting a planned purchase must remove only the selected fixture row')
+    await editedPurchaseCard.locator('button[title="Отметить купленным"]').click()
+    const purchaseConfirmDialog = page.getByRole('dialog')
+    await purchaseConfirmDialog.getByLabel('Списать со счёта').selectOption('account-cash')
+    await purchaseConfirmDialog.getByRole('button', { name: 'Подтвердить покупку' }).click()
+    await page.getByRole('dialog').waitFor({ state: 'detached' })
+    await page.getByText('Куплено', { exact: true }).waitFor()
+    assert.equal(state.planned_purchases[0].status, 'bought')
+    assert.equal(state.planned_purchases[0].linked_transaction_id, 'purchase_' + state.planned_purchases[0].id)
+    assert.equal(state.transactions.length, 3, 'confirming a planned purchase must create one expense')
+    assert.equal(state.transactions[2].amount_kopecks, 40000)
+    assert.equal(state.transactions[2].account_id, 'account-cash')
+    assert.equal(state.transactions[2].type, 'expense')
+
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    await page.getByLabel('Название').fill('E2E мышь')
+    await page.getByLabel('Ориентировочная стоимость, ₽').fill('100.00')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E мышь', { exact: true }).waitFor()
+    assert.equal(state.planned_purchases.length, 2)
+    const secondPurchaseCard = page.locator('.card').filter({ hasText: 'E2E мышь' }).first()
+    await secondPurchaseCard.locator('button[title="Удалить"]').click()
+    await page.getByText('E2E мышь', { exact: true }).waitFor({ state: 'detached' })
+    assert.equal(state.planned_purchases.length, 1, 'deleting a planned purchase must remove only the selected fixture row')
 
     process.stdout.write(JSON.stringify({
       result: 'PASS',
@@ -393,8 +493,8 @@ async function main() {
         'goal create uses the create_goal_with_purchase RPC contract',
         'account create, edit, archive, and restore preserve negative opening balances in integer kopecks',
         'category create, edit, and archive persist changes without duplicate rows',
-        'recurring payment validates dates, saves custom intervals, pauses, resumes, and deletes',
-        'planned purchase validates URLs, saves, edits, and deletes without duplicate rows',
+        'recurring payment validates dates, saves custom intervals, pauses, resumes, confirms one operation, and detaches on delete',
+        'planned purchase validates URLs, saves, edits, confirms one expense, and deletes an unbought item',
       ],
       persisted: {
         transactions: state.transactions.length,
