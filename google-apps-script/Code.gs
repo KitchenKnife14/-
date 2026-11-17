@@ -696,6 +696,21 @@ function validateRelations_(table,row,user,previous){
   if(table==='categories'){
     if(!['expense','income','transfer'].includes(String(row.kind||'')))throw new Error('Неизвестный тип категории');
     check('parent_id','categories','Родительская категория');
+    // A category may only point to an ancestor chain that terminates at a root.
+    // Reject self-parenting and cycles before persisting the hierarchy change.
+    if(row.parent_id){
+      const categoryRows=rows_('categories');
+      const visited=new Set();
+      if(row.id)visited.add(String(row.id));
+      let parentId=String(row.parent_id);
+      while(parentId){
+        if(visited.has(parentId))throw new Error('Нельзя создавать циклическую иерархию категорий');
+        visited.add(parentId);
+        const parent=categoryRows.find(category=>String(category.id)===parentId);
+        if(!parent)break;
+        parentId=String(parent.parent_id||'');
+      }
+    }
     const hierarchyChanged=!previous||String(previous.parent_id||'')!==String(row.parent_id||'')||String(previous.kind)!==String(row.kind);
     const kindChanged=!!previous&&String(previous.kind)!==String(row.kind);
     if(kindChanged&&row.id){
