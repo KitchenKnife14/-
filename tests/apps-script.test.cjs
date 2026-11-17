@@ -242,6 +242,14 @@ test('request metrics never log attacker-controlled unknown action values', () =
   assert.equal(logs[0].includes('secret-marker'), false);
 });
 
+test('auth helper functions preserve the positional _auth schema', () => {
+  const h = makeHarness();
+  const sheet = h.context.SpreadsheetApp.getActiveSpreadsheet().insertSheet('_auth');
+  sheet.getRange(1, 1, 1, 6).setValues([['wrong', 'email', 'salt', 'password_hash', 'display_name', 'created_at']]);
+  const response = h.call({ action: 'signup', email: 'auth-schema@example.com', password: '12345678' });
+  assert.match(response.error.message, /структура служебного листа _auth/);
+  assert.equal(sheet.getLastRow(), 1);
+});
 test('signup accepts an ordinary 8-character password and rejects shorter passwords', () => {
   const h = makeHarness();
   const short = h.call({ action: 'signup', email: 'short-password@example.com', password: '1234567' });
