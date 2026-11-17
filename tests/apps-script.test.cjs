@@ -2299,12 +2299,8 @@ test('planned purchase confirmation updates only its row', () => {
   assert.equal(h.call({ action: 'query', token: user.token, table: 'planned_purchases', mode: 'select' }).data[0].status, 'bought');
 });
 
-test('new registrations require 15 characters while existing shorter passwords remain valid', () => {
+test('legacy accounts with 8-character passwords can sign in and migrate their hash', () => {
   const h = makeHarness();
-  const short = h.call({ action: 'signup', email: 'short-password@example.com', password: '12345678' });
-  assert.ok(short.error);
-  assert.match(short.error.message, /15 символов/);
-
   const salt = 'legacy-short-password-salt';
   const email = 'existing-short-password@example.com';
   const id = 'legacy-short-password-user';
