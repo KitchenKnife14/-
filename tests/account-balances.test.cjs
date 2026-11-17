@@ -103,3 +103,19 @@ test('invalid opening balances and malformed transaction amounts are marked untr
   assert.equal(balances.invalidAccountIds.has('bad-row'), true)
   assert.deepEqual(balances.issues.map(issue => issue.reason).sort(), ['invalid-opening-balance', 'invalid-transaction-amount'])
 })
+
+test('unknown transaction types invalidate every referenced account instead of being ignored', async () => {
+  const { calculateAccountBalances } = await import('../src/lib/accountBalances.js')
+  const accounts = [
+    { id: 'cash', starting_balance_kopecks: 100000 },
+    { id: 'savings', starting_balance_kopecks: 5000 },
+  ]
+  const balances = calculateAccountBalances(accounts, [
+    { id: 'unknown-type', type: 'adjustment', amount_kopecks: 2500, account_id: 'cash', to_account_id: 'savings', planned: false },
+  ])
+
+  assert.equal(balances.get('cash'), 100000)
+  assert.equal(balances.get('savings'), 5000)
+  assert.deepEqual([...balances.invalidAccountIds].sort(), ['cash', 'savings'])
+  assert.deepEqual(balances.issues.map(issue => issue.reason), ['invalid-transaction-type', 'invalid-transaction-type'])
+})
