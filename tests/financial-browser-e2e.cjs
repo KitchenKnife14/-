@@ -182,6 +182,7 @@ async function main() {
     await addTransactionButton.click()
     const transactionDialog = page.getByRole('dialog')
     await transactionDialog.waitFor()
+    assert.equal(await transactionDialog.locator('[data-modal-autofocus]').evaluate(element => element === document.activeElement), true, 'dialog must focus its designated initial field')
     const dialogFocusable = transactionDialog.locator('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')
     assert.ok(await dialogFocusable.count() >= 2, 'transaction dialog must expose keyboard-focusable controls')
     const firstDialogControl = dialogFocusable.first()
