@@ -207,7 +207,7 @@ function CategoryForm({ open, onClose, onSaved, editing, parentId, parentKind, f
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label className="label" htmlFor="category-name">Название</label>
-          <input id="category-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <input id="category-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} data-modal-autofocus />
         </div>
         {!parentId && (
           <div>

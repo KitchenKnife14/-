@@ -210,7 +210,7 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Редактировать покупку' : 'Новая покупка'}>
       <form onSubmit={submit} className="space-y-3">
-        <div><label className="label" htmlFor="purchase-name">Название</label><input id="purchase-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
+        <div><label className="label" htmlFor="purchase-name">Название</label><input id="purchase-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} data-modal-autofocus /></div>
         <div><label className="label" htmlFor="purchase-category">Категория</label><select id="purchase-category" className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Без категории</option>{categories.filter((c) => c.kind === 'expense' && (!c.archived || c.id === categoryId)).map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}{c.archived ? ' (архив)' : ''}</option>)}</select></div>
         <div><label className="label" htmlFor="purchase-estimated">Ориентировочная стоимость, ₽</label><input id="purchase-estimated" className="input" type="number" step="0.01" min="0" required value={estimated} onChange={(e) => setEstimated(e.target.value)} placeholder="5000" /></div>
         <div className="grid grid-cols-2 gap-3">

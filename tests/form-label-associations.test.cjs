@@ -65,3 +65,24 @@ test('search and filter controls have accessible names, and purchase account lab
   assert.match(purchases, /<label\b[^>]*htmlFor="purchase-buy-account"/)
   assert.match(purchases, /<select\b[^>]*id="purchase-buy-account"/)
 })
+
+const modalInitialFocus = {
+  'src/pages/AccountsPage.tsx': [],
+  'src/pages/BudgetsPage.tsx': ['budget-limit'],
+  'src/pages/CategoriesPage.tsx': ['category-name'],
+  'src/pages/GoalsPage.tsx': ['goal-name', 'goal-contribution-amount'],
+  'src/pages/PlanningPage.tsx': ['monthly-plan-amount'],
+  'src/pages/PurchasesPage.tsx': ['purchase-name'],
+  'src/pages/RecurringPage.tsx': ['recurring-description'],
+  'src/pages/TransactionsPage.tsx': [],
+}
+
+test('modal forms use the modal-managed initial focus target', () => {
+  for (const [file, expectedTargets] of Object.entries(modalInitialFocus)) {
+    const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8')
+    assert.doesNotMatch(source, /\\bautoFocus\\b/, file + ': native autoFocus can steal focus before Modal stores the opener')
+    for (const id of expectedTargets) {
+      assert.match(source, new RegExp(`<[^>]+id=["']${id}["'][^>]*data-modal-autofocus`), file + ': missing modal focus target ' + id)
+    }
+  }
+})
