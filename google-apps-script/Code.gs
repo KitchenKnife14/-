@@ -356,13 +356,13 @@ function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpper
 function secureCode_(){return Utilities.getUuid().replace(/-/g,'').toUpperCase();}
 function accessCodeAttemptKey_(prefix,identity){
   const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(identity),Utilities.Charset.UTF_8);
-  return prefix+Utilities.base64Encode(digest).replace(/[+/=]/g,'');
+  return prefix+Utilities.base64Encode(digest).split('+').join('-').split('/').join('_').replace(/=+$/,'');
 }
 function recordAccessCodeAttempt_(prefix,identity,message){
   const props=PropertiesService.getScriptProperties(),key=accessCodeAttemptKey_(prefix,identity),now=Date.now();
   let state=null;
   try{state=JSON.parse(props.getProperty(key)||'null');}catch(_){}
-  if(!state||typeof state!=='object'||!Number.isSafeInteger(state.count)||typeof state.expires!=='number'||state.expires<=now)
+  if(!state||typeof state!=='object'||!Number.isSafeInteger(state.count)||state.count<0||typeof state.expires!=='number'||!Number.isFinite(state.expires)||state.expires<=now)
     state={count:0,expires:now+ACCESS_CODE_ATTEMPT_WINDOW_MS};
   if(state.count>=ACCESS_CODE_ATTEMPT_MAX)throw new Error(message);
   state.count++;
@@ -504,7 +504,7 @@ function benchmarkPasswordHash(){
 function pruneSessions_(){
   const props=PropertiesService.getScriptProperties(), all=props.getProperties(), now=Date.now();
   Object.keys(all).forEach(key=>{
-    if(!key.startsWith('session:')&&!key.startsWith('loginfail:'))return;
+    if(!key.startsWith('session:')&&!key.startsWith('loginfail:')&&!key.startsWith('family-invite-attempt:')&&!key.startsWith('telegram-link-attempt:'))return;
     try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=now)props.deleteProperty(key);}
     catch(_){props.deleteProperty(key);}
   });
@@ -1498,7 +1498,11 @@ function telegramWebhook_(req){
   const lastPrune=Number.isFinite(savedPrune)?savedPrune:0;
   if(Date.now()-lastPrune>TELEGRAM_UPDATE_PRUNE_INTERVAL_MS){
     const all=props.getProperties();
-    Object.keys(all).forEach(key=>{if(!key.startsWith('telegram:update:'))return;try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=Date.now())props.deleteProperty(key);}catch(_){props.deleteProperty(key);}});
+    Object.keys(all).forEach(key=>{
+      if(!key.startsWith('telegram:update:')&&!key.startsWith('telegram-link-attempt:')&&!key.startsWith('family-invite-attempt:'))return;
+      try{const item=JSON.parse(all[key]);if(!item.expires||item.expires<=Date.now())props.deleteProperty(key);}
+      catch(_){props.deleteProperty(key);}
+    });
     props.setProperty('telegram:last_prune',String(Date.now()));
   }
   const updateKey=updateId?'telegram:update:'+updateId:'';
