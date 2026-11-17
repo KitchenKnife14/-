@@ -1402,7 +1402,12 @@ function rpc_(req,user){
     }
     if(r.next_due_date!==expectedDueDate)throw new Error('Дата платежа уже изменилась. Обновите страницу.');
     if(r.end_date && expectedDueDate>r.end_date){r.active=false;updateRows_('recurring_payments',[r]);return true;}
-    if(!existingTx)appendRows_('transactions',[{id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:operationDate,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()}]);
+    if(!existingTx){
+      const transaction={id:transactionId,family_id:r.family_id,type:r.type,amount_kopecks:r.amount_kopecks,operation_date:operationDate,operation_time:null,category_id:r.category_id,account_id:r.account_id,to_account_id:null,description:r.description,created_by:user.id,updated_by:user.id,responsible_user_id:r.responsible_user_id||r.created_by||user.id,planned:false,parent_recurring_id:r.id,created_at:now_(),updated_at:now_()};
+      // RPC-created transactions must obey the same current account/category rules as direct inserts.
+      validateRelations_('transactions',transaction,user);
+      appendRows_('transactions',[transaction]);
+    }
     r.next_due_date=nextExpectedDate;
     if(r.end_date && r.next_due_date>r.end_date)r.active=false;
     updateRows_('recurring_payments',[r]);return true;
