@@ -4088,6 +4088,30 @@ test('category inserts are idempotent for the same ID and exact payload', () => 
   assert.equal(h.context.rows_('categories').filter(row => row.id === payload.id).length, 1);
 });
 
+
+test('transaction upsert cannot overwrite an existing operation with a different payload', () => {
+  const h = makeHarness();
+  const user = h.signup('transaction-upsert-collision@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита upsert операций' }).data;
+  const payload = { id: 'transaction-upsert-stable-1', family_id: family.id, type: 'expense', amount_kopecks: 1500, operation_date: '2026-11-17', description: 'Покупка' };
+  const created = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'insert', returning: true, values: payload });
+  assert.equal(created.error, null, created.error?.message);
+
+  const replay = h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'upsert', values: payload });
+  assert.equal(replay.error, null, replay.error?.message);
+
+  const collision = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'upsert',
+    values: { ...payload, amount_kopecks: 9900, description: 'Подмена суммы' },
+  });
+  assert.match(collision.error?.message || '', /операция с таким ID уже существует или содержит другие данные/i);
+  const saved = h.call({
+    action: 'query', token: user.token, table: 'transactions', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: payload.id }],
+  }).data[0];
+  assert.equal(saved.amount_kopecks, 1500);
+  assert.equal(saved.description, 'Покупка');
+});
 test('transaction inserts are idempotent for the same ID and exact payload', () => {
   const h = makeHarness();
   const owner = h.signup('transaction-idempotency-owner@example.com');
