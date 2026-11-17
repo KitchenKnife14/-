@@ -689,7 +689,7 @@ function validateRelations_(table,row,user,previous){
     if(!['income','expense'].includes(String(row.type||'')))throw new Error('Неизвестный тип регулярного платежа');
     if(!['daily','weekly','monthly','yearly','custom'].includes(String(row.frequency||'')))throw new Error('Неизвестная частота регулярного платежа');
     if(row.frequency==='custom'&&(!Number.isSafeInteger(row.custom_interval_days)||row.custom_interval_days<1))throw new Error('Интервал регулярного платежа должен быть целым числом дней от 1');
-    const isDateOnly=value=>typeof value==='string'&&/^\\d{4}-\\d{2}-\\d{2}$/.test(value)&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
+    const isDateOnly=value=>{if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const date=new Date(value+'T00:00:00Z');return !isNaN(date.getTime())&&date.toISOString().slice(0,10)===value;};
     if(!isDateOnly(row.start_date)||!isDateOnly(row.next_due_date))throw new Error('Укажите корректные даты начала и следующего регулярного платежа');
     if(row.end_date&&!isDateOnly(row.end_date))throw new Error('Укажите корректную дату окончания регулярного платежа');
     if(row.end_date&&row.end_date<row.start_date)throw new Error('Дата окончания регулярного платежа не может быть раньше даты начала');
