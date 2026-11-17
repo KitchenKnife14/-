@@ -275,3 +275,12 @@
 - CI [44177940961 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44177940961), commit `749c37c869825def38522a5667e3ec6d95d6ec52`: **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build и все 31 шага workflow — PASS.
 - Ограничение: mock проверяет клиентский контракт upsert. Уникальность и атомарность составного ключа на реальном Google Apps Script/Sheet не подтверждаются этим browser fixture; серверные проверки остаются отдельными.
 - Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
+
+
+### 4.8. Пополнение цели и история (2026-11-17)
+
+- Добавлен E2E для формы пополнения цели: сумма 0 отклоняется с видимой ошибкой и не создаёт запись; 500,25 ₽ сохраняется как 50025 копеек с правильными `goal_id` и заметкой.
+- После сохранения открывается история цели; проверяется, что заметка пополнения отображается.
+- CI [44178437906 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44178437906), commit `d7d9c38d7ae10c3e0154798753c3d6d53d3aa2db`: **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build и все 31 шага workflow — PASS.
+- Ограничение: mock fixture проверяет форму, payload и историю; автоматический пересчёт `saved_kopecks` на реальном GAS не подтверждается этим E2E. Серверные проверки остаются отдельными.
+- Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.

@@ -3994,3 +3994,14 @@ HEAD до:
 - Ограничение: это проверка фронтенда и mock-контракта; атомарность/уникальность composite upsert в реальном Sheet/GAS не заявляется как проверенная.
 - Прогресс остаётся **172/227 (75,8%)**, **4/12 (33,3%)**.
 - Только ветка `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не менялись.
+
+
+### 2026-11-17 — E2E пополнения финансовой цели
+
+- В `tests/financial-browser-e2e.cjs` добавлен сценарий формы пополнения цели и просмотра истории.
+- Сумма 0 отправляется первой: проверяется видимая ошибка «Введите корректную положительную сумму с точностью до копейки» и отсутствие insert.
+- Затем 500,25 ₽ + заметка «E2E взнос» сохраняются; проверяются `amount_kopecks=50025`, корректный `goal_id`, note. Открывается история и проверяется отображение заметки.
+- Финальный CI [44178437906 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44178437906) на commit `d7d9c38d7ae10c3e0154798753c3d6d53d3aa2db`: 31/31 шагов PASS, **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build PASS.
+- Ограничение: browser fixture проверяет форму/запись/историю, но не вычисляет реальное `saved_kopecks` так, как это делает backend. Не считать пересчёт GAS доказанным этим UI тестом.
+- Прогресс остаётся **172/227 (75,8%)**, **4/12 (33,3%)**.
+- Изменения только в `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не затрагивались.
