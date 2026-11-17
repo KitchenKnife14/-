@@ -281,6 +281,15 @@ async function main() {
     assert.equal(state.accounts.length, 3, 'editing an account must not create a duplicate')
     assert.equal(state.accounts[2].name, 'E2E накопительный изменён')
     assert.equal(state.accounts[2].starting_balance_kopecks, -3075)
+    const editedAccountCard = page.locator('.card').filter({ hasText: 'E2E накопительный изменён' }).first()
+    await editedAccountCard.getByRole('button', { name: 'Архивировать счёт' }).click()
+    await page.getByText('E2E накопительный изменён архив', { exact: false }).waitFor()
+    assert.equal(state.accounts[2].archived, true)
+    await page.getByLabel('Показывать архивные счета').check()
+    const archivedAccountCard = page.locator('.card').filter({ hasText: 'E2E накопительный изменён' }).first()
+    await archivedAccountCard.getByRole('button', { name: 'Восстановить счёт' }).click()
+    await page.getByText('E2E накопительный изменён', { exact: true }).waitFor()
+    assert.equal(state.accounts[2].archived, false)
 
     await page.goto(baseUrl + '/categories', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Категории' }).waitFor()
@@ -300,6 +309,10 @@ async function main() {
     await page.getByText('E2E транспорт изменён', { exact: true }).waitFor()
     assert.equal(state.categories.length, 4, 'editing a category must not create a duplicate')
     assert.equal(state.categories[3].name, 'E2E транспорт изменён')
+    const editedCategoryCard = page.locator('.card').filter({ hasText: 'E2E транспорт изменён' }).first()
+    await editedCategoryCard.getByRole('button', { name: 'Архивировать' }).click()
+    await page.getByText('E2E транспорт изменён', { exact: true }).waitFor({ state: 'detached' })
+    assert.equal(state.categories[3].archived, true)
 
     await page.goto(baseUrl + '/recurring', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Регулярные платежи' }).waitFor()
@@ -330,6 +343,10 @@ async function main() {
     await pausedRecurringCard.getByRole('button', { name: 'Возобновить' }).click()
     await page.getByRole('button', { name: 'Пауза' }).waitFor()
     assert.equal(state.recurring_payments[0].active, true)
+    const resumedRecurringCard = page.locator('.card').filter({ hasText: 'E2E интернет' }).first()
+    await resumedRecurringCard.locator('button[title="Удалить"]').click()
+    await page.getByText('E2E интернет', { exact: true }).waitFor({ state: 'detached' })
+    assert.equal(state.recurring_payments.length, 0, 'deleting a recurring payment must remove only the selected fixture row')
 
     await page.goto(baseUrl + '/purchases', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Планируемые покупки' }).waitFor()
@@ -360,6 +377,10 @@ async function main() {
     assert.equal(state.planned_purchases.length, 1, 'editing a purchase must not create a duplicate')
     assert.equal(state.planned_purchases[0].estimated_kopecks, 40000)
     assert.equal(state.planned_purchases[0].comment, 'Проверка редактирования')
+    const editedPurchaseCard = page.locator('.card').filter({ hasText: 'E2E наушники изменены' }).first()
+    await editedPurchaseCard.locator('button[title="Удалить"]').click()
+    await page.getByText('E2E наушники изменены', { exact: true }).waitFor({ state: 'detached' })
+    assert.equal(state.planned_purchases.length, 0, 'deleting a planned purchase must remove only the selected fixture row')
 
     process.stdout.write(JSON.stringify({
       result: 'PASS',
@@ -370,10 +391,10 @@ async function main() {
         'transaction delete removes the row',
         'budget create persists the monthly limit in kopecks',
         'goal create uses the create_goal_with_purchase RPC contract',
-        'account create and edit preserve negative opening balances in integer kopecks',
-        'category create and edit persist changes without duplicate rows',
-        'recurring payment validates date range, saves custom intervals, and can pause/resume',
-        'planned purchase validates URLs, saves a valid purchase, and edits it without duplication',
+        'account create, edit, archive, and restore preserve negative opening balances in integer kopecks',
+        'category create, edit, and archive persist changes without duplicate rows',
+        'recurring payment validates dates, saves custom intervals, pauses, resumes, and deletes',
+        'planned purchase validates URLs, saves, edits, and deletes without duplicate rows',
       ],
       persisted: {
         transactions: state.transactions.length,
