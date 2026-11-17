@@ -149,6 +149,30 @@ async function main() {
     await authPage.waitForURL('http://127.0.0.1:4173/')
     assert.equal(new URL(authPage.url()).origin, baseUrl, 'hostile backslash path must remain on the app origin')
 
+    // Exercise the mobile More menu, invite code, Telegram destination, and logout.
+    await authPage.setViewportSize({ width: 390, height: 844 })
+    await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    await authPage.getByRole('button', { name: 'Открыть дополнительные разделы' }).click()
+    await authPage.getByText('TEST-INVITE', { exact: true }).waitFor()
+    const moreLinks = authPage.getByRole('navigation', { name: 'Дополнительная навигация' }).getByRole('link')
+    assert.equal(await moreLinks.count(), 10, 'mobile More menu must expose all ten secondary sections')
+    for (const label of ['Календарь', 'Регулярные платежи', 'Цели', 'Планируемые покупки', 'Планирование', 'Отчёты', 'Анализ по участникам', 'Уведомления', 'Категории', 'Telegram']) {
+      assert.equal(await authPage.getByRole('navigation', { name: 'Дополнительная навигация' }).getByRole('link', { name: label }).count(), 1, 'missing mobile menu item: ' + label)
+    }
+    await authPage.getByRole('navigation', { name: 'Дополнительная навигация' }).getByRole('link', { name: 'Telegram' }).click()
+    await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
+    assert.equal(await authPage.getByRole('button', { name: 'Открыть дополнительные разделы' }).count(), 1, 'More menu should close after selecting a route')
+    const mobileMenuWidths = await authPage.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      document: document.documentElement.scrollWidth,
+      body: document.body.scrollWidth,
+    }))
+    assert.ok(mobileMenuWidths.document <= mobileMenuWidths.viewport + 1, `Mobile menu horizontal overflow: ${JSON.stringify(mobileMenuWidths)}`)
+    assert.ok(mobileMenuWidths.body <= mobileMenuWidths.viewport + 1, `Mobile menu body overflow: ${JSON.stringify(mobileMenuWidths)}`)
+    await authPage.getByRole('button', { name: 'Открыть дополнительные разделы' }).click()
+    await authPage.getByRole('button', { name: 'Выйти' }).click()
+    await authPage.getByRole('heading', { name: 'Бюджет для двоих' }).waitFor()
+
     await authPage.close()
 
     process.stdout.write(JSON.stringify({
