@@ -179,7 +179,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
 
         <div>
           <label className="label" htmlFor={`${fieldId}-amount`}>Сумма, ₽</label>
-          <input id={`${fieldId}-amount`} className="input" type="number" step="0.01" min="0" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus />
+          <input id={`${fieldId}-amount`} className="input" type="number" step="0.01" min="0" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" data-modal-autofocus />
         </div>
         <div>
           <label className="label" htmlFor={`${fieldId}-date`}>Дата</label>

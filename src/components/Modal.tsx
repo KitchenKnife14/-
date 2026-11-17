@@ -26,7 +26,7 @@ export default function Modal({ open, onClose, title, children }: Props) {
     const getFocusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])
       .filter(element => !element.hasAttribute('disabled') && !element.hidden && element.getAttribute('aria-hidden') !== 'true')
 
-    const initialTarget = dialog?.querySelector<HTMLElement>('[autofocus]') ?? getFocusable()[0] ?? dialog
+    const initialTarget = dialog?.querySelector<HTMLElement>('[data-modal-autofocus]') ?? getFocusable()[0] ?? dialog
     initialTarget?.focus()
 
     const handleKeyDown = (event: KeyboardEvent) => {
