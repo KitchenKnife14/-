@@ -18,6 +18,8 @@ const state = {
     { id: 'category-salary', family_id: familyId, name: 'Зарплата', kind: 'income', icon: '💼', archived: false, parent_id: null },
   ],
   transactions: [],
+  recurring_payments: [],
+  planned_purchases: [],
   budgets: [],
   goals: [],
   goal_contributions: [],
@@ -259,6 +261,72 @@ async function main() {
     assert.equal(state.goals[0].target_kopecks, 8500000)
     assert.equal(state.goals[0].priority, 2)
 
+    await page.goto(baseUrl + '/accounts', { waitUntil: 'networkidle' })
+    await page.getByRole('heading', { name: 'Счета' }).waitFor()
+    await page.getByRole('button', { name: 'Добавить счёт' }).click()
+    await page.getByLabel('Название', { exact: true }).fill('E2E накопительный')
+    await page.getByLabel('Тип').selectOption('savings')
+    await page.getByLabel('Начальный остаток, ₽').fill('-25.50')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E накопительный', { exact: true }).waitFor()
+    assert.equal(state.accounts.length, 3)
+    assert.equal(state.accounts[2].starting_balance_kopecks, -2550)
+    assert.equal(state.accounts[2].kind, 'savings')
+
+    await page.goto(baseUrl + '/categories', { waitUntil: 'networkidle' })
+    await page.getByRole('heading', { name: 'Категории' }).waitFor()
+    await page.getByRole('button', { name: 'Добавить', exact: true }).click()
+    await page.getByLabel('Название', { exact: true }).fill('E2E транспорт')
+    await page.getByLabel('Тип').selectOption('expense')
+    await page.getByLabel('Значок').fill('🚕')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E транспорт', { exact: true }).waitFor()
+    assert.equal(state.categories.length, 4)
+    assert.equal(state.categories[3].name, 'E2E транспорт')
+    assert.equal(state.categories[3].kind, 'expense')
+
+    await page.goto(baseUrl + '/recurring', { waitUntil: 'networkidle' })
+    await page.getByRole('heading', { name: 'Регулярные платежи' }).waitFor()
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    await page.getByLabel('Название').fill('E2E интернет')
+    await page.getByLabel('Сумма, ₽').fill('12.34')
+    await page.getByLabel('Частота').selectOption('custom')
+    await page.getByLabel('Интервал, дней').fill('14')
+    await page.getByLabel('Дата начала').fill('2026-11-18')
+    await page.getByLabel('Дата окончания').fill('2026-11-17')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('Дата окончания не может быть раньше даты начала').waitFor()
+    assert.equal(state.recurring_payments.length, 0, 'invalid recurring date range must not write data')
+    await page.getByLabel('Дата окончания').fill('2026-12-18')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E интернет', { exact: true }).waitFor()
+    assert.equal(state.recurring_payments.length, 1)
+    assert.equal(state.recurring_payments[0].amount_kopecks, 1234)
+    assert.equal(state.recurring_payments[0].frequency, 'custom')
+    assert.equal(state.recurring_payments[0].custom_interval_days, 14)
+    assert.equal(state.recurring_payments[0].start_date, '2026-11-18')
+    assert.equal(state.recurring_payments[0].end_date, '2026-12-18')
+
+    await page.goto(baseUrl + '/purchases', { waitUntil: 'networkidle' })
+    await page.getByRole('heading', { name: 'Планируемые покупки' }).waitFor()
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    await page.getByLabel('Название').fill('E2E наушники')
+    await page.getByLabel('Ориентировочная стоимость, ₽').fill('345.67')
+    await page.getByLabel('Ссылка на товар').fill('ftp://example.com/item')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('Укажите корректную ссылку, начинающуюся с http:// или https://').waitFor()
+    assert.equal(state.planned_purchases.length, 0, 'unsupported purchase URL must not write data')
+    await page.getByLabel('Ссылка на товар').fill('https://example.com/item')
+    await page.getByLabel('Приоритет').selectOption('2')
+    await page.getByLabel('Желаемая дата').fill('2026-12-01')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E наушники', { exact: true }).waitFor()
+    assert.equal(state.planned_purchases.length, 1)
+    assert.equal(state.planned_purchases[0].estimated_kopecks, 34567)
+    assert.equal(state.planned_purchases[0].priority, 2)
+    assert.equal(state.planned_purchases[0].url, 'https://example.com/item')
+    assert.equal(state.planned_purchases[0].desired_date, '2026-12-01')
+
     process.stdout.write(JSON.stringify({
       result: 'PASS',
       checks: [
@@ -268,11 +336,19 @@ async function main() {
         'transaction delete removes the row',
         'budget create persists the monthly limit in kopecks',
         'goal create uses the create_goal_with_purchase RPC contract',
+        'account create preserves a negative opening balance in integer kopecks',
+        'category create persists the selected type and icon',
+        'recurring payment rejects an end date before the start date and saves custom intervals',
+        'planned purchase rejects non-HTTP(S) URLs and saves a valid purchase in kopecks',
       ],
       persisted: {
         transactions: state.transactions.length,
         budgets: state.budgets.length,
         goals: state.goals.length,
+        accounts: state.accounts.length,
+        categories: state.categories.length,
+        recurring_payments: state.recurring_payments.length,
+        planned_purchases: state.planned_purchases.length,
       },
     }) + '\n')
     await context.close()
