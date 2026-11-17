@@ -1826,6 +1826,39 @@ test('deleting a recurring payment preserves history and detaches its transactio
   assert.equal(h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'select' }).data.length, 0);
 });
 
+
+test('goal upsert initializes the saved balance and preserves contribution-derived totals', () => {
+  const h = makeHarness();
+  const user = h.signup('goal-upsert-balance@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Цель через upsert' }).data;
+  const created = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'upsert', returning: true,
+    values: { id: 'goal-upsert-balance-1', family_id: family.id, name: 'Резерв', target_kopecks: 50000, status: 'active', priority: 1 },
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const afterCreate = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: 'goal-upsert-balance-1' }],
+  }).data[0];
+  assert.equal(afterCreate.saved_kopecks, 0);
+
+  const contribution = h.call({
+    action: 'query', token: user.token, table: 'goal_contributions', mode: 'insert', returning: true,
+    values: { id: 'goal-upsert-contribution-1', goal_id: afterCreate.id, amount_kopecks: 12500, contribution_date: '2026-11-17', note: 'Первое пополнение' },
+  });
+  assert.equal(contribution.error, null, contribution.error?.message);
+
+  const updated = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'upsert',
+    values: { id: afterCreate.id, family_id: family.id, name: 'Резерв семьи', target_kopecks: 60000, status: 'active', priority: 1 },
+  });
+  assert.equal(updated.error, null, updated.error?.message);
+  const afterUpdate = h.call({
+    action: 'query', token: user.token, table: 'goals', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: afterCreate.id }],
+  }).data[0];
+  assert.equal(afterUpdate.saved_kopecks, 12500);
+});
 test('goal contributions require positive integer kopecks and deletion recalculates totals', () => {
   const h = makeHarness();
   const user = h.signup('goal-contribution-validation@example.com');
