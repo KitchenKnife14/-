@@ -3891,3 +3891,13 @@ HEAD до:
 - Это закрывает конкретный дефект: некорректный shape ответа backend больше не приводит к падению Dashboard при обработке списков. Это **не** доказывает устранение исходной Safari ошибки `undefined is not an object (evaluating 't[r]')`; её точная первопричина без воспроизводимого стека/ответа реального запроса пока не подтверждена.
 - Контрольный прогресс не увеличен: **172/227 (75,8%)**. Новый тест подтверждает дополнительный негативный сценарий, но не закрывает целиком ни один оставшийся ручной критерий чек-листа. Макроэтап №4 остаётся активным; общий счётчик макроэтапов — **4/12 (33,3%)**.
 - TEST GAS не обновлялся. `main`, Production, основная Google Sheet, Production GAS, Vercel Production и Telegram webhook не менялись; реальные финансовые данные не затрагивались.
+
+
+### 2026-11-17 — мобильная проверка всех авторизованных маршрутов (320/390 px)
+
+- В `tests/browser-e2e.cjs` добавлен Chromium smoke-тест всех 14 авторизованных маршрутов: `/`, `/transactions`, `/accounts`, `/calendar`, `/recurring`, `/budgets`, `/goals`, `/purchases`, `/planning`, `/reports`, `/analysis`, `/notifications`, `/categories`, `/telegram`.
+- Каждый маршрут открывается в синтетической авторизованной сессии на ширине 390 и 320 CSS px; тест проверяет ожидаемый заголовок страницы, отсутствие необработанных browser pageerror и горизонтального переполнения документа/тела страницы.
+- GitHub Actions [44164128460 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44164128460) на commit [f4168895cb84f507e0f08cfe0923d4236af039ef](https://github.com/KitchenKnife14/-/commit/f4168895cb84f507e0f08cfe0923d4236af039ef): все 31 шага job завершены, conclusion SUCCESS. В рамках этого запуска прошли production dependency audit, TypeScript/production build, preview smoke, установка Chromium и Browser E2E; предыдущий стабильный набор 303/303 regression tests и финансовый CRUD/transfer E2E остаются подтверждёнными CI #1460, поскольку #1461 проверяет новый маршрутный сценарий.
+- Ограничение: это эмуляция viewport в Chromium, не проверка физического iPhone/Safari. Реальная safe area, системное увеличение, VoiceOver и визуальная проверка экранов на устройстве остаются открытыми. Нельзя считать исходную ошибку Safari `undefined is not an object (evaluating 't[r]')` устранённой только по этому тесту.
+- Прогресс не меняется: **172/227 (75,8%)** детальных критериев и **4/12 (33,3%)** макроэтапов. Новый тест расширяет покрытие макроэтапа №4, но не закрывает целиком оставшиеся ручные критерии.
+- Изменения остаются в `ispravleniya`. `main`, Production, основная Google Sheet, Production GAS, Vercel Production, Telegram webhook и реальные финансовые данные не затрагивались.
