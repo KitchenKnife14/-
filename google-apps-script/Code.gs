@@ -580,7 +580,7 @@ function route_(req,user){
     return f;
   }
   if(req.action==='joinFamily'){
-    const attemptKey=const code=String(req.invite_code||'').trim().toUpperCase(), f=rows_('families').find(x=>String(x.invite_code).toUpperCase()===code);
+    const code=String(req.invite_code||'').trim().toUpperCase(), f=rows_('families').find(x=>String(x.invite_code).toUpperCase()===code);
     if(!f)throw new Error('Код приглашения не найден');
         const members=rows_('family_members').filter(m=>m.family_id===f.id);
     if(members.some(m=>m.user_id===user.id)){setProfileName_(user.id,req.display_name);return f;}
@@ -1513,7 +1513,7 @@ function telegramWebhook_(req){
   }else if(/^\/help(?:@\w+)?$/i.test(text)){
     reply={chat_id:chatId,text:'Команды:\n/link КОД — привязать аккаунт приложения\n/balance — сводка за текущий месяц\n/unlink — отвязать Telegram\n/help — помощь\n\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
   }else if(linkCommand){
-    const attemptKey=const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
+    const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
     const codeRow=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash);
     const existingTelegramLink=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
     const alreadyCompleted=!!(codeRow&&codeRow.used_at&&existingTelegramLink&&
