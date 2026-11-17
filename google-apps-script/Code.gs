@@ -26,6 +26,8 @@ const AUTH_SHEET = '_auth';
 const SESSION_TTL = 60 * 60 * 24 * 14;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
+const ACCESS_CODE_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const ACCESS_CODE_ATTEMPT_MAX = 8;
 const API_VERSION=11, BATCH_MAX=25;
 let PBKDF2_MS=0; // суммарное время PBKDF2 внутри текущего запроса
 let SS_CACHE=null, SHEET_READS=0, SHEET_WRITES=0, SHEET_READ_MS=0, SHEET_WRITE_MS=0, REVISION_WRITE_FAILURES=0; // метрики сервисных вызовов Sheets и ревизий на один запрос
@@ -350,6 +352,24 @@ function writeRows_(name, data) {
 function now_(){return new Date().toISOString();}
 function id_(){return Utilities.getUuid();}
 function code_(){return Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();}
+// New invite/link credentials use a full UUIDv4 token (122 random bits); legacy 12-hex codes remain valid.
+function secureCode_(){return Utilities.getUuid().replace(/-/g,'').toUpperCase();}
+function accessCodeAttemptKey_(prefix,identity){
+  const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(identity),Utilities.Charset.UTF_8);
+  return prefix+Utilities.base64Encode(digest).replace(/[+/=]/g,'');
+}
+function recordAccessCodeAttempt_(prefix,identity,message){
+  const props=PropertiesService.getScriptProperties(),key=accessCodeAttemptKey_(prefix,identity),now=Date.now();
+  let state=null;
+  try{state=JSON.parse(props.getProperty(key)||'null');}catch(_){}
+  if(!state||typeof state!=='object'||!Number.isSafeInteger(state.count)||typeof state.expires!=='number'||state.expires<=now)
+    state={count:0,expires:now+ACCESS_CODE_ATTEMPT_WINDOW_MS};
+  if(state.count>=ACCESS_CODE_ATTEMPT_MAX)throw new Error(message);
+  state.count++;
+  props.setProperty(key,JSON.stringify(state));
+  return key;
+}
+function clearAccessCodeAttempts_(key){if(key)PropertiesService.getScriptProperties().deleteProperty(key);}
 function authSheet_(){
   const expected=['id','email','salt','password_hash','display_name','created_at'];
   const ss=ss_(); let sh=ss.getSheetByName(AUTH_SHEET);
@@ -568,7 +588,7 @@ function route_(req,user){
   if(req.action==='createFamily'){
     const name=String(req.name||'Наша семья').trim(); if(!name)throw new Error('Введите название семьи');
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Пользователь уже состоит в семье');
-    const f={id:id_(),name,invite_code:code_(),currency:'RUB',created_at:now_(),created_by:user.id};
+    const f={id:id_(),name,invite_code:secureCode_(),currency:'RUB',created_at:now_(),created_by:user.id};
     // Таблицы не поддерживают транзакции: при сбое на любом шаге откатываем уже записанное вручную.
     try{
       appendRows_('families',[f]);
@@ -580,8 +600,10 @@ function route_(req,user){
     return f;
   }
   if(req.action==='joinFamily'){
+    const attemptKey=recordAccessCodeAttempt_('family-invite-attempt:',user.id,'Слишком много попыток ввода кода приглашения. Попробуйте через 15 минут.');
     const code=String(req.invite_code||'').trim().toUpperCase(), f=rows_('families').find(x=>String(x.invite_code).toUpperCase()===code);
     if(!f)throw new Error('Код приглашения не найден');
+    clearAccessCodeAttempts_(attemptKey);
     const members=rows_('family_members').filter(m=>m.family_id===f.id);
     if(members.some(m=>m.user_id===user.id)){setProfileName_(user.id,req.display_name);return f;}
     if(rows_('family_members').some(m=>m.user_id===user.id))throw new Error('Вы уже состоите в другой семье');
@@ -985,7 +1007,7 @@ function query_(req,user){
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
       if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
       if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
-      if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
+      if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||secureCode_();r.currency='RUB';r.created_by=user.id;}
       validateRelations_(table,r,user);
       if(existingById){
         const same=table==='transactions'?sameTransactionInsert_(existingById,r,user):sameIdempotentInsert_(table,existingById,r,user);
@@ -1303,7 +1325,7 @@ function rpc_(req,user){
     const familyId=String(members[0].family_id);
     const existing=rows_('telegram_links').find(x=>String(x.user_id)===user.id&&String(x.family_id)===familyId);
     if(existing)throw new Error('К Telegram уже привязан аккаунт. Сначала отвяжите его.');
-    const code=code_().slice(0,12), expires=new Date(Date.now()+15*60*1000).toISOString();
+    const code=secureCode_(), expires=new Date(Date.now()+15*60*1000).toISOString();
     const old=rows_('telegram_link_codes').filter(x=>String(x.user_id)===user.id&&!x.used_at);
     // Persist the replacement before invalidating old codes. If append fails, the previous code remains usable.
     appendRows_('telegram_link_codes',[{id:id_(),user_id:user.id,family_id:familyId,code_hash:telegramCodeHash_(code),expires_at:expires,used_at:'',created_at:now_()}]);
@@ -1502,13 +1524,14 @@ function telegramWebhook_(req){
   const chatId=String(message.chat.id), telegramUserId=String(message.from.id), text=String(message.text||'').trim();
   if(!text)return {chat_id:chatId,text:'Отправьте текстовое сообщение или команду /help.'};
   let reply;
-  const linkCommand=text.match(/^\/link(?:@\w+)?\s+([A-Z0-9]{6,16})$/i);
+  const linkCommand=text.match(/^\/link(?:@\w+)?\s+([A-F0-9]{6,32})$/i);
   if(/^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)){
     const linked=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
     reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\n\nПример записи: Проезд 45 рублей\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\n/link ВАШ_КОД\n\nКод действует 15 минут.'};
   }else if(/^\/help(?:@\w+)?$/i.test(text)){
     reply={chat_id:chatId,text:'Команды:\n/link КОД — привязать аккаунт приложения\n/balance — сводка за текущий месяц\n/unlink — отвязать Telegram\n/help — помощь\n\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
   }else if(linkCommand){
+    const attemptKey=recordAccessCodeAttempt_('telegram-link-attempt:',telegramUserId,'Слишком много попыток привязки. Попробуйте через 15 минут.');
     const code=linkCommand[1].toUpperCase(), hash=telegramCodeHash_(code), now=now_();
     const codeRow=rows_('telegram_link_codes').find(x=>String(x.code_hash)===hash);
     const existingTelegramLink=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
@@ -1516,6 +1539,7 @@ function telegramWebhook_(req){
       String(existingTelegramLink.user_id)===String(codeRow.user_id)&&
       String(existingTelegramLink.family_id)===String(codeRow.family_id));
     if(alreadyCompleted){
+      clearAccessCodeAttempts_(attemptKey);
       // Telegram may retry after link + used_at persisted but before update_id cache was written.
       // The same code and same Telegram/account link are a completed replay.
       reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
@@ -1536,6 +1560,7 @@ function telegramWebhook_(req){
         appendRows_('telegram_links',[{id:id_(),telegram_user_id:telegramUserId,telegram_chat_id:chatId,user_id:candidate.user_id,family_id:candidate.family_id,linked_at:now_()}]);
       }
       candidate.used_at=now_();updateRows_('telegram_link_codes',[candidate]);
+      clearAccessCodeAttempts_(attemptKey);
       reply={chat_id:chatId,text:'Telegram успешно привязан к вашему аккаунту.\n\nТеперь отправьте, например: Проезд 45 рублей\nКоманды: /help и /balance'};
     }
   }else if(/^\/unlink(?:@\w+)?$/i.test(text)){
