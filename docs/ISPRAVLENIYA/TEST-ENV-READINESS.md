@@ -1,82 +1,75 @@
 # TEST GAS readiness — Family Cash
 
-> Актуализировано: 2026-11-16  
+> Обновлено: 2026-11-17  
 > Рабочая ветка: `ispravleniya`  
-> Назначение: безопасный порядок восстановления TEST-контура и запуска runtime acceptance batch.
+> Статус: live TEST runtime acceptance batch завершён успешно.
 
-## 1. Подтверждённая конфигурация TEST
+## 1. Назначение и границы
 
-По последней read-only диагностике:
-- отдельный TEST Apps Script project и отдельная TEST Google Sheet существуют;
-- Script ID suffix: `KMTZTF`;
-- Spreadsheet ID suffix: `bqT8qQ`;
-- Script и Spreadsheet timezone: `Europe/Moscow`;
+Этот документ описывает изолированный TEST-контур Apps Script и фактический результат последнего runtime acceptance batch.
+
+- Используется отдельный TEST Apps Script project и отдельная TEST Google Sheet.
+- Часовой пояс обоих контуров: `Europe/Moscow`.
+- TEST Script ID suffix: `KMTZTF`; TEST Spreadsheet ID suffix: `bqT8qQ`.
 - TEST Web App URL хранится в Script Properties `CONCURRENT_ROW_TEST_WEB_APP_URL`.
+- Guard проверяет `CONCURRENT_ROW_TEST_CONFIRM=ISOLATED_TEST_ONLY`, allowlist Script ID и Spreadsheet ID, TEST-имя таблицы и отдельный TEST deployment.
+- Полные ID, URL и секреты в документацию не записываются.
 
-Перед каждым запуском общий guard повторно проверяет:
-- `CONCURRENT_ROW_TEST_CONFIRM=ISOLATED_TEST_ONLY`;
-- точное совпадение Script ID с `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID`;
-- точное совпадение активной таблицы с `GAS_TEST_ALLOWED_SPREADSHEET_ID` и TEST/ТЕСТ в её имени;
-- URL отдельного TEST deployment и отличие от известного Production deployment.
+**Запрещено:** запускать эти тесты в Production GAS, менять основную таблицу, Production Vercel, Production deployment или действующий Telegram webhook.
 
-## 2. Файлы и назначение
+## 2. Файлы TEST-пакета
 
-- `google-apps-script/Code.gs` — backend API v11. Для текущего восстановления его менять не нужно.
-- `tests/gas/IsolatedTestGuard.gs` — fail-closed проверка TEST-окружения. Не менять.
-- `tests/gas/RuntimeAcceptanceBundle.gs` — единственный bundle-файл, который требуется обновить в TEST Apps Script.
-- Отдельные файлы в `tests/gas/` — поддерживаемые исходные модули; вручную добавлять их в GAS не нужно.
-- `tests/gas/RuntimeAcceptanceBatch.gs` — последовательный запуск четырёх runtime probes.
+- `google-apps-script/Code.gs` — актуальный backend API.
+- `tests/gas/IsolatedTestGuard.gs` — fail-closed TEST guard; оставлять без изменений.
+- `tests/gas/RuntimeAcceptanceBundle.gs` — единый переносимый bundle четырёх runtime probes.
+- Исходные отдельные модули в `tests/gas/` поддерживаются в Git; вручную добавлять их в GAS отдельно не требуется.
+- Отдельный `RuntimeAcceptanceBatch.gs` не нужен: функция-оркестратор находится в bundle.
 
-Bundle автоматически сверяется регрессионным тестом с исходными модулями. Последний GitHub Actions run для HEAD `60d63594b4f1e9086639de996d87fbf536f51213` завершился успешно: 293/293 регрессионных тестов, включая byte-for-byte sync bundle, и все последующие Apps Script syntax checks прошли. CI не исполняет Apps Script runtime.
+## 3. Результат live TEST batch — 2026-11-17
 
-## 3. Что проверяет runtime batch
+Пользователь запустил `runIsolatedRuntimeAcceptanceBatch()` в изолированном TEST GAS. Итоговый отчёт:
 
-`runIsolatedRuntimeAcceptanceBatch()` последовательно запускает:
-1. Telegram duplicate delivery/retry и защиту от повторного `update_id` с другим payload.
-2. Optimistic read/write consistency при параллельных чтениях и подтверждении покупки.
-3. Конкурентное обновление одной записи monthly plan: один update должен пройти, второй получить stale rejection.
-4. Параллельное создание операций двумя синтетическими участниками одной TEST-семьи.
+- `completed=4`
+- `passed=4`
+- `failed=0`
+- `stopped_for_cleanup_failure=false`
+- `result=PASS`
 
-Все сущности синтетические. Batch использует только TEST Web App и TEST spreadsheet. Он не вызывает Telegram Bot API, Vercel или Production.
+Все четыре сценария завершились `PASS`, каждый с `cleanup=PASS`:
 
-## 4. Текущее состояние последнего live batch
+| Проверка | Фактический результат |
+|---|---|
+| Telegram duplicate delivery и retry | Два параллельных запроса и повторная доставка; одна Telegram link row и одна transaction row; конфликт другого payload отклонён |
+| Optimistic read/write consistency | 16 параллельных чтений; 16 снимков после проверки; `PASS` |
+| Concurrent monthly-plan stale update | Два конкурентных обновления: одно принято, одно отклонено как устаревшее; итог 15000 копеек |
+| Concurrent transaction inserts | Два синтетических участника; сохранены обе операции на 12345 и 67890 копеек |
 
-По последнему предоставленному журналу:
-- Telegram duplicate/retry: `PASS`, `cleanup=PASS`;
-- optimistic read/write consistency: `PASS`;
-- monthly-plan probe остановился на этапе очистки; наличие успешной stale-update проверки не подтверждено;
-- transaction-insert probe после остановки batch не запускался.
+Отдельное восстановление предыдущего fixture до запуска batch также завершилось `result=PASS`, `cleanup=PASS`; остаточные auth/transaction/family/user/member/category/account записи не обнаружены.
 
-После monthly-plan probe остались только две синтетические строки в `_auth`. Их точные адреса:
-- `monthly-plan-a+c4c8cab147c74f1cb9d87540ef684349@example.test`
-- `monthly-plan-b+c4c8cab147c74f1cb9d87540ef684349@example.test`
+Числа времени, попавшие в логи отдельных тестов, не являются полноценным performance benchmark и не закрывают этап замеров производительности.
 
-## 5. Исправление и восстановление
+## 4. Что это подтверждает — и чего не подтверждает
 
-В исходный модуль `MonthlyPlanConcurrencyTest.gs` добавлена функция `monthlyPlanDeleteSyntheticAuthRows_()`. Она:
-- заново читает текущий столбец email листа `_auth` непосредственно перед удалением;
-- выбирает только точные переданные адреса;
-- удаляет найденные строки снизу вверх;
-- повторно читает лист и возвращает число оставшихся совпадений.
+Подтверждено на TEST-контуре:
+- защита от дублирующей доставки Telegram update в проверенном сценарии;
+- согласованность параллельных чтений в проверенном сценарии;
+- отклонение устаревшего конкурентного обновления месячного плана;
+- сохранение двух конкурентно созданных операций двумя синтетическими участниками;
+- очистка синтетических данных после каждого из четырёх сценариев.
 
-В `finally` monthly-plan probe теперь использует этот helper вместо сохранённых ранее номеров строк. Добавлена одноразовая функция `cleanupLatestFailedMonthlyPlanFixture()`, ограниченная двумя адресами из раздела 4 и общим TEST guard.
+Не подтверждено этим batch:
+- безопасность всех возможных сценариев авторизации и доступа к семейным данным;
+- полноценная проверка реальных двух пользовательских аккаунтов через браузер;
+- поведение Production;
+- производительность под репрезентативной нагрузкой;
+- резервное копирование и восстановление полного набора данных;
+- доступность и корректность всех функций на реальных устройствах.
 
-### Действия в TEST Apps Script
+## 5. Дальнейшие действия
 
-1. Открой TEST Apps Script project.
-2. Открой существующий файл `RuntimeAcceptanceBundle.gs`.
-3. Полностью замени только его содержимое версией из [ветки ispravleniya](https://github.com/KitchenKnife14/-/blob/ispravleniya/tests/gas/RuntimeAcceptanceBundle.gs).
-4. Сохрани файл. Новый Web App deployment не нужен.
-5. Запусти `cleanupLatestFailedMonthlyPlanFixture()` один раз.
-6. Продолжай только если журнал показывает `result=PASS`, `cleanup=PASS`, `verified_remaining.auth=false`.
-7. После успешной очистки запусти `runIsolatedRuntimeAcceptanceBatch()` и передай полный JSON-журнал.
+1. Зафиксировать успешный live acceptance batch в общем журнале проекта.
+2. Продолжить оставшиеся пункты текущего аудита безопасности и финансовой целостности.
+3. Не закрывать макроэтап только на основании этого batch: закрытие возможно после проверки всех критериев этапа.
+4. Полные замеры производительности выполнять после основных макроэтапов, как согласовано.
 
-Если recovery helper завершится ошибкой или не подтвердит отсутствие строк — остановись и передай полный журнал. Не удаляй строки вручную.
-
-## 6. Границы безопасности
-
-- Не запускать тесты в Production GAS.
-- Не открывать и не менять основную Google Sheet.
-- Не менять Production Vercel, Telegram webhook или реальные секреты.
-- Не менять `Code.gs`, `IsolatedTestGuard.gs` и deployment для этого исправления.
-- Не очищать никакие строки, кроме двух точных синтетических email, указанных в разделе 4.
+При повторном запуске использовать только TEST project, TEST spreadsheet и TEST deployment. Если любой тест или cleanup завершится неуспешно — остановиться и сохранить полный журнал; строки вручную не удалять.
