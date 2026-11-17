@@ -77,31 +77,39 @@ async function main() {
     let telegramStatusReads = 0
     await authPage.route('https://test-gas.invalid/exec', async route => {
       const payload = route.request().postDataJSON()
-      let data
-      if (payload.action === 'signin') {
-        assert.equal(payload.email, 'browser-test@example.com')
-        assert.equal(payload.password, 'correct-test-password')
-        data = {
-          token: 'synthetic-browser-session-token',
-          user: { id: 'browser-test-user', email: 'browser-test@example.com' },
+      const resolveRequest = request => {
+        if (request.action === 'signin') {
+          assert.equal(request.email, 'browser-test@example.com')
+          assert.equal(request.password, 'correct-test-password')
+          return {
+            token: 'synthetic-browser-session-token',
+            user: { id: 'browser-test-user', email: 'browser-test@example.com' },
+          }
         }
-      } else if (payload.action === 'rpc' && payload.name === 'get_my_context') {
-        data = {
-          profile: { id: 'browser-test-user', display_name: 'Тестовый участник', family_id: 'browser-test-family' },
-          family: { id: 'browser-test-family', name: 'Тестовая семья', invite_code: 'TEST-INVITE' },
-          members: [],
-          member_profiles: [{ id: 'browser-test-user', display_name: 'Тестовый участник' }],
+        if (request.action === 'rpc' && request.name === 'get_my_context') {
+          return {
+            profile: { id: 'browser-test-user', display_name: 'Тестовый участник', family_id: 'browser-test-family' },
+            family: { id: 'browser-test-family', name: 'Тестовая семья', invite_code: 'TEST-INVITE' },
+            members: [],
+            member_profiles: [{ id: 'browser-test-user', display_name: 'Тестовый участник' }],
+          }
         }
-      } else if (payload.action === 'rpc' && payload.name === 'get_telegram_link_status') {
-        telegramStatusReads += 1
-        data = { linked: telegramStatusReads > 1, linked_at: '2026-11-17T10:00:00.000Z' }
-      } else if (payload.action === 'rpc' && payload.name === 'create_telegram_link_code') {
-        data = { code: 'a1b2c3d4e5f6', expires_at: '2026-11-17T10:15:00.000Z' }
-      } else if (payload.action === 'signout') {
-        data = {}
-      } else {
-        throw new Error('Unexpected browser E2E API request: ' + JSON.stringify(payload))
+        if (request.action === 'rpc' && request.name === 'ensure_supplemental_categories') return { added: 0 }
+        if (request.action === 'rpc' && request.name === 'get_table_revision') return '1'
+        if (request.action === 'rpc' && request.name === 'get_telegram_link_status') {
+          telegramStatusReads += 1
+          return { linked: telegramStatusReads > 1, linked_at: '2026-11-17T10:00:00.000Z' }
+        }
+        if (request.action === 'rpc' && request.name === 'create_telegram_link_code') {
+          return { code: 'a1b2c3d4e5f6', expires_at: '2026-11-17T10:15:00.000Z' }
+        }
+        if (request.action === 'query' && ['transactions', 'categories', 'accounts'].includes(request.table)) return []
+        if (request.action === 'signout') return {}
+        throw new Error('Unexpected browser E2E API request: ' + JSON.stringify(request))
       }
+      const data = payload.action === 'batch'
+        ? payload.requests.map(request => ({ data: resolveRequest(request), error: null }))
+        : resolveRequest(payload)
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
