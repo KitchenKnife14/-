@@ -2431,7 +2431,7 @@ test('Telegram one-time linking records transactions through the existing family
   props.setProperty('TELEGRAM_BACKEND_SECRET', 'test-backend-secret-0123456789abcdef01234567');
   const generated = h.call({ action: 'rpc', token: owner.token, name: 'create_telegram_link_code' });
   assert.equal(generated.error, null, generated.error?.message);
-  assert.match(generated.data.code, /^[A-F0-9]{32}$/);
+  assert.match(generated.data.code, /^[A-F0-9]{12}$/);
 
   const linked = h.call({
     action: 'telegramWebhook',
