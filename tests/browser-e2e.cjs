@@ -152,9 +152,23 @@ async function main() {
     // Exercise the transaction dialog at common iPhone widths; it must remain inside the visual viewport.
     await authPage.setViewportSize({ width: 390, height: 844 })
     await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    const bottomNav = authPage.getByRole('navigation', { name: 'Нижняя навигация' })
+    const navLayout = await bottomNav.evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      return { position: getComputedStyle(element).position, bottom: rect.bottom, viewportHeight: window.innerHeight }
+    })
+    assert.equal(navLayout.position, 'relative', 'the inner nav row should remain in normal flow inside the fixed bottom bar')
+    const bottomBar = await bottomNav.evaluate(element => {
+      const bar = element.parentElement
+      const rect = bar.getBoundingClientRect()
+      return { position: getComputedStyle(bar).position, bottom: rect.bottom, viewportHeight: window.innerHeight }
+    })
+    assert.equal(bottomBar.position, 'fixed', 'mobile navigation bar must be fixed to the bottom of the viewport')
+    assert.ok(bottomBar.bottom >= bottomBar.viewportHeight - 1, 'mobile navigation bar must sit at the bottom edge')
     await authPage.getByRole('button', { name: 'Добавить операцию' }).click()
     const transactionDialog = authPage.getByRole('dialog', { name: 'Новая операция' })
     await transactionDialog.waitFor()
+    assert.equal(await transactionDialog.evaluate(element => getComputedStyle(element).overflowY), 'auto', 'dialog content must scroll internally when it exceeds the viewport')
     for (const width of [390, 320]) {
       await authPage.setViewportSize({ width, height: 640 })
       const dialogBounds = await transactionDialog.evaluate(element => {
