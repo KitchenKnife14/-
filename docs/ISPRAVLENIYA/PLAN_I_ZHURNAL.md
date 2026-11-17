@@ -4019,3 +4019,13 @@ HEAD до:
 - Ограничение: mock контракт соответствует GAS RPC, но это не live GAS acceptance; реальные retries/partial failures проверяются серверным тестовым набором отдельно.
 - Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
 - Только ветка `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не менялись.
+
+
+### 2026-11-17 — fixture пересчитывает накопления цели по истории взносов
+
+- Расширен helper `syncGoalTotals(goalIds)` в `tests/financial-browser-e2e.cjs`: после insert/upsert/update/delete goal_contributions пересчитывается `saved_kopecks` из всех оставшихся взносов затронутой цели.
+- E2E после добавления 50025 копеек проверяет `state.goals[0].saved_kopecks===50025`, помимо amount_kopecks, goal_id и заметки.
+- Это делает mock fixture ближе к GAS контракту `syncGoalTotals_`, но не заменяет серверную проверку: mock не доказывает работу SpreadsheetApp и реального GAS runtime.
+- CI [44180094673 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44180094673) на commit `ff61d1aa6a9b631e6d60c6a27914be52b45235b8`: 31/31 шагов PASS, **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build PASS.
+- Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
+- Только ветка `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не менялись.

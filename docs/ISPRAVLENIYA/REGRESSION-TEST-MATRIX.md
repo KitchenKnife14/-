@@ -282,7 +282,7 @@
 - Добавлен E2E для формы пополнения цели: сумма 0 отклоняется с видимой ошибкой и не создаёт запись; 500,25 ₽ сохраняется как 50025 копеек с правильными `goal_id` и заметкой.
 - После сохранения открывается история цели; проверяется, что заметка пополнения отображается.
 - CI [44178437906 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44178437906), commit `d7d9c38d7ae10c3e0154798753c3d6d53d3aa2db`: **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build и все 31 шага workflow — PASS.
-- Ограничение: mock fixture проверяет форму, payload и историю; автоматический пересчёт `saved_kopecks` на реальном GAS не подтверждается этим E2E. Серверные проверки остаются отдельными.
+- Mock fixture дополнительно пересчитывает `saved_kopecks` из истории пополнений; проверено, что после взноса 50025 копеек итог цели равен 50025. Это проверка клиентского сценария и тестовой модели, а не замена серверных GAS тестов.
 - Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
 
 
@@ -295,3 +295,12 @@
 - CI [44179491260 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44179491260), commit `564732ab1293285bec455de7615e0d6f4ee26107`: **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build и все 31 шага workflow — PASS.
 - Ограничение: UI проверяется через mock RPC с контрактом GAS. Реальный Apps Script RPC и его retry/partial-failure поведение остаются в отдельных серверных тестах; live TEST GAS не вызывался.
 - Прогресс остаётся **172/227 (75,8%)**, **4/12 (33,3%)**.
+
+
+### 4.10. Пересчёт накоплений цели после взноса (2026-11-17)
+
+- В mock query добавлен пересчёт `goals.saved_kopecks` из `goal_contributions` после insert/upsert/update/delete, по затронутым целям.
+- E2E теперь проверяет не только запись пополнения и историю, но и новый накопленный итог цели: взнос 50025 копеек даёт `saved_kopecks=50025`.
+- CI [44180094673 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44180094673), commit `ff61d1aa6a9b631e6d60c6a27914be52b45235b8`: **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build и все 31 шага workflow — PASS.
+- Ограничение: пересчёт в fixture следует серверной модели, но фактическая работа GAS проверяется отдельными Apps Script тестами; этот UI тест не вызывает live TEST GAS.
+- Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
