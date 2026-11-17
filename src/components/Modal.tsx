@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useId, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 interface Props {
@@ -16,7 +16,7 @@ export default function Modal({ open, onClose, title, children }: Props) {
   const titleId = useId()
   onCloseRef.current = onClose
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return
     const dialog = dialogRef.current
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
