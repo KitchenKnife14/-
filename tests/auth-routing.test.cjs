@@ -63,7 +63,7 @@ test('mobile navigation exposes four primary routes and all remaining routes in 
   assert.match(layout, /aria-label="Нижняя навигация"/)
   assert.match(layout, /aria-label="Дополнительная навигация"/)
   assert.match(layout, /aria-expanded=\{moreOpen\}/)
-  assert.match(layout, /pb-\[env\(safe-area-inset-bottom\)\]/)
+  assert.match(layout, /pb-\[max\(0\.5rem,env\(safe-area-inset-bottom\)\)\]/)
   assert.match(layout, /pb-28/)
   assert.match(layout, /family\?\.invite_code \|\| 'Недоступен'/)
   assert.match(layout, /Выйти/)
