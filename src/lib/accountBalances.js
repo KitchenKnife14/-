@@ -66,7 +66,15 @@ export function calculateAccountBalances(accounts, transactions) {
         invalidate(from, transaction.id, 'balance-overflow');
         invalidate(to, transaction.id, 'balance-overflow');
       }
+      continue;
     }
+
+    // Unknown transaction types must not be silently ignored: a legacy or malformed
+    // row may still affect one or more known accounts, making their balances uncertain.
+    const referencedAccountIds = new Set(
+      [transaction.account_id, transaction.to_account_id].filter(id => id && balances.has(id))
+    );
+    referencedAccountIds.forEach(accountId => invalidate(accountId, transaction.id, 'invalid-transaction-type'));
   }
 
   balances.invalidAccountIds = invalidAccountIds;
