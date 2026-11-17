@@ -417,6 +417,31 @@ test('joinFamily retry completes profile update after membership was already sav
   assert.equal(h.context.rows_('profiles').find(row => row.id === partner.user.id).display_name, 'Новое имя после повтора');
 });
 
+
+test('recurring payments reject unsupported frequencies, invalid intervals and invalid dates', () => {
+  const h = makeHarness();
+  const user = h.signup('recurring-schedule-validation@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Проверка расписания' }).data;
+  const base = { family_id: family.id, type: 'expense', amount_kopecks: 1000, description: 'Расписание', start_date: '2026-11-17', next_due_date: '2026-11-17', frequency: 'monthly', active: true };
+  const invalid = [
+    { ...base, frequency: 'fortnightly' },
+    { ...base, frequency: 'custom', custom_interval_days: 0 },
+    { ...base, frequency: 'custom', custom_interval_days: '14' },
+    { ...base, start_date: '2026-02-30' },
+    { ...base, next_due_date: '2026-11-16' },
+    { ...base, end_date: '2026-11-16' },
+  ];
+  for (const values of invalid) {
+    const result = h.call({ action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', values });
+    assert.ok(result.error, JSON.stringify(values));
+  }
+  const valid = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { ...base, frequency: 'custom', custom_interval_days: 14 },
+  });
+  assert.equal(valid.error, null, valid.error?.message);
+  assert.equal(valid.data[0].custom_interval_days, 14);
+});
 test('recurring payment confirmation can retry after a partial write without duplicating the transaction', () => {
   const h = makeHarness();
   const user = h.signup('owner@example.com');
