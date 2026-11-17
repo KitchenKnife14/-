@@ -324,11 +324,11 @@ async function main() {
     assert.equal(state.recurring_payments[0].end_date, '2026-12-18')
     const recurringCard = page.locator('.card').filter({ hasText: 'E2E интернет' }).first()
     await recurringCard.getByRole('button', { name: 'Пауза' }).click()
-    await page.getByText('E2E интернет', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Возобновить' }).waitFor()
     assert.equal(state.recurring_payments[0].active, false)
     const pausedRecurringCard = page.locator('.card').filter({ hasText: 'E2E интернет' }).first()
     await pausedRecurringCard.getByRole('button', { name: 'Возобновить' }).click()
-    await page.getByText('E2E интернет', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Пауза' }).waitFor()
     assert.equal(state.recurring_payments[0].active, true)
 
     await page.goto(baseUrl + '/purchases', { waitUntil: 'networkidle' })
