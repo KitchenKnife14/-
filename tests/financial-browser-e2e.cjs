@@ -390,6 +390,8 @@ async function main() {
     const updatedGoalCard = page.locator('.card').filter({ hasText: 'E2E отпуск' }).first()
     await updatedGoalCard.locator('button[title="История"]').click()
     await page.getByRole('dialog').getByText('E2E взнос', { exact: true }).waitFor()
+    await page.keyboard.press('Escape')
+    await page.getByRole('dialog').waitFor({ state: 'detached' })
 
     await page.getByRole('button', { name: 'Цель' }).click()
     const linkedGoalDialog = page.getByRole('dialog')
