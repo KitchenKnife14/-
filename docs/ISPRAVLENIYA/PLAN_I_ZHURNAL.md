@@ -3869,3 +3869,9 @@ HEAD до:
 - Пересчёт активного плана: этапы 0–6 — 158/210; UX-01 — 10/13; FC-14 — 4/4. Итого **172/227 = 75,8%**, открыто 55. Это процент закрытых критериев плана стабилизации, не процент готовности приложения.
 - Dev-only advisory для `picomatch` остаётся открытым и не считается исправленным; CI gate проверяет production dependencies. Полный CI запуск прошёл с этим явно документированным ограничением.
 - Production, основная Google Sheet, production GAS, Vercel Production и Telegram webhook не менялись.
+
+
+### 2026-11-17 — дополнительная проверка нижней панели и прокрутки модалки
+- В `tests/browser-e2e.cjs` дополнительно проверено, что мобильная панель закреплена у нижнего края viewport, а содержимое модального окна использует внутреннюю вертикальную прокрутку. Коммит: `180f0d147b1743ba2b93aaa5ea90c9eede79bcb3`.
+- CI [44155402328 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44155402328) на указанном коммите: production dependency audit, build, preview smoke, browser E2E (включая нижнюю панель и внутреннюю прокрутку модалки), financial CRUD/transfer E2E, 303/303 regression tests, все Apps Script syntax checks и manifest validation — PASS.
+- Это автоматическая проверка Chromium на заданных viewport, а не визуальная проверка настоящего iPhone. Увеличенный системный масштаб iOS, реальная safe area, VoiceOver и модальные окна в реальном Safari остаются ручными пунктами.
