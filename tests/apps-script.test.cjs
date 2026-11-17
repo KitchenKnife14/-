@@ -3734,6 +3734,12 @@ test('category hierarchy rejects self-parenting and parent cycles', () => {
   });
   assert.match(cycle.error?.message || '', /циклическую иерархию/);
 
+  const upsertCycle = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'upsert',
+    values: { id: second.id, family_id: family.id, parent_id: first.id, name: 'Вторая категория', kind: 'expense' },
+  });
+  assert.match(upsertCycle.error?.message || '', /циклическую иерархию/);
+
   const rows = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
   assert.equal(rows.find(row => row.id === first.id).parent_id, second.id);
   assert.equal(rows.find(row => row.id === second.id).parent_id, '');
@@ -3796,6 +3802,12 @@ test('account owner must be a member of the account family on insert and update'
     values: { owner_user_id: outsider.user.id },
   });
   assert.match(invalidUpdate.error?.message || '', /владелец счёта не состоит в этой семье/i);
+
+  const invalidUpsert = h.call({
+    action: 'query', token: owner.token, table: 'accounts', mode: 'upsert',
+    values: { id: valid.data[0].id, family_id: family.id, name: 'Общий счёт', kind: 'bank', owner_user_id: outsider.user.id, starting_balance_kopecks: 0 },
+  });
+  assert.match(invalidUpsert.error?.message || '', /владелец счёта не состоит в этой семье/i);
 
   const saved = h.call({
     action: 'query', token: owner.token, table: 'accounts', mode: 'select',
