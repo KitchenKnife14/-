@@ -3540,6 +3540,47 @@ test('category hierarchy, recurring payments, budgets, monthly plans and planned
 });
 
 
+test('category hierarchy rejects self-parenting and parent cycles', () => {
+  const h = makeHarness();
+  const user = h.signup('category-cycle-guard@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Защита иерархии' }).data;
+  const createCategory = name => {
+    const result = h.call({
+      action: 'query', token: user.token, table: 'categories', mode: 'insert', returning: true,
+      values: { family_id: family.id, name, kind: 'expense' },
+    });
+    assert.equal(result.error, null, result.error?.message);
+    return result.data[0];
+  };
+  const first = createCategory('Первая категория');
+  const second = createCategory('Вторая категория');
+
+  const selfParent = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: first.id }],
+    values: { parent_id: first.id },
+  });
+  assert.match(selfParent.error?.message || '', /циклическую иерархию/);
+
+  const validParent = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: first.id }],
+    values: { parent_id: second.id },
+  });
+  assert.equal(validParent.error, null, validParent.error?.message);
+
+  const cycle = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: second.id }],
+    values: { parent_id: first.id },
+  });
+  assert.match(cycle.error?.message || '', /циклическую иерархию/);
+
+  const rows = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data;
+  assert.equal(rows.find(row => row.id === first.id).parent_id, second.id);
+  assert.equal(rows.find(row => row.id === second.id).parent_id, null);
+});
+
 test('legacy category mismatches do not block unrelated edits to historical records', () => {
   const h = makeHarness();
   const user = h.signup('legacy-category-edit@example.com');
