@@ -674,6 +674,11 @@ function validateRelations_(table,row,user,previous){
     if(!name)throw new Error('Введите название счёта');
     if(!['cash','bank','savings','other'].includes(String(row.kind||'')))throw new Error('Неизвестный тип счёта');
   }
+  if(table==='accounts'&&row.owner_user_id){
+    const ownerIsMember=rows_('family_members').some(member=>
+      String(member.family_id)===familyId&&String(member.user_id)===String(row.owner_user_id));
+    if(!ownerIsMember)throw new Error('Владелец счёта не состоит в этой семье');
+  }
   if(table==='transactions'){
     if(!['income','expense','transfer'].includes(String(row.type||'')))throw new Error('Неизвестный тип операции');
     if(row.type==='transfer'&&(!row.account_id||!row.to_account_id))throw new Error('Для перевода нужны счёт списания и счёт зачисления');
