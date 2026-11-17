@@ -453,6 +453,66 @@ test('recurring payment confirmation can retry after a partial write without dup
 });
 
 
+
+test('recurring confirmation refuses archived account or category without advancing the schedule', () => {
+  const h = makeHarness();
+  const user = h.signup('recurring-archived-references@example.com');
+  const family = h.call({ action: 'createFamily', token: user.token, name: 'Архивные связи платежа' }).data;
+  const account = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Счёт для платежа', kind: 'bank', starting_balance_kopecks: 0, archived: false },
+  }).data[0];
+  const category = h.call({ action: 'query', token: user.token, table: 'categories', mode: 'select' }).data
+    .find(row => row.kind === 'expense' && !row.archived);
+  const created = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'insert', returning: true,
+    values: { family_id: family.id, type: 'expense', amount_kopecks: 2500, category_id: category.id, account_id: account.id, description: 'Регулярная оплата', start_date: '2026-11-17', next_due_date: '2026-11-17', frequency: 'monthly', active: true },
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const recurringId = created.data[0].id;
+
+  const archiveAccount = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: account.id }], values: { archived: true },
+  });
+  assert.equal(archiveAccount.error, null, archiveAccount.error?.message);
+  const paymentAfterAccountArchive = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: recurringId }],
+  }).data[0];
+  const confirmAccount = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurringId, p_expected_due_date: '2026-11-17', p_operation_date: '2026-11-17', p_expected_recurring: paymentAfterAccountArchive },
+  });
+  assert.match(confirmAccount.error?.message || '', /архивный счёт/i);
+
+  const restoreAccount = h.call({
+    action: 'query', token: user.token, table: 'accounts', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: account.id }], values: { archived: false },
+  });
+  assert.equal(restoreAccount.error, null, restoreAccount.error?.message);
+  const archiveCategory = h.call({
+    action: 'query', token: user.token, table: 'categories', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: category.id }], values: { archived: true },
+  });
+  assert.equal(archiveCategory.error, null, archiveCategory.error?.message);
+  const paymentAfterCategoryArchive = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: recurringId }],
+  }).data[0];
+  const confirmCategory = h.call({
+    action: 'rpc', token: user.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurringId, p_expected_due_date: '2026-11-17', p_operation_date: '2026-11-17', p_expected_recurring: paymentAfterCategoryArchive },
+  });
+  assert.match(confirmCategory.error?.message || '', /архивную категорию/i);
+
+  assert.equal(h.call({ action: 'query', token: user.token, table: 'transactions', mode: 'select' }).data.length, 0);
+  const unchanged = h.call({
+    action: 'query', token: user.token, table: 'recurring_payments', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: recurringId }],
+  }).data[0];
+  assert.equal(unchanged.next_due_date, '2026-11-17');
+});
 test('recurring payment confirmation replay returns success after the full commit', () => {
   const h = makeHarness();
   const user = h.signup('recurring-full-replay@example.com');
