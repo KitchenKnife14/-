@@ -3709,3 +3709,18 @@ HEAD до:
 - Добавлена TEST-guarded recovery-функция `cleanupLatestFailedMonthlyPlanFixture()` для точного suffix `c4c8cab147c74f1cb9d87540ef684349`. Она удаляет только соответствующие synthetic plan/family/profile/auth/session записи и проверяет остаток после сброса caches.
 - Следующий ручной шаг: заменить только `RuntimeAcceptanceBundle.gs` в TEST GAS, сохранить, запустить `cleanupLatestFailedMonthlyPlanFixture()`. Прислать JSON-отчёт. Не запускать batch до подтверждения `cleanup=PASS` и всех `verified_remaining=false`. После подтверждения повторить `runIsolatedRuntimeAcceptanceBatch()`.
 - Прогресс без изменений: **171/234 = 73,1%**, макроэтапы **4/12 = 33,3%**. M-04 остаётся открытым. Только ветка `ispravleniya`; Production, `main`, основная таблица, Production GAS, Vercel Production и Telegram webhook не затрагивались.
+
+
+### 2026-11-17 — live TEST GAS runtime acceptance: 4/4 PASS
+
+- До запуска batch отдельная recovery-функция завершилась `result=PASS`, `cleanup=PASS`; остаточные synthetic auth/transaction/family/user/member/category/account записи не обнаружены.
+- Пользователь запустил `runIsolatedRuntimeAcceptanceBatch()` в изолированном TEST GAS. Итог: `completed=4`, `passed=4`, `failed=0`, `stopped_for_cleanup_failure=false`, `result=PASS`.
+- Telegram duplicate delivery/retry: PASS; один link row и одна transaction row, повторный update с другим payload отклонён; cleanup PASS.
+- Optimistic read/write consistency: PASS; 16 параллельных чтений; cleanup PASS.
+- Monthly-plan stale update: PASS; из двух конкурентных запросов один принят, один отклонён как устаревший; итог 15000 копеек; cleanup PASS.
+- Transaction insert concurrency: PASS; два синтетических участника сохранили две операции на 12345 и 67890 копеек; cleanup PASS.
+- `docs/ISPRAVLENIYA/TEST-ENV-READINESS.md` обновлён фактическими результатами и ограничениями проверки. README исправлен: активная ветка — `ispravleniya`.
+- Это закрывает live TEST runtime acceptance subtask. Макроэтап №4 пока не объявляется закрытым: остаются browser E2E входа/привязки Telegram и остальные критерии приёмки. Не делать выводов о Production по результатам TEST.
+- Контрольный детальный счётчик из последнего рабочего контекста — **100/267 (37,5%)**, 167 открытых; он не пересчитан автоматически по этому журналу. Исторические значения вроде 171/234 относятся к прежней версии чек-листа и не должны смешиваться с текущим знаменателем. Макроэтапы: **4/12 (33,3%)**, этап №4 остаётся активным.
+- Время отдельных тестовых запросов из логов не засчитывается как performance benchmark; полные замеры остаются отложены до завершения основных макроэтапов.
+- Изменения документации выполнены только в `ispravleniya`. `main`, Production, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не менялись.
