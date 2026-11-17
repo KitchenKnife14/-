@@ -3967,3 +3967,17 @@ HEAD до:
 - Открыто: RPC подтверждения регулярного платежа и фактической покупки, включая проверку созданной транзакции и предотвращение повторного создания.
 - Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
 - Изменения только в `ispravleniya`; Production, `main`, Google Sheets, GAS, Vercel Production, Telegram webhook и реальные финансовые данные не менялись.
+
+
+### 2026-11-17 — E2E подтверждения регулярного платежа и покупки
+
+- Добавлены mock RPC `confirm_recurring_payment` и `confirm_planned_purchase` в изолированный fixture `tests/financial-browser-e2e.cjs`; они воспроизводят только необходимые UI контракты и детерминированные связи, не заменяя GAS implementation.
+- Регулярный платёж: UI открывает диалог подтверждения; fixture создаёт транзакцию с ID `recurring_<id>_<due-date>`, суммой 1234 копейки, датой операции и `parent_recurring_id`; custom interval 14 дней переносит `next_due_date` с 2026-11-18 на 2026-12-02. Затем удаление recurring оставляет транзакцию, очищая её `parent_recurring_id`.
+- Планируемая покупка: UI открывает диалог, выбирается account-cash; fixture создаёт транзакцию `purchase_<id>` типа expense на 40000 копеек и выбранный счёт; статус покупки меняется на bought, сохраняется linked_transaction_id. Вторая незавершённая покупка отдельно удаляется.
+- Mock delete сначала имел ошибку: Set содержал объекты строк, а cascade сравнивал с ID связей. Исправлено разделением Set выбранных объектов для удаления и Set идентификаторов для очистки ссылок.
+- Следующий прогон выявил неоднозначность селектора статуса: «Куплено» совпало со скрытой option и видимым badge. Селектор уточнён до `.badge`.
+- Финальный CI [44177192218 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44177192218) на commit `4c69374ad98966497a5e72c15693a18b850ee5c7`: 31/31 шагов PASS, **304/304 regression tests**, Browser E2E, Financial CRUD/transfer E2E, TypeScript/production build PASS.
+- Итог fixture: transactions=3, recurring_payments=0, planned_purchases=1 (купленная покупка сохраняется); бюджеты/цели/счета/категории также проходят прежние проверки.
+- Важно: эти новые UI сценарии используют mock API. GAS RPC logic не изменялась. Серверные тесты подтверждения, повторной доставки, частичного сбоя и конкуренции остаются отдельной проверкой Apps Script; live TEST GAS не запускался.
+- Прогресс без изменений: **172/227 (75,8%)**, **4/12 (33,3%)**.
+- Изменения только в `ispravleniya`; Production, `main`, Google Sheets, GAS deployments, Vercel Production, Telegram webhook и реальные финансовые данные не затрагивались.
