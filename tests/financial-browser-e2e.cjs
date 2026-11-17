@@ -353,6 +353,24 @@ async function main() {
     assert.equal(state.goals.length, 1)
     assert.equal(state.goals[0].target_kopecks, 8500000)
     assert.equal(state.goals[0].priority, 2)
+    const goalCard = page.locator('.card').filter({ hasText: 'E2E отпуск' }).first()
+    await goalCard.locator('button[title="Пополнить"]').click()
+    const contributionDialog = page.getByRole('dialog')
+    await contributionDialog.getByLabel('Сумма, ₽ (минус для снятия)').fill('0')
+    await contributionDialog.getByRole('button', { name: 'Пополнить' }).click()
+    await page.getByText('Введите корректную положительную сумму с точностью до копейки').waitFor()
+    assert.equal(state.goal_contributions.length, 0, 'zero contribution must not write data')
+    await contributionDialog.getByLabel('Сумма, ₽ (минус для снятия)').fill('500.25')
+    await contributionDialog.getByLabel('Комментарий').fill('E2E взнос')
+    await contributionDialog.getByRole('button', { name: 'Пополнить' }).click()
+    await page.getByRole('dialog').waitFor({ state: 'detached' })
+    assert.equal(state.goal_contributions.length, 1)
+    assert.equal(state.goal_contributions[0].goal_id, state.goals[0].id)
+    assert.equal(state.goal_contributions[0].amount_kopecks, 50025)
+    assert.equal(state.goal_contributions[0].note, 'E2E взнос')
+    const updatedGoalCard = page.locator('.card').filter({ hasText: 'E2E отпуск' }).first()
+    await updatedGoalCard.locator('button[title="История"]').click()
+    await page.getByRole('dialog').getByText('E2E взнос', { exact: true }).waitFor()
 
     await page.goto(baseUrl + '/accounts', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Счета' }).waitFor()
@@ -514,7 +532,7 @@ async function main() {
         'transaction delete removes the row',
         'budget create persists the monthly limit in kopecks',
         'monthly plan upsert updates the same family/month/category/type key without duplicates',
-        'goal create uses the create_goal_with_purchase RPC contract',
+        'goal create and contribution validate positive kopecks and preserve the goal link and history note',
         'account create, edit, archive, and restore preserve negative opening balances in integer kopecks',
         'category create, edit, and archive persist changes without duplicate rows',
         'recurring payment validates dates, saves custom intervals, pauses, resumes, confirms one operation, and detaches on delete',
