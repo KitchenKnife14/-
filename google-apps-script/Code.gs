@@ -687,6 +687,13 @@ function validateRelations_(table,row,user,previous){
   if(table==='recurring_payments'){
     if(row.type==='transfer')throw new Error('Регулярные переводы пока не поддерживаются');
     if(!['income','expense'].includes(String(row.type||'')))throw new Error('Неизвестный тип регулярного платежа');
+    if(!['daily','weekly','monthly','yearly','custom'].includes(String(row.frequency||'')))throw new Error('Неизвестная частота регулярного платежа');
+    if(row.frequency==='custom'&&(!Number.isSafeInteger(row.custom_interval_days)||row.custom_interval_days<1))throw new Error('Интервал регулярного платежа должен быть целым числом дней от 1');
+    const isDateOnly=value=>typeof value==='string'&&/^\\d{4}-\\d{2}-\\d{2}$/.test(value)&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
+    if(!isDateOnly(row.start_date)||!isDateOnly(row.next_due_date))throw new Error('Укажите корректные даты начала и следующего регулярного платежа');
+    if(row.end_date&&!isDateOnly(row.end_date))throw new Error('Укажите корректную дату окончания регулярного платежа');
+    if(row.end_date&&row.end_date<row.start_date)throw new Error('Дата окончания регулярного платежа не может быть раньше даты начала');
+    if(row.next_due_date<row.start_date)throw new Error('Дата следующего платежа не может быть раньше даты начала');
   }
   if(!familyId)return;
   if(['transactions','goals','planned_purchases','recurring_payments'].includes(table)&&row.responsible_user_id){
@@ -1426,13 +1433,13 @@ function nextDate_(iso,freq,days,anchorIso){
     const year=d.getUTCFullYear()+1, month=anchor.getUTCMonth(), day=anchor.getUTCDate();
     const last=new Date(Date.UTC(year,month+1,0)).getUTCDate();
     return new Date(Date.UTC(year,month,Math.min(day,last),12)).toISOString().slice(0,10);
-  } else {
+  } else if(freq==='monthly'){
     const year=d.getUTCFullYear(), month=d.getUTCMonth()+1, day=anchor.getUTCDate();
     const nextMonth=new Date(Date.UTC(year,month,1));
     const last=new Date(Date.UTC(nextMonth.getUTCFullYear(),nextMonth.getUTCMonth()+1,0)).getUTCDate();
     nextMonth.setUTCHours(12,0,0,0);nextMonth.setUTCDate(Math.min(day,last));
     return nextMonth.toISOString().slice(0,10);
-  }
+  } else throw new Error('Неизвестная частота регулярного платежа');
   return d.toISOString().slice(0,10);
 }
 
