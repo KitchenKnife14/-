@@ -337,7 +337,7 @@
 - [x] Добавить concurrency tests для критических операций и Telegram. Добавлены signup/join, transaction update/insert, goal contribution, Telegram replay и read consistency probes; runtime execution учитывается отдельно.
 - [x] Добавить browser smoke в CI: экран входа/регистрации, связи label/control, минимальная длина пароля и отсутствие горизонтального переполнения на viewport 390×844 и 1280×900; Playwright Chromium PASS. Полные финансовые E2E-сценарии остаются отдельным открытым критерием.
 - [x] Добавить финансовые браузерные E2E: создание, изменение и удаление операции; перевод между счетами; создание бюджета и финансовой цели. Сценарии проходят через React UI в Chromium с изолированным in-memory backend fixture; это проверяет frontend/API contract, но не заменяет live TEST GAS.
-- [ ] Добавить браузерные E2E реального входа и Telegram linking; финансовые сценарии с настоящим TEST Apps Script остаются частью отдельной runtime-приёмки этапа 5.
+- [x] Добавить браузерные E2E пользовательского входа и Telegram linking через синтетический API fixture: проверяются создание сессии, загрузка семейного контекста, создание кода привязки и обновление статуса. Реальная авторизация через TEST Apps Script и финансовые сценарии с TEST backend остаются отдельной runtime-приёмкой этапа 5.
 - [x] Добавить dependency audit/security scan в CI с понятной политикой блокировки.
 - [x] Сохранить текущие регрессионные тесты; не удалять тест ради прохождения сборки.
 - [x] Записывать версии Node/npm и результаты CI.
@@ -3795,3 +3795,14 @@ HEAD до:
 - Проверенные связи категорий, счетов, операций, регулярных платежей, целей и пополнений имеют существующие регрессионные сценарии; полный набор 303 тестов прошёл. Других конкретных дефектов в просмотренных участках не подтверждено, поэтому рабочую логику не переписывали.
 - TEST GAS всё ещё не обновлён текущим `Code.gs`; CI не является live GAS runtime-тестом. Полный Runtime Acceptance Batch 4/4 повторно не запускался. Production, `main`, основная таблица и действующий webhook не менялись.
 - Контрольная точка без изменений: **100/267 (37,5%)**, 167 открытых критериев; активен макроэтап **№4 из 12**. Процент не повышен: CI закрывает подтверждённые regression checks, но не все критерии M-04.
+
+
+### 2026-11-17 — браузерный E2E входа и привязки Telegram
+
+- В `tests/browser-e2e.cjs` добавлен полноценный браузерный сценарий поверх изолированного синтетического API fixture: вход по email/паролю, получение сессии, загрузка семейного контекста, переход в Telegram, создание одноразового кода и повторная проверка статуса до состояния «Telegram привязан».
+- Fixture перехватывает только тестовый URL `https://test-gas.invalid/exec`; реальные аккаунты, Apps Script, Google Sheets, Telegram bot и финансовые данные не используются.
+- Первый прогон выявил не ошибку приложения, а неполный fixture: после входа Dashboard одновременно отправляет batch из `ensure_supplemental_categories`, `get_table_revision` и чтений transactions/categories/accounts. Fixture расширен и теперь возвращает корректный batch envelope; это также проверяет совместимость frontend batch-контракта.
+- Финальный GitHub Actions run [44101697753 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44101697753) на commit `36e9322860744665927e6adaaf7eebfda052a478`: **303/303 regression tests PASS**, browser smoke + auth/Telegram linking E2E PASS, financial CRUD/transfer browser E2E PASS, TypeScript/production build, dependency audit, Apps Script syntax checks и manifest validation PASS.
+- Это закрывает добавление browser UI E2E для входа и Telegram linking в FC-17. Это **не** подтверждает авторизацию на реальном TEST GAS и не заменяет live runtime acceptance этапа 5.
+- Контрольный общий прогресс не меняется: **100/267 (37,5%)**, 167 открытых критериев; макроэтап **№4 из 12** остаётся активным. TEST GAS не обновлялся; полный Runtime Acceptance Batch повторно не запускался.
+- Изменён только тестовый файл и журнал в ветке `ispravleniya`. `main`, Production, основная таблица, Production GAS, Vercel Production и действующий Telegram webhook не затронуты.
