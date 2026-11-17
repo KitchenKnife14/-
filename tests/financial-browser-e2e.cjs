@@ -21,6 +21,7 @@ const state = {
   recurring_payments: [],
   planned_purchases: [],
   budgets: [],
+  monthly_plans: [],
   goals: [],
   goal_contributions: [],
 }
@@ -66,10 +67,10 @@ function query(payload) {
     const values = Array.isArray(payload.values) ? payload.values : [payload.values]
     for (const value of values) {
       if (payload.mode === 'upsert') {
-        const key = payload.onConflict || 'id'
-        const existing = rows.find(row => row[key] === value[key])
+        const keyColumns = (payload.onConflict || 'id').split(',').map(column => column.trim())
+        const existing = rows.find(row => keyColumns.every(column => (row[column] ?? null) === (value[column] ?? null)))
         if (existing) Object.assign(existing, value)
-        else rows.push({ ...value })
+        else rows.push({ ...value, id: value.id || 'fixture-' + payload.table + '-' + (++sequence) })
       } else {
         if (rows.some(row => row.id === value.id)) throw new Error('Duplicate id in E2E fixture')
         rows.push({ ...value })
@@ -319,6 +320,27 @@ async function main() {
     assert.equal(state.budgets.length, 1)
     assert.equal(state.budgets[0].limit_kopecks, 1200000)
 
+    await page.goto(baseUrl + '/planning', { waitUntil: 'networkidle' })
+    await page.getByRole('heading', { name: 'Месячное планирование' }).waitFor()
+    await page.getByRole('button', { name: 'План' }).click()
+    await page.getByLabel('Категория').selectOption('category-food')
+    await page.getByLabel('Плановая сумма, ₽').fill('5000')
+    await page.getByLabel('Заметка').fill('E2E план')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E план', { exact: true }).waitFor()
+    assert.equal(state.monthly_plans.length, 1)
+    assert.equal(state.monthly_plans[0].planned_kopecks, 500000)
+    assert.equal(state.monthly_plans[0].type, 'expense')
+    await page.getByRole('button', { name: 'План' }).click()
+    await page.getByLabel('Категория').selectOption('category-food')
+    await page.getByLabel('Плановая сумма, ₽').fill('7000')
+    await page.getByLabel('Заметка').fill('E2E план обновлён')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByText('E2E план обновлён', { exact: true }).waitFor()
+    assert.equal(state.monthly_plans.length, 1, 'monthly plan upsert must update the existing composite key')
+    assert.equal(state.monthly_plans[0].planned_kopecks, 700000)
+    assert.equal(state.monthly_plans[0].note, 'E2E план обновлён')
+
     await page.goto(baseUrl + '/goals', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Финансовые цели' }).waitFor()
     await page.getByRole('button', { name: 'Цель' }).click()
@@ -491,6 +513,7 @@ async function main() {
         'transfer stores distinct source/destination accounts and no category',
         'transaction delete removes the row',
         'budget create persists the monthly limit in kopecks',
+        'monthly plan upsert updates the same family/month/category/type key without duplicates',
         'goal create uses the create_goal_with_purchase RPC contract',
         'account create, edit, archive, and restore preserve negative opening balances in integer kopecks',
         'category create, edit, and archive persist changes without duplicate rows',
@@ -500,6 +523,7 @@ async function main() {
       persisted: {
         transactions: state.transactions.length,
         budgets: state.budgets.length,
+        monthly_plans: state.monthly_plans.length,
         goals: state.goals.length,
         accounts: state.accounts.length,
         categories: state.categories.length,
