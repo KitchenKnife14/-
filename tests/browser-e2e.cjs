@@ -131,6 +131,21 @@ async function main() {
     await authPage.getByText('Telegram привязан', { exact: true }).waitFor()
     assert.equal(telegramStatusReads, 2)
 
+    // Exercise authenticated history navigation and direct SPA deep links.
+    await authPage.getByRole('link', { name: 'Главная' }).click()
+    await authPage.waitForURL('http://127.0.0.1:4173/')
+    await authPage.goBack()
+    await authPage.waitForURL('http://127.0.0.1:4173/telegram')
+    await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
+    await authPage.goForward()
+    await authPage.waitForURL('http://127.0.0.1:4173/')
+    await authPage.goto(baseUrl + '/telegram', { waitUntil: 'networkidle' })
+    await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
+    await authPage.reload({ waitUntil: 'networkidle' })
+    await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
+    await authPage.goto(baseUrl + '/not-a-real-section', { waitUntil: 'networkidle' })
+    await authPage.waitForURL('http://127.0.0.1:4173/')
+
     await authPage.close()
 
     process.stdout.write(JSON.stringify({
@@ -144,6 +159,9 @@ async function main() {
         'desktop viewport has no horizontal overflow',
         'browser login creates a session and loads the family context',
         'Telegram linking code is created and linked status refreshes',
+        'authenticated back/forward navigation preserves the correct route',
+        'authenticated deep links survive direct navigation and reload',
+        'unknown SPA paths return to the internal home route',
       ],
       mobileWidths,
       desktopWidths,
