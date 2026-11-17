@@ -45,6 +45,16 @@ function matches(row, filters = []) {
   })
 }
 
+function syncGoalTotals(goalIds) {
+  for (const goalId of new Set(goalIds.filter(Boolean))) {
+    const goal = state.goals.find(row => row.id === goalId)
+    if (!goal) continue
+    goal.saved_kopecks = state.goal_contributions
+      .filter(row => row.goal_id === goalId)
+      .reduce((sum, row) => sum + row.amount_kopecks, 0)
+  }
+}
+
 function query(payload) {
   const rows = state[payload.table]
   if (!Array.isArray(rows)) throw new Error('Unknown E2E table: ' + payload.table)
@@ -76,17 +86,21 @@ function query(payload) {
         rows.push({ ...value })
       }
     }
+    if (payload.table === 'goal_contributions') syncGoalTotals(values.map(row => row.goal_id))
     return payload.returning ? values : null
   }
   if (payload.mode === 'update') {
     const values = payload.values || {}
+    const affectedGoalIds = selected.flatMap(row => [row.goal_id, values.goal_id])
     for (const row of selected) Object.assign(row, values)
+    if (payload.table === 'goal_contributions') syncGoalTotals(affectedGoalIds)
     return payload.returning ? selected : null
   }
   if (payload.mode === 'delete') {
     const selectedRows = new Set(selected)
     const selectedIds = new Set(selected.map(row => row.id))
     state[payload.table] = rows.filter(row => !selectedRows.has(row))
+    if (payload.table === 'goal_contributions') syncGoalTotals(selected.map(row => row.goal_id))
     if (payload.table === 'recurring_payments') {
       for (const transaction of state.transactions) {
         if (selectedIds.has(transaction.parent_recurring_id)) transaction.parent_recurring_id = ''
@@ -387,6 +401,7 @@ async function main() {
     assert.equal(state.goal_contributions[0].goal_id, state.goals[0].id)
     assert.equal(state.goal_contributions[0].amount_kopecks, 50025)
     assert.equal(state.goal_contributions[0].note, 'E2E взнос')
+    assert.equal(state.goals[0].saved_kopecks, 50025, 'goal saved total must be recalculated from contribution history')
     const updatedGoalCard = page.locator('.card').filter({ hasText: 'E2E отпуск' }).first()
     await updatedGoalCard.locator('button[title="История"]').click()
     await page.getByRole('dialog').getByText('E2E взнос', { exact: true }).waitFor()
