@@ -145,6 +145,9 @@ async function main() {
     await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
     await authPage.goto(baseUrl + '/not-a-real-section', { waitUntil: 'networkidle' })
     await authPage.waitForURL('http://127.0.0.1:4173/')
+    await authPage.goto(baseUrl + '/%5c%5cevil.example', { waitUntil: 'networkidle' })
+    await authPage.waitForURL('http://127.0.0.1:4173/')
+    assert.equal(new URL(authPage.url()).origin, baseUrl, 'hostile backslash path must remain on the app origin')
 
     await authPage.close()
 
@@ -162,6 +165,7 @@ async function main() {
         'authenticated back/forward navigation preserves the correct route',
         'authenticated deep links survive direct navigation and reload',
         'unknown SPA paths return to the internal home route',
+        'hostile backslash paths cannot navigate away from the app origin',
       ],
       mobileWidths,
       desktopWidths,
