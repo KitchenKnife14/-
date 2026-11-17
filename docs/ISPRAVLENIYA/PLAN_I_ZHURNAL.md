@@ -3817,3 +3817,13 @@ HEAD до:
 - TEST GAS не менялся. Последний live batch 4/4 PASS относится к предыдущему содержимому backend; текущий `Code.gs` после последующих исправлений ещё нужно перенести в изолированный TEST GAS и проверить отдельно. Полный batch в этой работе не запускался.
 - Общий контрольный показатель не изменён: **100/267 (37,5%)**, макроэтап **№4 из 12**. CI подтверждает браузерный маршрутный сценарий, но не закрывает ручную приёмку FC-18 и не доказывает runtime текущего backend.
 - Изменения только в `tests/browser-e2e.cjs` и журнале ветки `ispravleniya`. `main`, Production, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не затронуты.
+
+
+### 2026-11-17 — FC-18: hostile backslash path проверен в реальном браузерном E2E
+
+- В `tests/browser-e2e.cjs` добавлен реальный Chromium сценарий для URL с encoded backslashes `/%5c%5cevil.example`. После открытия приложение должно вернуть пользователя на внутренний маршрут `/`; дополнительно проверяется, что origin остаётся `http://127.0.0.1:4173` и навигация не уходит на внешний домен.
+- Сценарий проходит после авторизации в изолированном синтетическом fixture; никакие внешние сайты, реальные аккаунты, GAS, Google Sheets или Telegram не используются.
+- CI [44124252750 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44124252750) на commit `5b66bbb18875c9c3a7d01628d116d41f658ff2bd`: **303/303 regression tests PASS**, browser smoke включая hostile backslash path PASS, financial CRUD/transfer browser E2E PASS, typecheck/build, dependency audit, Apps Script syntax и manifest checks PASS.
+- Это дополняет существующий `matchRoutes` regression test: hostile URL-shaped paths должны попадать только в catch-all. Ручной просмотр всех экранов, меню и back/forward на пользовательском устройстве остаётся открытым; FC-18 не закрывается целиком только на основании CI.
+- Общий прогресс без изменений: **100/267 (37,5%)**, макроэтап **№4 из 12**. TEST GAS не обновлялся; live batch 4/4 PASS относится к предыдущему backend snapshot.
+- Только `tests/browser-e2e.cjs` и журнал в ветке `ispravleniya`; Production, `main`, основная Google Sheet, Production GAS, Vercel Production и действующий Telegram webhook не затронуты.
