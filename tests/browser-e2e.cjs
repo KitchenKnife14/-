@@ -70,6 +70,61 @@ async function main() {
     assert.ok(desktopWidths.document <= desktopWidths.viewport + 1, `Desktop horizontal overflow: ${JSON.stringify(desktopWidths)}`)
     assert.ok(desktopWidths.body <= desktopWidths.viewport + 1, `Desktop body overflow: ${JSON.stringify(desktopWidths)}`)
 
+
+    // Exercise the real React auth and Telegram screens against an isolated API fixture.
+    // No real Apps Script, user account, Telegram bot, or spreadsheet is contacted.
+    const authPage = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+    let telegramStatusReads = 0
+    await authPage.route('https://test-gas.invalid/exec', async route => {
+      const payload = route.request().postDataJSON()
+      let data
+      if (payload.action === 'signin') {
+        assert.equal(payload.email, 'browser-test@example.com')
+        assert.equal(payload.password, 'correct-test-password')
+        data = {
+          token: 'synthetic-browser-session-token',
+          user: { id: 'browser-test-user', email: 'browser-test@example.com' },
+        }
+      } else if (payload.action === 'rpc' && payload.name === 'get_my_context') {
+        data = {
+          profile: { id: 'browser-test-user', display_name: 'Тестовый участник', family_id: 'browser-test-family' },
+          family: { id: 'browser-test-family', name: 'Тестовая семья', invite_code: 'TEST-INVITE' },
+          members: [],
+          member_profiles: [{ id: 'browser-test-user', display_name: 'Тестовый участник' }],
+        }
+      } else if (payload.action === 'rpc' && payload.name === 'get_telegram_link_status') {
+        telegramStatusReads += 1
+        data = { linked: telegramStatusReads > 1, linked_at: '2026-11-17T10:00:00.000Z' }
+      } else if (payload.action === 'rpc' && payload.name === 'create_telegram_link_code') {
+        data = { code: 'a1b2c3d4e5f6', expires_at: '2026-11-17T10:15:00.000Z' }
+      } else if (payload.action === 'signout') {
+        data = {}
+      } else {
+        throw new Error('Unexpected browser E2E API request: ' + JSON.stringify(payload))
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify({ data, error: null }),
+      })
+    })
+
+    await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    await authPage.getByLabel('Email').fill('browser-test@example.com')
+    await authPage.getByLabel('Пароль').fill('correct-test-password')
+    await authPage.getByRole('button', { name: 'Войти' }).click()
+    await authPage.getByText('Тестовый участник', { exact: true }).waitFor()
+    await authPage.getByRole('link', { name: 'Telegram' }).click()
+    await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
+    await authPage.getByRole('button', { name: 'Создать код привязки' }).click()
+    await authPage.getByText('a1b2c3d4e5f6', { exact: true }).waitFor()
+    await authPage.getByRole('button', { name: 'Проверить подключение' }).click()
+    await authPage.getByText('Telegram привязан', { exact: true }).waitFor()
+    assert.equal(telegramStatusReads, 2)
+
+    await authPage.close()
+
     process.stdout.write(JSON.stringify({
       result: 'PASS',
       checks: [
@@ -79,6 +134,8 @@ async function main() {
         'login/signup mode switch works',
         'mobile viewport has no horizontal overflow',
         'desktop viewport has no horizontal overflow',
+        'browser login creates a session and loads the family context',
+        'Telegram linking code is created and linked status refreshes',
       ],
       mobileWidths,
       desktopWidths,
