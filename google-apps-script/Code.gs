@@ -1360,6 +1360,7 @@ function rpc_(req,user){
     }
     if(!tx){
       tx={id:transactionId,family_id:purchase.family_id,type:'expense',amount_kopecks:purchase.estimated_kopecks,operation_date:p.p_operation_date,operation_time:null,category_id:purchase.category_id||null,account_id:accountId||null,to_account_id:null,description:purchase.name,created_by:user.id,updated_by:user.id,responsible_user_id:purchase.responsible_user_id||purchase.created_by||user.id,planned:false,parent_recurring_id:null,created_at:now_(),updated_at:now_()};
+      validateRelations_('transactions',tx,user);
       appendRows_('transactions',[tx]);
     }
     purchase.status='bought';
