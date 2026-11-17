@@ -3917,7 +3917,7 @@ HEAD до:
 
 ### 2026-11-17 — единый начальный фокус всех модальных форм
 
-- Найдены шесть оставшихся страниц с нативным `autoFocus` внутри Modal: BudgetsPage, CategoriesPage, GoalsPage (две формы), PlanningPage, PurchasesPage, RecurringPage.
+- Найдены шесть страниц с нативным `autoFocus` внутри Modal: BudgetsPage, CategoriesPage, GoalsPage (две формы), PlanningPage, PurchasesPage, RecurringPage.
 - Причина риска та же, что была найдена в TransactionForm: нативный autofocus может сработать при монтировании дочерней формы раньше эффекта Modal, из-за чего Modal сохранит не исходную кнопку-триггер, а уже сфокусированное поле.
 - Во всех найденных формах заменён `autoFocus` на `data-modal-autofocus`. Modal уже управляет этим маркером: сначала фиксирует исходный элемент, затем фокусирует целевое поле.
 - В `tests/form-label-associations.test.cjs` добавлен тест для восьми страниц с модальными окнами: запрещает возврат нативного `autoFocus` и проверяет маркеры у всех назначенных начальных полей.
