@@ -1121,6 +1121,7 @@ function query_(req,user){
       }else {
         if(req.expectedRows!==undefined&&req.expectedRows[inputIndex])throw new Error('Запись была удалена другим участником. Обновите планы и повторите действие.');
         const r=Object.assign({id:id_()},raw);
+        if(table==='goals')r.saved_kopecks=0;
         if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
         if(TABLES[table].includes('created_at'))r.created_at=now_();
         if(TABLES[table].includes('updated_at'))r.updated_at=now_();
