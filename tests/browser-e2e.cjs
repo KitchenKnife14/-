@@ -153,7 +153,7 @@ async function main() {
     await authPage.setViewportSize({ width: 390, height: 844 })
     await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
     await authPage.getByRole('button', { name: 'Открыть дополнительные разделы' }).click()
-    await authPage.locator('aside').getByText('TEST-INVITE', { exact: true }).waitFor()
+    await authPage.getByText('TEST-INVITE', { exact: true }).last().waitFor()
     const moreLinks = authPage.getByRole('navigation', { name: 'Дополнительная навигация' }).getByRole('link')
     assert.equal(await moreLinks.count(), 10, 'mobile More menu must expose all ten secondary sections')
     for (const label of ['Календарь', 'Регулярные платежи', 'Цели', 'Планируемые покупки', 'Планирование', 'Отчёты', 'Анализ по участникам', 'Уведомления', 'Категории', 'Telegram']) {
