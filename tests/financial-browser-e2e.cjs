@@ -283,7 +283,7 @@ async function main() {
     assert.equal(state.accounts[2].starting_balance_kopecks, -3075)
     const editedAccountCard = page.locator('.card').filter({ hasText: 'E2E накопительный изменён' }).first()
     await editedAccountCard.getByRole('button', { name: 'Архивировать счёт' }).click()
-    await page.getByText('E2E накопительный изменён архив', { exact: false }).waitFor()
+    await editedAccountCard.waitFor({ state: 'detached' })
     assert.equal(state.accounts[2].archived, true)
     await page.getByLabel('Показывать архивные счета').check()
     const archivedAccountCard = page.locator('.card').filter({ hasText: 'E2E накопительный изменён' }).first()
