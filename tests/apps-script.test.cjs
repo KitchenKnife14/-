@@ -3610,6 +3610,41 @@ test('legacy category mismatches do not block unrelated edits to historical reco
 });
 
 
+
+test('account owner must be a member of the account family on insert and update', () => {
+  const h = makeHarness();
+  const owner = h.signup('account-owner-member@example.com');
+  const partner = h.signup('account-owner-partner@example.com');
+  const outsider = h.signup('account-owner-outsider@example.com');
+  const family = h.call({ action: 'createFamily', token: owner.token, name: 'Семья владельца счёта' }).data;
+  const joined = h.call({ action: 'joinFamily', token: partner.token, invite_code: family.invite_code });
+  assert.equal(joined.error, null, joined.error?.message);
+
+  const valid = h.call({
+    action: 'query', token: owner.token, table: 'accounts', mode: 'insert', returning: true,
+    values: { family_id: family.id, name: 'Общий счёт', kind: 'bank', owner_user_id: partner.user.id, starting_balance_kopecks: 0 },
+  });
+  assert.equal(valid.error, null, valid.error?.message);
+
+  const invalidInsert = h.call({
+    action: 'query', token: owner.token, table: 'accounts', mode: 'insert',
+    values: { family_id: family.id, name: 'Чужой владелец', kind: 'bank', owner_user_id: outsider.user.id, starting_balance_kopecks: 0 },
+  });
+  assert.match(invalidInsert.error?.message || '', /владелец счёта не состоит в этой семье/i);
+
+  const invalidUpdate = h.call({
+    action: 'query', token: owner.token, table: 'accounts', mode: 'update',
+    filters: [{ column: 'id', op: 'eq', value: valid.data[0].id }],
+    values: { owner_user_id: outsider.user.id },
+  });
+  assert.match(invalidUpdate.error?.message || '', /владелец счёта не состоит в этой семье/i);
+
+  const saved = h.call({
+    action: 'query', token: owner.token, table: 'accounts', mode: 'select',
+    filters: [{ column: 'id', op: 'eq', value: valid.data[0].id }],
+  });
+  assert.equal(saved.data[0].owner_user_id, partner.user.id);
+});
 test('archived accounts cannot be assigned to new transactions or recurring payments', () => {
   const h = makeHarness();
   const user = h.signup('archived-account-assignment@example.com');
