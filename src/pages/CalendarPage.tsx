@@ -165,7 +165,7 @@ export default function CalendarPage() {
     const inMonth = isSameMonth(day, cursor)
     const isToday = isSameDay(day, currentMoscowDate())
     return (
-      <button key={dateStr} onClick={() => { setSelectedDay(day); setView('day') }}
+      <button type="button" key={dateStr} aria-label={`День ${format(day, 'd MMMM yyyy', { locale: ru })}`} onClick={() => { setSelectedDay(day); setView('day') }}
         className={`min-h-[72px] p-1.5 rounded-lg border text-left transition-colors ${isToday ? 'border-primary-400 bg-primary-50/50' : 'border-slate-100 hover:bg-slate-50'} ${!inMonth ? 'opacity-40' : ''}`}>
         <div className="text-xs font-medium text-slate-600">{format(day, 'd')}</div>
         {sum.net !== 0 && <div className={`text-[10px] font-medium ${sum.net > 0 ? 'text-accent-600' : 'text-danger-600'}`}>{formatRublesShort(sum.net)}</div>}
@@ -181,20 +181,20 @@ export default function CalendarPage() {
         <h1 className="page-title">Финансовый календарь</h1>
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {(['month', 'week', 'day', 'list'] as View[]).map((v) => (
-            <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{v === 'month' ? 'Месяц' : v === 'week' ? 'Неделя' : v === 'day' ? 'День' : 'Список'}</button>
+            <button type="button" key={v} aria-pressed={view === v} onClick={() => setView(v)} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{v === 'month' ? 'Месяц' : v === 'week' ? 'Неделя' : v === 'day' ? 'День' : 'Список'}</button>
           ))}
         </div>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between">
-        <button onClick={prev} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
+        <button type="button" onClick={prev} className="btn-ghost px-2" aria-label="Предыдущий месяц"><ChevronLeft size={18} /></button>
         <div className="font-medium text-slate-700">{monthLabel(cursor.getFullYear(), cursor.getMonth())}</div>
-        <button onClick={next} className="btn-ghost px-2"><ChevronRight size={18} /></button>
+        <button type="button" onClick={next} className="btn-ghost px-2" aria-label="Следующий месяц"><ChevronRight size={18} /></button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
         {(['all', 'income', 'expense'] as TxFilter[]).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : f === 'income' ? 'Доходы' : f === 'expense' ? 'Расходы' : 'Переводы'}</button>
+          <button type="button" key={f} aria-pressed={filter === f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : f === 'income' ? 'Доходы' : f === 'expense' ? 'Расходы' : 'Переводы'}</button>
         ))}
         </div>
         <select aria-label="Фильтр по категории операций" className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
