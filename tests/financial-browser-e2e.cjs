@@ -817,7 +817,7 @@ async function main() {
     await page.keyboard.press('Escape')
     await page.getByRole('dialog').waitFor({ state: 'detached' })
 
-    await page.getByRole('button', { name: 'Цель' }).click()
+    await page.getByRole('button', { name: 'Цель', exact: true }).click()
     const linkedGoalDialog = page.getByRole('dialog')
     await linkedGoalDialog.getByLabel('Название', { exact: true }).fill('E2E авто покупка')
     await linkedGoalDialog.getByLabel('Описание').fill('Автоматически связанная покупка')
