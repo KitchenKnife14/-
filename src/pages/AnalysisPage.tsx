@@ -63,9 +63,9 @@ export default function AnalysisPage() {
       <h1 className="page-title">Анализ доходов по участникам</h1>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
+        <button type="button" onClick={prevMonth} className="btn-ghost px-2" aria-label="Предыдущий месяц"><ChevronLeft size={18} /></button>
         <div className="font-medium text-slate-700">{monthLabel(cursor.year, cursor.month)}</div>
-        <button onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
+        <button type="button" onClick={nextMonth} className="btn-ghost px-2" aria-label="Следующий месяц"><ChevronRight size={18} /></button>
       </div>
       {!loading && !error && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
