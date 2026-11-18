@@ -358,6 +358,8 @@ async function main() {
     await page.getByText('Загрузка…', { exact: true }).waitFor()
     await calendarNavigation
     await page.getByRole('heading', { name: 'Финансовый календарь' }).waitFor()
+    await page.getByRole('button', { name: 'Список' }).click()
+    await page.getByText('Нет операций за месяц.', { exact: true }).waitFor()
     transactionReadDelayMs = 0
     transactionReadError = 'Тестовая ошибка календаря'
     await page.getByRole('button').filter({ has: page.locator('svg.lucide-chevron-right') }).click()
