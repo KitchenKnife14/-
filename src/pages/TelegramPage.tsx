@@ -80,7 +80,12 @@ export default function TelegramPage() {
           </div>
         </div>
 
-        {loading ? <p className="text-sm text-muted">Проверяем статус подключения…</p> : status?.linked ? (
+        {loading ? <p className="text-sm text-muted">Проверяем статус подключения…</p> : !status ? (
+          <div className="rounded-xl border border-line bg-canvas p-4">
+            <p className="text-sm text-muted">Не удалось загрузить статус подключения. Повторите проверку.</p>
+            <button type="button" onClick={loadStatus} className="btn-secondary mt-3">Повторить проверку</button>
+          </div>
+        ) : status.linked ? (
           <div className="rounded-xl border border-primary-200 bg-primary-50/60 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-primary-900"><ShieldCheck size={17} /> Telegram привязан</div>
             {status.linked_at && <p className="mt-1 text-xs text-muted">Дата привязки: {formatDateTimeInMoscow(status.linked_at)}</p>}

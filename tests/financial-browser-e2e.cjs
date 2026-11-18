@@ -17,6 +17,7 @@ const state = {
     { id: 'category-home', family_id: familyId, name: 'Дом', kind: 'expense', icon: '🏠', archived: false, parent_id: null },
     { id: 'category-salary', family_id: familyId, name: 'Зарплата', kind: 'income', icon: '💼', archived: false, parent_id: null },
   ],
+  profiles: [{ id: userId, display_name: 'Тестовый пользователь' }],
   transactions: [],
   notifications: [],
   recurring_payments: [],
@@ -44,6 +45,10 @@ let purchaseReadDelayMs = 0
 let purchaseReadError = null
 let recurringReadDelayMs = 0
 let recurringReadError = null
+let categoryReadDelayMs = 0
+let categoryReadError = null
+let telegramStatusDelayMs = 0
+let telegramStatusError = null
 let transactionReadRequests = 0
 let tableRevisions = { transactions: 1, accounts: 1 }
 let revisionReadRequests = 0
@@ -150,6 +155,10 @@ function rpc(name, params) {
     }
   }
   if (name === 'ensure_supplemental_categories') return { added: 0 }
+  if (name === 'get_telegram_link_status') {
+    if (telegramStatusError) throw new Error(telegramStatusError)
+    return { linked: false }
+  }
   if (name === 'get_table_revision') { revisionReadRequests++; return String(tableRevisions[params.p_table] ?? 1) }
   if (name === 'create_goal_with_purchase') {
     const goalId = 'goal_' + params.p_request_id
@@ -301,6 +310,7 @@ async function main() {
                 if (request.action === 'query' && request.table === 'budgets' && request.mode === 'select' && budgetReadError) throw new Error(budgetReadError)
                 if (request.action === 'query' && request.table === 'planned_purchases' && request.mode === 'select' && purchaseReadError) throw new Error(purchaseReadError)
                 if (request.action === 'query' && request.table === 'recurring_payments' && request.mode === 'select' && recurringReadError) throw new Error(recurringReadError)
+                if (request.action === 'query' && request.table === 'categories' && request.mode === 'select' && categoryReadError) throw new Error(categoryReadError)
                 return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null }
               } catch (error) { return { data: null, error: { message: String(error.message || error) } } }
             })
@@ -316,6 +326,7 @@ async function main() {
                   if (payload.table === 'budgets' && payload.mode === 'select' && budgetReadError) throw new Error(budgetReadError)
                   if (payload.table === 'planned_purchases' && payload.mode === 'select' && purchaseReadError) throw new Error(purchaseReadError)
                   if (payload.table === 'recurring_payments' && payload.mode === 'select' && recurringReadError) throw new Error(recurringReadError)
+                  if (payload.table === 'categories' && payload.mode === 'select' && categoryReadError) throw new Error(categoryReadError)
                   return query(payload)
                 })()
               : null
@@ -340,6 +351,12 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'goals' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'goals' && payload.mode === 'select'
         if (goalReads && goalReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, goalReadDelayMs))
+        const categoryReads = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'categories' && request.mode === 'select')
+          : payload.action === 'query' && payload.table === 'categories' && payload.mode === 'select'
+        if (categoryReads && categoryReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, categoryReadDelayMs))
+        const telegramStatusReads = payload.action === 'rpc' && payload.name === 'get_telegram_link_status'
+        if (telegramStatusReads && telegramStatusDelayMs > 0) await new Promise(resolve => setTimeout(resolve, telegramStatusDelayMs))
         for (const [table, delay] of [
           ['budgets', budgetReadDelayMs],
           ['planned_purchases', purchaseReadDelayMs],
@@ -905,6 +922,87 @@ async function main() {
     await secondPurchaseCard.locator('button[title="Удалить"]').click()
     await page.getByText('E2E мышь', { exact: true }).waitFor({ state: 'detached' })
     assert.equal(state.planned_purchases.length, 1, 'deleting a planned purchase must remove only the selected fixture row')
+
+    // Categories: slow reads show a loading state; failed reads must not look like an empty list.
+    const savedCategories = state.categories
+    state.categories = []
+    categoryReadDelayMs = 400
+    const categoriesNavigation = page.goto(baseUrl + '/categories', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText('По заданным фильтрам категорий нет.', { exact: true }).count(), 0, 'categories empty state must stay hidden during loading')
+    await categoriesNavigation
+    await page.getByText('По заданным фильтрам категорий нет.', { exact: true }).waitFor()
+    categoryReadDelayMs = 0
+    categoryReadError = 'Тестовая ошибка загрузки категорий'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/categories', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка загрузки категорий', { exact: true }).waitFor()
+    assert.equal(await page.getByText('По заданным фильтрам категорий нет.', { exact: true }).count(), 0, 'failed category read must not be presented as an empty list')
+    categoryReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/categories', { waitUntil: 'domcontentloaded' })
+    await page.getByText('По заданным фильтрам категорий нет.', { exact: true }).waitFor()
+    state.categories = savedCategories
+
+    // Reports and participant analysis: suppress zero totals and empty states until reads succeed.
+    const savedTransactions = state.transactions
+    state.transactions = []
+    transactionReadDelayMs = 400
+    const reportsNavigation = page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Доходы', { exact: true }).count(), 0, 'report totals must stay hidden during loading')
+    assert.equal(await page.getByText('Нет данных за период.', { exact: true }).count(), 0, 'report empty states must stay hidden during loading')
+    await reportsNavigation
+    await page.getByText('Нет данных за период.', { exact: true }).first().waitFor()
+    transactionReadDelayMs = 0
+    transactionReadError = 'Тестовая ошибка отчётов'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка отчётов', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Доходы', { exact: true }).count(), 0, 'failed report read must not show stale totals')
+    assert.equal(await page.getByText('Нет данных за период.', { exact: true }).count(), 0, 'failed report read must not look like an empty period')
+    transactionReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Нет данных за период.', { exact: true }).first().waitFor()
+
+    transactionReadDelayMs = 400
+    const analysisNavigation = page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общие доходы', { exact: true }).count(), 0, 'participant totals must stay hidden during loading')
+    assert.equal(await page.getByText('Операций за выбранный месяц нет.', { exact: true }).count(), 0, 'participant empty state must stay hidden during loading')
+    await analysisNavigation
+    await page.getByText('Операций за выбранный месяц нет.', { exact: true }).waitFor()
+    transactionReadDelayMs = 0
+    transactionReadError = 'Тестовая ошибка анализа по участникам'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка анализа по участникам', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общие доходы', { exact: true }).count(), 0, 'failed participant analysis must not show stale totals')
+    assert.equal(await page.getByText('Операций за выбранный месяц нет.', { exact: true }).count(), 0, 'failed participant analysis must not look like an empty month')
+    transactionReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Операций за выбранный месяц нет.', { exact: true }).waitFor()
+    state.transactions = savedTransactions
+
+    // Telegram: a delayed or failed status lookup must not be mistaken for an unlinked account.
+    telegramStatusDelayMs = 400
+    const telegramNavigation = page.goto(baseUrl + '/telegram', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Проверяем статус подключения…', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Создать код привязки' }).count(), 0, 'Telegram link flow must stay hidden while status is loading')
+    await telegramNavigation
+    await page.getByRole('button', { name: 'Создать код привязки' }).waitFor()
+    telegramStatusDelayMs = 0
+    telegramStatusError = 'Тестовая ошибка статуса Telegram'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/telegram', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка статуса Telegram', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Создать код привязки' }).count(), 0, 'failed Telegram status lookup must not be presented as unlinked')
+    await page.getByRole('button', { name: 'Повторить проверку' }).waitFor()
+    telegramStatusError = null
+    await page.getByRole('button', { name: 'Повторить проверку' }).click()
+    await page.getByRole('button', { name: 'Создать код привязки' }).waitFor()
 
     process.stdout.write(JSON.stringify({
       result: 'PASS',

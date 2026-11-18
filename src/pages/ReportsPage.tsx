@@ -108,32 +108,38 @@ export default function ReportsPage() {
           <option value="all">Все участники</option>{members.map((m) => <option key={m.user_id} value={m.user_id}>{profMap.get(m.user_id)?.display_name ?? 'Участник'}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="card"><div className="text-sm text-slate-500">Доходы</div><div className="text-xl font-semibold text-accent-600 mt-1">{formatRubles(income)}</div></div>
-        <div className="card"><div className="text-sm text-slate-500">Расходы</div><div className="text-xl font-semibold text-slate-900 mt-1">{formatRubles(expense)}</div></div>
-        <div className="card"><div className="text-sm text-slate-500">Разница</div><div className={`text-xl font-semibold mt-1 ${income - expense >= 0 ? 'text-accent-600' : 'text-danger-600'}`}>{formatRubles(income - expense)}</div></div>
-      </div>
-      <div className="card">
-        <h2 className="text-sm font-medium text-slate-700 mb-3">Расходы по категориям</h2>
-        {byCategory.length === 0 ? <p className="text-sm text-slate-500">Нет данных за период.</p> : (
-          <div className="space-y-2">
-            {byCategory.map(([catId, sum]) => {
-              const cat = catMap.get(catId)
-              const pct = expense > 0 ? (sum / expense) * 100 : 0
-              return (<div key={catId}><div className="flex items-center justify-between text-sm mb-1"><span className="text-slate-700">{cat?.icon ?? '📦'} {cat?.name ?? 'Категория'}</span><span className="text-slate-500">{formatRubles(sum)} · {Math.round(pct)}%</span></div><div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-primary-500" style={{ width: `${maxCat > 0 ? (sum / maxCat) * 100 : 0}%` }} /></div></div>)
-            })}
+      {loading ? (
+        <div className="text-sm text-slate-400">Загрузка…</div>
+      ) : error ? null : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="card"><div className="text-sm text-slate-500">Доходы</div><div className="text-xl font-semibold text-accent-600 mt-1">{formatRubles(income)}</div></div>
+            <div className="card"><div className="text-sm text-slate-500">Расходы</div><div className="text-xl font-semibold text-slate-900 mt-1">{formatRubles(expense)}</div></div>
+            <div className="card"><div className="text-sm text-slate-500">Разница</div><div className={`text-xl font-semibold mt-1 ${income - expense >= 0 ? 'text-accent-600' : 'text-danger-600'}`}>{formatRubles(income - expense)}</div></div>
           </div>
-        )}
-      </div>
-      <div className="card">
-        <h2 className="text-sm font-medium text-slate-700 mb-3">Распределение по участникам</h2>
-        {byMember.length === 0 ? <p className="text-sm text-slate-500">Нет данных за период.</p> : (
-          <div className="space-y-2">
-            {byMember.map(([uid, vals]) => (<div key={uid} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0"><span className="text-sm text-slate-700">{profMap.get(uid)?.display_name ?? 'Участник'}</span><div className="text-right"><div className="text-sm text-accent-600">Доходы: {formatRubles(vals.income)}</div><div className="text-sm text-slate-700">Расходы: {formatRubles(vals.expense)}</div></div></div>))}
+          <div className="card">
+            <h2 className="text-sm font-medium text-slate-700 mb-3">Расходы по категориям</h2>
+            {byCategory.length === 0 ? <p className="text-sm text-slate-500">Нет данных за период.</p> : (
+              <div className="space-y-2">
+                {byCategory.map(([catId, sum]) => {
+                  const cat = catMap.get(catId)
+                  const pct = expense > 0 ? (sum / expense) * 100 : 0
+                  return (<div key={catId}><div className="flex items-center justify-between text-sm mb-1"><span className="text-slate-700">{cat?.icon ?? '📦'} {cat?.name ?? 'Категория'}</span><span className="text-slate-500">{formatRubles(sum)} · {Math.round(pct)}%</span></div><div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-primary-500" style={{ width: `${maxCat > 0 ? (sum / maxCat) * 100 : 0}%` }} /></div></div>)
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      {loading && <div className="text-sm text-slate-400">Загрузка…</div>}
+          <div className="card">
+            <h2 className="text-sm font-medium text-slate-700 mb-3">Распределение по участникам</h2>
+            {byMember.length === 0 ? <p className="text-sm text-slate-500">Нет данных за период.</p> : (
+              <div className="space-y-2">
+                {byMember.map(([uid, vals]) => (<div key={uid} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0"><span className="text-sm text-slate-700">{profMap.get(uid)?.display_name ?? 'Участник'}</span><div className="text-right"><div className="text-sm text-accent-600">Доходы: {formatRubles(vals.income)}</div><div className="text-sm text-slate-700">Расходы: {formatRubles(vals.expense)}</div></div></div>))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
     </div>
   )
 }

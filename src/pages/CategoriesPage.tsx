@@ -84,7 +84,7 @@ export default function CategoriesPage() {
 
       {loading ? (
         <div className="text-sm text-slate-400">Загрузка…</div>
-      ) : roots.length === 0 ? (
+      ) : error ? null : roots.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500">По заданным фильтрам категорий нет.</div>
       ) : (
         <>

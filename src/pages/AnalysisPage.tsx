@@ -67,12 +67,16 @@ export default function AnalysisPage() {
         <div className="font-medium text-slate-700">{monthLabel(cursor.year, cursor.month)}</div>
         <button onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="card"><div className="text-sm text-slate-500">Общие доходы</div><div className="text-xl font-semibold text-accent-600 mt-1">{formatRubles(totalIncome)}</div></div>
-        <div className="card"><div className="text-sm text-slate-500">Общие расходы</div><div className="text-xl font-semibold text-slate-900 mt-1">{formatRubles(totalExpense)}</div></div>
-        <div className="card"><div className="text-sm text-slate-500">Общий остаток</div><div className={`text-xl font-semibold mt-1 ${totalIncome - totalExpense >= 0 ? 'text-accent-600' : 'text-danger-600'}`}>{formatRubles(totalIncome - totalExpense)}</div></div>
-      </div>
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : (
+      {!loading && !error && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="card"><div className="text-sm text-slate-500">Общие доходы</div><div className="text-xl font-semibold text-accent-600 mt-1">{formatRubles(totalIncome)}</div></div>
+          <div className="card"><div className="text-sm text-slate-500">Общие расходы</div><div className="text-xl font-semibold text-slate-900 mt-1">{formatRubles(totalExpense)}</div></div>
+          <div className="card"><div className="text-sm text-slate-500">Общий остаток</div><div className="text-xl font-semibold text-slate-900 mt-1">{formatRubles(totalIncome - totalExpense)}</div></div>
+        </div>
+      )}
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : txs.length === 0 ? (
+        <div className="card text-center py-8 text-sm text-slate-500">Операций за выбранный месяц нет.</div>
+      ) : (
         <div className="space-y-3">
           {memberData.map((d) => {
             const share = totalIncome > 0 ? (d.income / totalIncome) * 100 : 0
