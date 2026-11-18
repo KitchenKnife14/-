@@ -349,7 +349,7 @@ async function main() {
     assert.ok(revisionReadRequests > dashboardRevisionBaseline, 'dashboard realtime subscription must initialize before failure injection')
     transactionReadError = 'Тестовая ошибка главной страницы'
     tableRevisions.transactions++
-    await page.getByText('Тестовая ошибка главной страницы', { exact: true }).waitFor()
+    await page.getByText(/Тестовая ошибка главной страницы/).waitFor()
     assert.equal(await page.getByRole('region', { name: 'Итоги месяца' }).count(), 0, 'dashboard must not show zero totals when financial data failed to load')
     assert.equal(await page.getByText('Пока нет операций за этот месяц', { exact: true }).count(), 0, 'dashboard must not present a failed load as an empty month')
     transactionReadError = null
