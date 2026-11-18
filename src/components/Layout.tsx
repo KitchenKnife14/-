@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Home, ListTree, Tag, LogOut, Calendar, Repeat, Target, ShoppingCart, ClipboardList, ChartBar as BarChart3, Bell, Users, Wallet, MessageCircle, MoreHorizontal, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -53,7 +53,22 @@ export default function Layout() {
   const location = useLocation()
   const [moreOpen, setMoreOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
   const moreActive = mobileMoreItems.some(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
+
+  useEffect(() => {
+    if (!moreOpen) return
+    moreMenuRef.current?.querySelector<HTMLElement>('a[href], button:not([disabled])')?.focus()
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setMoreOpen(false)
+      moreButtonRef.current?.focus()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [moreOpen])
 
   const signOut = async () => {
     if (signingOut) return
@@ -125,8 +140,8 @@ export default function Layout() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
         {moreOpen && (
           <>
-            <button type="button" aria-label="Закрыть меню" className="fixed inset-0 z-0 bg-black/20" onClick={() => setMoreOpen(false)} />
-            <div className="absolute z-10 bottom-full left-3 right-3 mb-2 rounded-2xl border border-line bg-surface p-2 shadow-xl">
+            <button type="button" tabIndex={-1} aria-label="Закрыть меню" className="fixed inset-0 z-0 bg-black/20" onClick={() => { setMoreOpen(false); moreButtonRef.current?.focus() }} />
+            <div id="mobile-more-menu" ref={moreMenuRef} className="absolute z-10 bottom-full left-3 right-3 mb-2 rounded-2xl border border-line bg-surface p-2 shadow-xl">
               <nav aria-label="Дополнительная навигация" className="grid max-h-[55vh] grid-cols-2 gap-1 overflow-y-auto">
                 {mobileMoreItems.map(item => (
                   <NavLink
@@ -177,7 +192,9 @@ export default function Layout() {
           <button
             type="button"
             onClick={() => setMoreOpen(open => !open)}
+            ref={moreButtonRef}
             aria-expanded={moreOpen}
+            aria-controls="mobile-more-menu"
             aria-label={moreOpen ? 'Закрыть дополнительные разделы' : 'Открыть дополнительные разделы'}
             className={`flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium transition-colors ${
               moreOpen || moreActive ? 'text-primary-800' : 'text-muted'
