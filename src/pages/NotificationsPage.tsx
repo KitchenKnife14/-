@@ -71,7 +71,7 @@ export default function NotificationsPage() {
           <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : 'Непрочитанные'}</button>
         ))}
       </div>
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : items.length === 0 ? (
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : items.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500"><Bell size={24} className="mx-auto mb-2 text-slate-300" />Нет уведомлений.</div>
       ) : (
         <div className="space-y-2">
