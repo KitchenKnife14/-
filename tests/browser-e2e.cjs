@@ -127,12 +127,12 @@ async function main() {
     // The muted text token must meet WCAG AA for normal text on the app's light surfaces.
     const mutedTextAudit = await authPage.locator('.text-muted').evaluateAll(elements => {
       const luminance = hex => {
-        const channels = hex.match(/[a-f\\d]{2}/gi).map(value => parseInt(value, 16) / 255)
+        const channels = hex.match(/[a-f0-9]{2}/gi).map(value => parseInt(value, 16) / 255)
         const linear = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
       }
       const foreground = getComputedStyle(elements.find(element => element.getClientRects().length)).color
-      const channels = foreground.match(/[\\d.]+/g).slice(0, 3).map(Number)
+      const channels = foreground.match(/[0-9.]+/g).slice(0, 3).map(Number)
       const foregroundLuminance = (() => {
         const linear = channels.map(value => {
           const normalized = value / 255
