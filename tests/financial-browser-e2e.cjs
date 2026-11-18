@@ -30,7 +30,7 @@ let transactionInsertRequests = 0
 let transactionReadDelayMs = 0
 let transactionReadError = null
 let transactionReadRequests = 0
-let tableRevision = 1
+let tableRevisions = { transactions: 1, accounts: 1 }
 let revisionReadRequests = 0
 
 function matches(row, filters = []) {
@@ -135,7 +135,7 @@ function rpc(name, params) {
     }
   }
   if (name === 'ensure_supplemental_categories') return { added: 0 }
-  if (name === 'get_table_revision') { revisionReadRequests++; return String(tableRevision) }
+  if (name === 'get_table_revision') { revisionReadRequests++; return String(tableRevisions[params.p_table] ?? 1) }
   if (name === 'create_goal_with_purchase') {
     const goalId = 'goal_' + params.p_request_id
     let goal = state.goals.find(row => row.id === goalId)
@@ -334,7 +334,7 @@ async function main() {
     await page.getByLabel('Фильтр по категории операции').selectOption('category-food')
     const revisionDeadline = Date.now() + 3000
     while (revisionReadRequests < 1 && Date.now() < revisionDeadline) await new Promise(resolve => setTimeout(resolve, 20))
-    assert.ok(revisionReadRequests > 0, 'realtime subscription must read the initial table revision')
+    assert.ok(revisionReadRequests >= 2, 'realtime subscriptions must read both transaction and account table revisions')
     const transactionReadsBeforeRealtime = transactionReadRequests
     const nextMonth = new Date()
     nextMonth.setUTCDate(15)
@@ -346,12 +346,22 @@ async function main() {
       to_account_id: null, description: 'Обновление после подписки', created_by: userId, updated_by: userId,
       responsible_user_id: userId, planned: false, parent_recurring_id: null,
     })
-    tableRevision++
+    tableRevisions.transactions++
     const refreshDeadline = Date.now() + 7000
     while (transactionReadRequests <= transactionReadsBeforeRealtime && Date.now() < refreshDeadline) await new Promise(resolve => setTimeout(resolve, 20))
     assert.ok(transactionReadRequests > transactionReadsBeforeRealtime, `revision change must trigger a fresh transactions read (revision reads: ${revisionReadRequests}, transaction reads: ${transactionReadRequests})`)
     await page.getByText('Обновление после подписки', { exact: true }).waitFor({ timeout: 2000 })
     assert.equal(state.transactions[0].operation_date, nextMonthDate)
+    const readsBeforeAccountChange = transactionReadRequests
+    state.accounts[0].name = 'Наличные (обновлено)'
+    tableRevisions.accounts++
+    const accountRefreshDeadline = Date.now() + 7000
+    while (transactionReadRequests <= readsBeforeAccountChange && Date.now() < accountRefreshDeadline) await new Promise(resolve => setTimeout(resolve, 20))
+    assert.ok(transactionReadRequests > readsBeforeAccountChange, 'account revision change must trigger a fresh transaction page load')
+    await page.waitForFunction(() => document.body.innerText.includes('Наличные (обновлено)'), null, { timeout: 2000 })
+    const refreshedCard = await page.locator('.card').filter({ hasText: 'Обновление после подписки' }).innerText()
+    assert.match(refreshedCard, /Наличные \(обновлено\)/)
+    state.accounts[0].name = 'Наличные'
     state.transactions = state.transactions.filter(row => row.id !== 'transaction-realtime-refresh')
     await page.getByLabel('Поиск операций').fill('')
     await page.getByLabel('Фильтр по типу операции').selectOption('all')
