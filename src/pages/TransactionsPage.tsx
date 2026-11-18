@@ -34,6 +34,8 @@ export default function TransactionsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<TransactionDraft | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
+  const deletePendingRef = useRef(false)
   const loadSequence = useRef(createRequestSequence())
 
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
@@ -114,11 +116,21 @@ export default function TransactionsPage() {
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
 
   const confirmDelete = async () => {
-    if (!deleting) return
-    const { error: err } = await googleSheets.from('transactions').delete().eq('id', deleting.id).expect(deleting as unknown as Record<string, unknown>)
-    if (err) setError(err.message)
-    setDeleting(null)
-    load()
+    if (!deleting || deletePendingRef.current) return
+    deletePendingRef.current = true
+    setDeletePending(true)
+    setError(null)
+    try {
+      const { error: err } = await googleSheets.from('transactions').delete().eq('id', deleting.id).expect(deleting as unknown as Record<string, unknown>)
+      if (err) throw err
+      setDeleting(null)
+      void load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить операцию')
+    } finally {
+      deletePendingRef.current = false
+      setDeletePending(false)
+    }
   }
 
   return (
@@ -209,11 +221,11 @@ export default function TransactionsPage() {
 
       <TransactionForm open={showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} editing={editing} />
 
-      <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Удалить операцию?">
+      <Modal open={!!deleting} onClose={() => { if (!deletePendingRef.current) setDeleting(null) }} title="Удалить операцию?">
         <p className="text-sm text-slate-600 mb-4">Это действие нельзя отменить. Операция будет удалена безвозвратно.</p>
         <div className="flex gap-2">
-          <button type="button" onClick={() => setDeleting(null)} className="btn-secondary flex-1">Отмена</button>
-          <button type="button" onClick={confirmDelete} className="btn-danger flex-1">Удалить</button>
+          <button type="button" onClick={() => setDeleting(null)} disabled={deletePending} className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Отмена</button>
+          <button type="button" onClick={confirmDelete} disabled={deletePending} aria-busy={deletePending} className="btn-danger flex-1 disabled:opacity-50 disabled:cursor-not-allowed">{deletePending ? 'Удаление…' : 'Удалить'}</button>
         </div>
       </Modal>
     </div>

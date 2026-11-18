@@ -29,6 +29,7 @@ const state = {
 }
 let sequence = 0
 let transactionInsertRequests = 0
+let transactionDeleteDelayMs = 0
 let transactionReadDelayMs = 0
 let transactionReadError = null
 let notificationReadDelayMs = 0
@@ -300,6 +301,10 @@ async function main() {
     await context.route(apiUrl, async route => {
       try {
         const payload = JSON.parse(route.request().postData() || '{}')
+        const transactionDeletes = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'delete')
+          : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'delete'
+        if (transactionDeletes && transactionDeleteDelayMs > 0) await new Promise(resolve => setTimeout(resolve, transactionDeleteDelayMs))
         const result = payload.action === 'batch'
           ? (payload.requests || []).map(request => {
               try {
@@ -707,8 +712,14 @@ async function main() {
     assert.equal(await deleteTransferButton.evaluate(element => element === document.activeElement), true, 'closing a sequential dialog must restore focus to its trigger')
     await deleteTransferButton.click()
     await page.getByRole('heading', { name: 'Удалить операцию?' }).waitFor()
-    await page.locator('button.btn-danger').click()
+    transactionDeleteDelayMs = 350
+    const confirmTransferDelete = page.locator('button.btn-danger')
+    await confirmTransferDelete.click()
+    await page.getByRole('button', { name: 'Удаление…' }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Удаление…' }).isDisabled(), true, 'transaction delete confirmation must disable while request is pending')
+    assert.equal(await page.getByRole('button', { name: 'Отмена' }).isDisabled(), true, 'transaction delete dialog must not close while delete is pending')
     await page.getByText('E2E перевод', { exact: true }).waitFor({ state: 'detached' })
+    transactionDeleteDelayMs = 0
     assert.equal(state.transactions.length, 1)
 
     await page.goto(baseUrl + '/budgets', { waitUntil: 'networkidle' })
