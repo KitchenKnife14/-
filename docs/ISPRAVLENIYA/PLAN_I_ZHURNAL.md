@@ -4157,3 +4157,12 @@ HEAD до:
 - Финальный CI [44272415369 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44272415369) на точном HEAD 4b6e91b60e1250c1e7a42b8f61eb5dd546aba633: production build, preview smoke, browser smoke, Financial CRUD/transfer browser E2E, All regression tests и проверки Apps Script syntax/manifest — PASS; workflow завершился SUCCESS.
 - Общий составной UX-01 остаётся открытым: проверка остальных экранов, контраста/клавиатуры/VoiceOver и реального iPhone ещё не завершена. Поэтому прогресс не меняется: **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
 - Изменены AccountsPage.tsx, financial-browser-e2e.cjs и этот журнал в ветке ispravleniya. main, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
+
+
+### 2026-11-18 — UX-01: состояния загрузки финансовых целей
+
+- В GoalsPage.tsx пустое состояние «Целей пока нет» теперь показывается только после успешного ответа. При ошибке загрузки оно скрыто, ошибка остаётся видимой. Сводка общего прогресса активных целей также скрывается во время загрузки и при ошибке, чтобы не показывать устаревшие значения как актуальные.
+- В tests/financial-browser-e2e.cjs добавлен сценарий для целей: искусственная задержка 400 мс, отсутствие пустого состояния и сводки до ответа, успешное пустое состояние, ошибка без ложного сообщения/сводки и восстановление после повторной загрузки.
+- CI [44272821146 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44272821146) на точном HEAD 958c16fefc72a9a0a7011c363cd290f17e2f72ff: production build, preview smoke, browser smoke, Financial CRUD/transfer browser E2E, All regression tests и Apps Script syntax/manifest checks — PASS; workflow завершился SUCCESS.
+- Счётчик не меняется: UX-01 — составной критерий, для которого ещё не завершены проверки остальных экранов, контраста, клавиатурной навигации, VoiceOver и реального iPhone. Общий прогресс **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
+- Изменены GoalsPage.tsx, financial-browser-e2e.cjs и этот журнал в ветке ispravleniya. main, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
