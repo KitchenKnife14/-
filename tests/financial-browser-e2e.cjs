@@ -38,6 +38,12 @@ let accountReadDelayMs = 0
 let accountReadError = null
 let goalReadDelayMs = 0
 let goalReadError = null
+let budgetReadDelayMs = 0
+let budgetReadError = null
+let purchaseReadDelayMs = 0
+let purchaseReadError = null
+let recurringReadDelayMs = 0
+let recurringReadError = null
 let transactionReadRequests = 0
 let tableRevisions = { transactions: 1, accounts: 1 }
 let revisionReadRequests = 0
@@ -292,6 +298,9 @@ async function main() {
                 if (request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
                 if (request.action === 'query' && request.table === 'accounts' && request.mode === 'select' && accountReadError) throw new Error(accountReadError)
                 if (request.action === 'query' && request.table === 'goals' && request.mode === 'select' && goalReadError) throw new Error(goalReadError)
+                if (request.action === 'query' && request.table === 'budgets' && request.mode === 'select' && budgetReadError) throw new Error(budgetReadError)
+                if (request.action === 'query' && request.table === 'planned_purchases' && request.mode === 'select' && purchaseReadError) throw new Error(purchaseReadError)
+                if (request.action === 'query' && request.table === 'recurring_payments' && request.mode === 'select' && recurringReadError) throw new Error(recurringReadError)
                 return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null }
               } catch (error) { return { data: null, error: { message: String(error.message || error) } } }
             })
@@ -304,6 +313,9 @@ async function main() {
                   if (payload.table === 'monthly_plans' && payload.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
                   if (payload.table === 'accounts' && payload.mode === 'select' && accountReadError) throw new Error(accountReadError)
                   if (payload.table === 'goals' && payload.mode === 'select' && goalReadError) throw new Error(goalReadError)
+                  if (payload.table === 'budgets' && payload.mode === 'select' && budgetReadError) throw new Error(budgetReadError)
+                  if (payload.table === 'planned_purchases' && payload.mode === 'select' && purchaseReadError) throw new Error(purchaseReadError)
+                  if (payload.table === 'recurring_payments' && payload.mode === 'select' && recurringReadError) throw new Error(recurringReadError)
                   return query(payload)
                 })()
               : null
@@ -328,6 +340,16 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'goals' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'goals' && payload.mode === 'select'
         if (goalReads && goalReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, goalReadDelayMs))
+        for (const [table, delay] of [
+          ['budgets', budgetReadDelayMs],
+          ['planned_purchases', purchaseReadDelayMs],
+          ['recurring_payments', recurringReadDelayMs],
+        ]) {
+          const readsTable = payload.action === 'batch'
+            ? (payload.requests || []).some(request => request.action === 'query' && request.table === table && request.mode === 'select')
+            : payload.action === 'query' && payload.table === table && payload.mode === 'select'
+          if (readsTable && delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
+        }
         const transactionInserts = payload.action === 'batch'
           ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert' ? 1 : 0
@@ -363,6 +385,63 @@ async function main() {
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
     await page.goto(baseUrl + '/goals', { waitUntil: 'domcontentloaded' })
     await page.getByText('Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.', { exact: true }).waitFor()
+
+    // Budgets: hide totals until successful load; errors must not look like an empty month.
+    budgetReadDelayMs = 400
+    const budgetsNavigation = page.goto(baseUrl + '/budgets', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общий бюджет', { exact: true }).count(), 0, 'budget summary must stay hidden during loading')
+    await budgetsNavigation
+    await page.getByText('Бюджетов пока нет. Установите лимиты по категориям на месяц.', { exact: true }).waitFor()
+    budgetReadDelayMs = 0
+    budgetReadError = 'Тестовая ошибка загрузки бюджетов'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/budgets', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка загрузки бюджетов', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общий бюджет', { exact: true }).count(), 0, 'failed budget read must not show a summary')
+    assert.equal(await page.getByText('Бюджетов пока нет. Установите лимиты по категориям на месяц.', { exact: true }).count(), 0, 'failed budget read must not show an empty state')
+    budgetReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/budgets', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Бюджетов пока нет. Установите лимиты по категориям на месяц.', { exact: true }).waitFor()
+
+    // Planned purchases: hide estimated total and empty state until a successful read.
+    purchaseReadDelayMs = 400
+    const purchasesNavigation = page.goto(baseUrl + '/purchases', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общая стоимость запланированных покупок', { exact: true }).count(), 0, 'purchase total must stay hidden during loading')
+    await purchasesNavigation
+    await page.getByText('Покупок пока нет. Добавьте товары, которые планируете купить.', { exact: true }).waitFor()
+    purchaseReadDelayMs = 0
+    purchaseReadError = 'Тестовая ошибка загрузки покупок'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/purchases', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка загрузки покупок', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общая стоимость запланированных покупок', { exact: true }).count(), 0, 'failed purchase read must not show a total')
+    assert.equal(await page.getByText('Покупок пока нет. Добавьте товары, которые планируете купить.', { exact: true }).count(), 0, 'failed purchase read must not show an empty state')
+    purchaseReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/purchases', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Покупок пока нет. Добавьте товары, которые планируете купить.', { exact: true }).waitFor()
+
+    // Recurring payments: do not show overdue summary or empty state before a successful read.
+    recurringReadDelayMs = 400
+    const recurringNavigation = page.goto(baseUrl + '/recurring', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText(/Просроченные платежи/).count(), 0, 'overdue summary must stay hidden during loading')
+    await recurringNavigation
+    await page.getByText(/Регулярных платежей пока нет/).waitFor()
+    recurringReadDelayMs = 0
+    recurringReadError = 'Тестовая ошибка загрузки регулярных платежей'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/recurring', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка загрузки регулярных платежей', { exact: true }).waitFor()
+    assert.equal(await page.getByText(/Просроченные платежи/).count(), 0, 'failed recurring read must not show overdue summary')
+    assert.equal(await page.getByText(/Регулярных платежей пока нет/).count(), 0, 'failed recurring read must not show an empty state')
+    recurringReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/recurring', { waitUntil: 'domcontentloaded' })
+    await page.getByText(/Регулярных платежей пока нет/).waitFor()
 
     // Accounts must not show a fabricated zero balance while data is loading or after a failed read.
     accountReadDelayMs = 400
