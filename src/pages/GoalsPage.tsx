@@ -84,14 +84,14 @@ export default function GoalsPage() {
         <select aria-label="Фильтр по участнику цели" className="input" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
       </div>
       {(search || statusFilter !== 'all' || priorityFilter !== 'all' || participantFilter) && <button onClick={() => { setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setParticipantFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
-      {goals.filter((g) => g.status === 'active').length > 0 && (
+      {!loading && !error && goals.filter((g) => g.status === 'active').length > 0 && (
         <div className="card bg-primary-50 border-primary-100">
           <div className="text-sm text-primary-700">Общий прогресс по активным целям</div>
           <div className="text-lg font-semibold text-slate-900 mt-1">{formatRubles(totalSaved)} / {formatRubles(totalTarget)}</div>
           <div className="h-2 bg-white/50 rounded-full overflow-hidden mt-2"><div className="h-full bg-primary-500 rounded-full" style={{ width: `${totalTarget > 0 ? Math.min((totalSaved / totalTarget) * 100, 100) : 0}%` }} /></div>
         </div>
       )}
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : goals.length === 0 ? (
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : goals.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500"><Target size={24} className="mx-auto mb-2 text-slate-300" />Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.</div>
       ) : visibleSortedGoals.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500">По заданным фильтрам целей нет.</div>
