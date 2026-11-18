@@ -32,7 +32,7 @@ jobs:
       - name: Production preview smoke test
         run: node tests/vite-preview-smoke.cjs
       - name: Install Chromium for browser smoke
-        run: npx --yes playwright@1.56.1 install --with-deps chromium
+        run: npx --yes playwright@1.56.1 install chromium
       - name: Browser E2E smoke test
         run: npx --yes --package=playwright@1.56.1 -c 'NODE_PATH="$(dirname "$(dirname "$(readlink -f "$(command -v playwright)")")")" node tests/browser-e2e.cjs'
       - name: Financial CRUD and transfer browser E2E
