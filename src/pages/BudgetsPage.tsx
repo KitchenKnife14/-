@@ -89,7 +89,7 @@ export default function BudgetsPage() {
         <button onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
       </div>
 
-      {budgets.length > 0 && (
+      {!loading && !error && budgets.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-medium text-slate-700">Общий бюджет</div>
@@ -100,7 +100,7 @@ export default function BudgetsPage() {
         </div>
       )}
 
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : budgets.length === 0 ? (
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : budgets.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500">Бюджетов пока нет. Установите лимиты по категориям на месяц.</div>
       ) : (
         <div className="space-y-2">
