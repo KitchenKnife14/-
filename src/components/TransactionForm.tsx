@@ -168,9 +168,9 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Редактировать операцию' : 'Новая операция'}>
       <form onSubmit={submit} className="space-y-3">
-        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+        <div role="group" aria-label="Тип операции" className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {(['expense', 'income', 'transfer'] as TxType[]).map((t) => (
-            <button key={t} type="button" onClick={() => setType(t)}
+            <button key={t} type="button" onClick={() => setType(t)} aria-pressed={type === t}
               className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
               {t === 'expense' ? 'Расход' : t === 'income' ? 'Доход' : 'Перевод'}
             </button>
