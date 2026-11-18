@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
@@ -20,6 +20,9 @@ export default function RecurringPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [confirming, setConfirming] = useState<RecurringPayment | null>(null)
+  const [paymentConfirming, setPaymentConfirming] = useState(false)
+  const [paymentConfirmError, setPaymentConfirmError] = useState<string | null>(null)
+  const paymentConfirmPendingRef = useRef(false)
 
   const load = async () => {
     if (!family) return
@@ -49,8 +52,10 @@ export default function RecurringPage() {
   const accountMap = new Map(accounts.map((a) => [a.id, a.name]))
 
   const confirmPayment = async () => {
-    if (!confirming || !family || !session?.user) return
-    setError(null)
+    if (paymentConfirmPendingRef.current || !confirming || !family || !session?.user) return
+    paymentConfirmPendingRef.current = true
+    setPaymentConfirming(true)
+    setPaymentConfirmError(null)
     try {
       const { error: confirmError } = await googleSheets.rpc('confirm_recurring_payment', {
         p_recurring_id: confirming.id,
@@ -62,7 +67,10 @@ export default function RecurringPage() {
       setConfirming(null)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось подтвердить платёж')
+      setPaymentConfirmError(e instanceof Error ? e.message : 'Не удалось подтвердить платёж')
+    } finally {
+      paymentConfirmPendingRef.current = false
+      setPaymentConfirming(false)
     }
   }
 
@@ -92,10 +100,11 @@ export default function RecurringPage() {
         </div>
       )}
       <RecurringForm open={showForm} onClose={() => setShowForm(false)} onSaved={load} categories={categories} accounts={accounts} members={members} memberProfiles={memberProfiles} familyId={family?.id ?? null} userId={session?.user.id ?? null} />
-      <Modal open={!!confirming} onClose={() => setConfirming(null)} title="Подтвердить платёж?">
+      <Modal open={!!confirming} onClose={() => { if (!paymentConfirmPendingRef.current) { setConfirming(null); setPaymentConfirmError(null) } }} title="Подтвердить платёж?">
         <p className="text-sm text-slate-600 mb-2">Будет создана операция на сумму <strong>{formatRubles(confirming?.amount_kopecks ?? 0)}</strong> за сегодня. Дата следующего платежа будет перенесена.</p>
         <p className="text-xs text-slate-400 mb-4">Платёж не дублируется автоматически — только ручное подтверждение.</p>
-        <div className="flex gap-2"><button type="button" onClick={() => setConfirming(null)} className="btn-secondary flex-1">Отмена</button><button type="button" onClick={confirmPayment} className="btn-primary flex-1">Подтвердить</button></div>
+        {paymentConfirmError && <div role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2 mb-3">{paymentConfirmError}</div>}
+        <div className="flex gap-2"><button type="button" disabled={paymentConfirming} onClick={() => { setConfirming(null); setPaymentConfirmError(null) }} className="btn-secondary flex-1">Отмена</button><button type="button" disabled={paymentConfirming} onClick={confirmPayment} className="btn-primary flex-1">{paymentConfirming ? 'Подтверждение…' : 'Подтвердить'}</button></div>
       </Modal>
     </div>
   )

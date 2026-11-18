@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
@@ -30,6 +30,9 @@ export default function PurchasesPage() {
   const [sortBy, setSortBy] = useState<SortBy>('date')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [buying, setBuying] = useState<PlannedPurchase | null>(null)
+  const [buyConfirming, setBuyConfirming] = useState(false)
+  const [buyError, setBuyError] = useState<string | null>(null)
+  const buyConfirmPendingRef = useRef(false)
 
   const load = async () => {
     if (!family) return
@@ -73,19 +76,26 @@ export default function PurchasesPage() {
   const remove = async (p: PlannedPurchase) => { const { error: err } = await googleSheets.from('planned_purchases').delete().eq('id', p.id).expect(p as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
 
   const confirmBuy = async () => {
-    if (!buying || !family || !session?.user) return
-    setError(null)
+    if (buyConfirmPendingRef.current || !buying || !family || !session?.user) return
+    buyConfirmPendingRef.current = true
+    setBuyConfirming(true)
+    setBuyError(null)
     try {
-      const { error: buyError } = await googleSheets.rpc('confirm_planned_purchase', {
+      const { error: confirmError } = await googleSheets.rpc('confirm_planned_purchase', {
         p_purchase_id: buying.id,
         p_operation_date: todayISO(),
         p_account_id: buyAccountId || null,
         p_expected_purchase: buying,
       })
-      if (buyError) throw buyError
+      if (confirmError) throw confirmError
       setBuying(null)
       await load()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка подтверждения покупки') }
+    } catch (e) {
+      setBuyError(e instanceof Error ? e.message : 'Ошибка подтверждения покупки')
+    } finally {
+      buyConfirmPendingRef.current = false
+      setBuyConfirming(false)
+    }
   }
 
   return (
@@ -145,11 +155,12 @@ export default function PurchasesPage() {
         </div>
       )}
       <PurchaseForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} categories={categories} goals={goals} familyId={family?.id ?? null} userId={session?.user.id ?? null} editing={editing} />
-      <Modal open={!!buying} onClose={() => setBuying(null)} title="Отметить как купленное?">
+      <Modal open={!!buying} onClose={() => { if (!buyConfirmPendingRef.current) { setBuying(null); setBuyError(null) } }} title="Отметить как купленное?">
         <p className="text-sm text-slate-600 mb-2">Будет создан фактический расход на сумму <strong>{formatRubles(buying?.estimated_kopecks ?? 0)}</strong>. Покупка получит статус «Куплено».</p>
         <p className="text-xs text-slate-400 mb-3">Расход не будет учтён дважды — он заменит плановую стоимость, а не добавится поверх.</p>
         <div className="mb-4"><label className="label" htmlFor="purchase-buy-account">Списать со счёта</label><select id="purchase-buy-account" className="input" value={buyAccountId} onChange={(e) => setBuyAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.filter((a) => !a.archived).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-        <div className="flex gap-2"><button type="button" onClick={() => setBuying(null)} className="btn-secondary flex-1">Отмена</button><button type="button" onClick={confirmBuy} className="btn-primary flex-1">Подтвердить покупку</button></div>
+        {buyError && <div role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2 mb-3">{buyError}</div>}
+        <div className="flex gap-2"><button type="button" disabled={buyConfirming} onClick={() => { setBuying(null); setBuyError(null) }} className="btn-secondary flex-1">Отмена</button><button type="button" disabled={buyConfirming} onClick={confirmBuy} className="btn-primary flex-1">{buyConfirming ? 'Подтверждение…' : 'Подтвердить покупку'}</button></div>
       </Modal>
     </div>
   )

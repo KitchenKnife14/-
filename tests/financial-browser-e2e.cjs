@@ -31,6 +31,12 @@ let sequence = 0
 let transactionInsertRequests = 0
 let transactionDeleteDelayMs = 0
 let transactionDeleteError = null
+let purchaseConfirmDelayMs = 0
+let purchaseConfirmError = null
+let purchaseConfirmRequests = 0
+let recurringConfirmDelayMs = 0
+let recurringConfirmError = null
+let recurringConfirmRequests = 0
 let transactionReadDelayMs = 0
 let transactionReadError = null
 let notificationReadDelayMs = 0
@@ -209,6 +215,8 @@ function rpc(name, params) {
     return { goal_id: goalId, purchase_id: purchaseId }
   }
   if (name === 'confirm_planned_purchase') {
+    purchaseConfirmRequests++
+    if (purchaseConfirmError) throw new Error(purchaseConfirmError)
     const purchase = state.planned_purchases.find(row => row.id === params.p_purchase_id)
     if (!purchase) throw new Error('Планируемая покупка не найдена')
     const transactionId = 'purchase_' + purchase.id
@@ -236,6 +244,8 @@ function rpc(name, params) {
     return { transaction_id: transactionId }
   }
   if (name === 'confirm_recurring_payment') {
+    recurringConfirmRequests++
+    if (recurringConfirmError) throw new Error(recurringConfirmError)
     const recurring = state.recurring_payments.find(row => row.id === params.p_recurring_id)
     if (!recurring) throw new Error('Регулярный платёж не найден')
     const dueDate = params.p_expected_due_date
@@ -306,6 +316,8 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'delete')
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'delete'
         if (transactionDeletes && transactionDeleteDelayMs > 0) await new Promise(resolve => setTimeout(resolve, transactionDeleteDelayMs))
+        if (payload.action === 'rpc' && payload.name === 'confirm_planned_purchase' && purchaseConfirmDelayMs > 0) await new Promise(resolve => setTimeout(resolve, purchaseConfirmDelayMs))
+        if (payload.action === 'rpc' && payload.name === 'confirm_recurring_payment' && recurringConfirmDelayMs > 0) await new Promise(resolve => setTimeout(resolve, recurringConfirmDelayMs))
         const result = payload.action === 'batch'
           ? (payload.requests || []).map(request => {
               try {
@@ -952,8 +964,24 @@ async function main() {
     const resumedRecurringCard = page.locator('.card').filter({ hasText: 'E2E интернет' }).first()
     await resumedRecurringCard.locator('button[title="Подтвердить оплату"]').click()
     const recurringConfirmDialog = page.getByRole('dialog')
+    recurringConfirmError = 'Тестовая ошибка подтверждения регулярного платежа'
     await recurringConfirmDialog.getByRole('button', { name: 'Подтвердить' }).click()
+    await recurringConfirmDialog.getByRole('alert').getByText(recurringConfirmError).waitFor()
+    assert.equal(await page.getByRole('dialog').count(), 1, 'a failed recurring confirmation must keep its dialog open')
+    assert.equal(state.transactions.length, 1, 'a failed recurring confirmation must not create a transaction')
+    recurringConfirmError = null
+    recurringConfirmDelayMs = 400
+    const recurringRequestsBefore = recurringConfirmRequests
+    const recurringConfirmButton = recurringConfirmDialog.getByRole('button', { name: 'Подтвердить' })
+    await recurringConfirmButton.evaluate(button => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await recurringConfirmDialog.getByRole('button', { name: 'Подтверждение…' }).waitFor()
+    assert.equal(await recurringConfirmDialog.getByRole('button', { name: 'Отмена' }).isDisabled(), true, 'recurring confirmation cancel must be disabled while pending')
     await page.getByRole('dialog').waitFor({ state: 'detached' })
+    assert.equal(recurringConfirmRequests - recurringRequestsBefore, 1, 'rapid recurring confirmation clicks must send one RPC')
+    recurringConfirmDelayMs = 0
     assert.equal(state.transactions.length, 2, 'confirming a recurring payment must create one operation')
     assert.equal(state.transactions[1].id, 'recurring_' + state.recurring_payments[0].id + '_2026-11-18')
     assert.equal(state.transactions[1].amount_kopecks, 1234)
@@ -1012,8 +1040,24 @@ async function main() {
     await editedPurchaseCard.locator('button[title="Отметить купленным"]').click()
     const purchaseConfirmDialog = page.getByRole('dialog')
     await purchaseConfirmDialog.getByLabel('Списать со счёта').selectOption('account-cash')
+    purchaseConfirmError = 'Тестовая ошибка подтверждения покупки'
     await purchaseConfirmDialog.getByRole('button', { name: 'Подтвердить покупку' }).click()
+    await purchaseConfirmDialog.getByRole('alert').getByText(purchaseConfirmError).waitFor()
+    assert.equal(await page.getByRole('dialog').count(), 1, 'a failed purchase confirmation must keep its dialog open')
+    assert.equal(state.transactions.length, 2, 'a failed purchase confirmation must not create a transaction')
+    purchaseConfirmError = null
+    purchaseConfirmDelayMs = 400
+    const purchaseRequestsBefore = purchaseConfirmRequests
+    const purchaseConfirmButton = purchaseConfirmDialog.getByRole('button', { name: 'Подтвердить покупку' })
+    await purchaseConfirmButton.evaluate(button => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await purchaseConfirmDialog.getByRole('button', { name: 'Подтверждение…' }).waitFor()
+    assert.equal(await purchaseConfirmDialog.getByRole('button', { name: 'Отмена' }).isDisabled(), true, 'purchase confirmation cancel must be disabled while pending')
     await page.getByRole('dialog').waitFor({ state: 'detached' })
+    assert.equal(purchaseConfirmRequests - purchaseRequestsBefore, 1, 'rapid purchase confirmation clicks must send one RPC')
+    purchaseConfirmDelayMs = 0
     await page.locator('.badge').filter({ hasText: 'Куплено' }).waitFor()
     assert.equal(state.planned_purchases[0].status, 'bought')
     assert.equal(state.planned_purchases[0].linked_transaction_id, 'purchase_' + state.planned_purchases[0].id)
