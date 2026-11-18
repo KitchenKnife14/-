@@ -74,7 +74,7 @@ export default function GoalsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Финансовые цели</h1>
-        <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Цель</button>
+        <button type="button" onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Цель</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
@@ -83,7 +83,7 @@ export default function GoalsPage() {
         <select aria-label="Фильтр по приоритету цели" className="input" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}><option value="all">Любой приоритет</option><option value="1">Высокий</option><option value="2">Выше среднего</option><option value="3">Обычный</option><option value="4">Низкий</option><option value="5">Минимальный</option></select>
         <select aria-label="Фильтр по участнику цели" className="input" value={participantFilter} onChange={(e) => setParticipantFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
       </div>
-      {(search || statusFilter !== 'all' || priorityFilter !== 'all' || participantFilter) && <button onClick={() => { setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setParticipantFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
+      {(search || statusFilter !== 'all' || priorityFilter !== 'all' || participantFilter) && <button type="button" onClick={() => { setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setParticipantFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
       {!loading && !error && goals.filter((g) => g.status === 'active').length > 0 && (
         <div className="card bg-primary-50 border-primary-100">
           <div className="text-sm text-primary-700">Общий прогресс по активным целям</div>
@@ -124,13 +124,13 @@ export default function GoalsPage() {
                     </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
-                    {g.status === 'active' && <button onClick={() => setContribGoal(g)} className="btn-ghost px-2 text-accent-600" title="Пополнить"><Plus size={16} /></button>}
-                    <button onClick={() => showHistory(g)} className="btn-ghost px-2" title="История"><History size={16} /></button>
-                    {g.status === 'active' && <button onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Пауза"><Pause size={16} /></button>}
-                    {g.status === 'paused' && <button onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Возобновить"><Play size={16} /></button>}
-                    {g.status !== 'done' && remaining <= 0 && <button onClick={() => markDone(g)} className="btn-ghost px-2 text-accent-600" title="Отметить достигнутой"><Check size={16} /></button>}
-                    <button onClick={() => { setEditing(g); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
-                    <button onClick={() => remove(g)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                    {g.status === 'active' && <button type="button" onClick={() => setContribGoal(g)} className="btn-ghost px-2 text-accent-600" title="Пополнить"><Plus size={16} /></button>}
+                    <button type="button" onClick={() => showHistory(g)} className="btn-ghost px-2" title="История"><History size={16} /></button>
+                    {g.status === 'active' && <button type="button" onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Пауза"><Pause size={16} /></button>}
+                    {g.status === 'paused' && <button type="button" onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Возобновить"><Play size={16} /></button>}
+                    {g.status !== 'done' && remaining <= 0 && <button type="button" onClick={() => markDone(g)} className="btn-ghost px-2 text-accent-600" title="Отметить достигнутой"><Check size={16} /></button>}
+                    <button type="button" onClick={() => { setEditing(g); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
+                    <button type="button" onClick={() => remove(g)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                   </div>
                 </div>
                 </div>

@@ -80,13 +80,13 @@ export default function BudgetsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Бюджеты</h1>
-        <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Бюджет</button>
+        <button type="button" onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Бюджет</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
+        <button type="button" onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
         <div className="font-medium text-slate-700">{monthLabel(cursor.year, cursor.month)}</div>
-        <button onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
+        <button type="button" onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
       </div>
 
       {!loading && !error && budgets.length > 0 && (
@@ -114,8 +114,8 @@ export default function BudgetsPage() {
                   <div className="flex items-center gap-2"><span className="text-lg">{cat?.icon ?? '📦'}</span><span className="text-sm font-medium text-slate-900">{cat?.name ?? 'Категория'}</span></div>
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-semibold ${getTextColor(pct)}`}>{formatRubles(spent)} / {formatRubles(b.limit_kopecks)}</span>
-                    <button onClick={() => { setEditing(b); setShowForm(true) }} className="btn-ghost px-2"><Pencil size={14} /></button>
-                    <button onClick={() => remove(b)} className="btn-ghost px-2 text-danger-600"><Trash2 size={14} /></button>
+                    <button type="button" onClick={() => { setEditing(b); setShowForm(true) }} className="btn-ghost px-2"><Pencil size={14} /></button>
+                    <button type="button" onClick={() => remove(b)} className="btn-ghost px-2 text-danger-600"><Trash2 size={14} /></button>
                   </div>
                 </div>
                 <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${getBarColor(pct)}`} style={{ width: `${Math.min(pct, 100)}%` }} /></div>

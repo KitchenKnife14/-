@@ -92,7 +92,7 @@ export default function PurchasesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Планируемые покупки</h1>
-        <button onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Добавить</button>
+        <button type="button" onClick={() => { setEditing(null); setShowForm(true) }} className="btn-primary"><Plus size={18} /> Добавить</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex flex-wrap gap-2">
@@ -134,9 +134,9 @@ export default function PurchasesPage() {
                   </div>
                   <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(p.estimated_kopecks)}</div>
                   <div className="flex gap-1 flex-shrink-0">
-                    {p.status !== 'bought' && <button onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
-                    <button onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
-                    <button onClick={() => remove(p)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                    {p.status !== 'bought' && <button type="button" onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
+                    <button type="button" onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
+                    <button type="button" onClick={() => remove(p)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                   </div>
                 </div>
               </div>
@@ -149,7 +149,7 @@ export default function PurchasesPage() {
         <p className="text-sm text-slate-600 mb-2">Будет создан фактический расход на сумму <strong>{formatRubles(buying?.estimated_kopecks ?? 0)}</strong>. Покупка получит статус «Куплено».</p>
         <p className="text-xs text-slate-400 mb-3">Расход не будет учтён дважды — он заменит плановую стоимость, а не добавится поверх.</p>
         <div className="mb-4"><label className="label" htmlFor="purchase-buy-account">Списать со счёта</label><select id="purchase-buy-account" className="input" value={buyAccountId} onChange={(e) => setBuyAccountId(e.target.value)}><option value="">Не учитывать в остатках счетов</option>{accounts.filter((a) => !a.archived).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-        <div className="flex gap-2"><button onClick={() => setBuying(null)} className="btn-secondary flex-1">Отмена</button><button onClick={confirmBuy} className="btn-primary flex-1">Подтвердить покупку</button></div>
+        <div className="flex gap-2"><button type="button" onClick={() => setBuying(null)} className="btn-secondary flex-1">Отмена</button><button type="button" onClick={confirmBuy} className="btn-primary flex-1">Подтвердить покупку</button></div>
       </Modal>
     </div>
   )

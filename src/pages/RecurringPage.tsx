@@ -77,7 +77,7 @@ export default function RecurringPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Регулярные платежи</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary"><Plus size={18} /> Добавить</button>
+        <button type="button" onClick={() => setShowForm(true)} className="btn-primary"><Plus size={18} /> Добавить</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       {!loading && !error && overdue.length > 0 && <div className="card bg-warn-50 border-warn-100"><div className="text-sm font-medium text-warn-600">Просроченные платежи ({overdue.length})</div><div className="text-xs text-slate-500 mt-1">Подтвердите оплату, чтобы создать операцию и перенести дату.</div></div>}
@@ -95,7 +95,7 @@ export default function RecurringPage() {
       <Modal open={!!confirming} onClose={() => setConfirming(null)} title="Подтвердить платёж?">
         <p className="text-sm text-slate-600 mb-2">Будет создана операция на сумму <strong>{formatRubles(confirming?.amount_kopecks ?? 0)}</strong> за сегодня. Дата следующего платежа будет перенесена.</p>
         <p className="text-xs text-slate-400 mb-4">Платёж не дублируется автоматически — только ручное подтверждение.</p>
-        <div className="flex gap-2"><button onClick={() => setConfirming(null)} className="btn-secondary flex-1">Отмена</button><button onClick={confirmPayment} className="btn-primary flex-1">Подтвердить</button></div>
+        <div className="flex gap-2"><button type="button" onClick={() => setConfirming(null)} className="btn-secondary flex-1">Отмена</button><button type="button" onClick={confirmPayment} className="btn-primary flex-1">Подтвердить</button></div>
       </Modal>
     </div>
   )
@@ -121,9 +121,9 @@ function Section({ title, items, catMap, accountMap, memberProfiles, onConfirm, 
                 </div>
                 <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(r.amount_kopecks)}</div>
                 <div className="flex gap-1 flex-shrink-0">
-                  {r.active && <button onClick={() => onConfirm(r)} className="btn-ghost px-2 text-accent-600" title="Подтвердить оплату"><Check size={16} /></button>}
-                  <button onClick={() => onToggle(r)} className="btn-ghost px-2" title={r.active ? 'Пауза' : 'Возобновить'}>{r.active ? <Pause size={16} /> : <Play size={16} />}</button>
-                  <button onClick={() => onRemove(r)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                  {r.active && <button type="button" onClick={() => onConfirm(r)} className="btn-ghost px-2 text-accent-600" title="Подтвердить оплату"><Check size={16} /></button>}
+                  <button type="button" onClick={() => onToggle(r)} className="btn-ghost px-2" title={r.active ? 'Пауза' : 'Возобновить'}>{r.active ? <Pause size={16} /> : <Play size={16} />}</button>
+                  <button type="button" onClick={() => onRemove(r)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
                 </div>
               </div>
             </div>
