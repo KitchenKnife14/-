@@ -4089,3 +4089,12 @@ HEAD до:
 - GitHub Actions run [44261190332 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44261190332) на точном HEAD `c1531a4f5e26dfff3f3515e86113da68441e7501`: все 28 основных шагов PASS, включая Chromium install, Browser E2E, Financial CRUD/transfer E2E, All regression tests, Apps Script syntax checks и manifest validation.
 - Закрыт один критерий этапа 5: disabled-состояния и защита от повторного клика. Новый активный счётчик: **178/227 (78,4%)**, открыто 49; этапы 0–6: **164/210**, UX-01: **10/13**, FC-14: **4/4**. Макроэтапы без изменения: **4/12 (33,3%)**.
 - Изменения только в ветке `ispravleniya`. `main`, Production, Apps Script deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
+
+
+### 2026-11-18 — UX: ошибка загрузки операций не маскируется пустым списком
+
+- В `TransactionsPage.tsx` пустое состояние теперь показывается только при успешной загрузке без записей. При ошибке загрузки остаётся сообщение об ошибке; пустой список не выдаётся за подтверждённое отсутствие операций.
+- В `tests/financial-browser-e2e.cjs` добавлена проверка: при ошибке чтения операций текст «Операций за этот месяц нет.» не отображается; после восстановления чтения пустое состояние снова доступно.
+- CI [44264560568 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44264560568) на точном HEAD `3d7bc88bd4b79a7d498bdaa98d9253c58cc17d3e`: все 31/31 шага workflow завершились успешно, включая production build, preview smoke, Chromium install, Browser E2E, Financial CRUD/transfer E2E, All regression tests и Apps Script syntax/manifest checks.
+- Это подтверждает исправление на странице «Операции», но составной критерий UX-01 «состояния загрузки, ошибки, пустых списков и медленного соединения» пока не закрыт: аналогичные состояния остальных страниц и разные сценарии медленного соединения ещё не проверены. Поэтому счётчик намеренно не меняется: **178/227 (78,4%)**, открыто 49; этапы 0–6: **164/210**, UX-01: **10/13**, FC-14: **4/4**. Макроэтапы: **4/12 (33,3%)**.
+- Изменены только `TransactionsPage.tsx`, `tests/financial-browser-e2e.cjs` и этот журнал в ветке `ispravleniya`. `main`, Production, Apps Script, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
