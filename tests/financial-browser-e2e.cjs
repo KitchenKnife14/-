@@ -34,6 +34,8 @@ let notificationReadDelayMs = 0
 let notificationReadError = null
 let monthlyPlanReadDelayMs = 0
 let monthlyPlanReadError = null
+let accountReadDelayMs = 0
+let accountReadError = null
 let transactionReadRequests = 0
 let tableRevisions = { transactions: 1, accounts: 1 }
 let revisionReadRequests = 0
@@ -286,6 +288,7 @@ async function main() {
                 if (request.action === 'query' && request.table === 'transactions' && request.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
                 if (request.action === 'query' && request.table === 'notifications' && request.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                 if (request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
+                if (request.action === 'query' && request.table === 'accounts' && request.mode === 'select' && accountReadError) throw new Error(accountReadError)
                 return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null }
               } catch (error) { return { data: null, error: { message: String(error.message || error) } } }
             })
@@ -296,6 +299,7 @@ async function main() {
                   if (payload.table === 'transactions' && payload.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
                   if (payload.table === 'notifications' && payload.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                   if (payload.table === 'monthly_plans' && payload.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
+                  if (payload.table === 'accounts' && payload.mode === 'select' && accountReadError) throw new Error(accountReadError)
                   return query(payload)
                 })()
               : null
@@ -312,6 +316,10 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'monthly_plans' && payload.mode === 'select'
         if (monthlyPlanReads && monthlyPlanReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, monthlyPlanReadDelayMs))
+        const accountReads = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'accounts' && request.mode === 'select')
+          : payload.action === 'query' && payload.table === 'accounts' && payload.mode === 'select'
+        if (accountReads && accountReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, accountReadDelayMs))
         const transactionInserts = payload.action === 'batch'
           ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert' ? 1 : 0
@@ -326,6 +334,28 @@ async function main() {
       }
     })
     const page = await context.newPage()
+
+    // Accounts must not show a fabricated zero balance while data is loading or after a failed read.
+    accountReadDelayMs = 400
+    const accountsNavigation = page.goto(baseUrl + '/accounts', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общий остаток активных счетов', { exact: true }).count(), 0, 'accounts total must stay hidden during loading')
+    await accountsNavigation
+    await page.getByRole('heading', { name: 'Счета' }).waitFor()
+    await page.getByText('Счетов пока нет. Создайте первый счёт.', { exact: true }).waitFor()
+    await page.getByText('Общий остаток активных счетов', { exact: true }).waitFor()
+    accountReadDelayMs = 0
+    accountReadError = 'Тестовая ошибка загрузки счетов'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/accounts', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка загрузки счетов', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общий остаток активных счетов', { exact: true }).count(), 0, 'accounts total must stay hidden after a failed read')
+    assert.equal(await page.getByText('Счетов пока нет. Создайте первый счёт.', { exact: true }).count(), 0, 'a failed accounts read must not be presented as an empty list')
+    accountReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/accounts', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Счетов пока нет. Создайте первый счёт.', { exact: true }).waitFor()
+    await page.getByText('Общий остаток активных счетов', { exact: true }).waitFor()
 
     transactionReadDelayMs = 400
     const initialNavigation = page.goto(baseUrl + '/transactions', { waitUntil: 'domcontentloaded' })
