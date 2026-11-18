@@ -103,10 +103,10 @@ export default function PurchasesPage() {
           <option value="all">Все статусы</option>{Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </div>
-      {filtered.length > 0 && (
+      {!loading && !error && filtered.length > 0 && (
         <div className="card bg-primary-50 border-primary-100"><div className="text-sm text-primary-700">Общая стоимость запланированных покупок</div><div className="text-lg font-semibold text-slate-900 mt-1">{formatRubles(totalEstimated)}</div></div>
       )}
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : sorted.length === 0 ? (
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : sorted.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500">Покупок пока нет. Добавьте товары, которые планируете купить.</div>
       ) : (
         <div className="space-y-2">
