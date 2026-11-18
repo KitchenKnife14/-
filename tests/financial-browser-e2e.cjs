@@ -276,8 +276,11 @@ async function main() {
             : payload.action === 'query'
               ? query(payload)
               : null
-        if (payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert') {
-          transactionInsertRequests++
+        const transactionInserts = payload.action === 'batch'
+          ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
+          : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert' ? 1 : 0
+        if (transactionInserts) {
+          transactionInsertRequests += transactionInserts
           await new Promise(resolve => setTimeout(resolve, 250))
         }
         sequence++
@@ -315,13 +318,13 @@ async function main() {
     await page.getByLabel('Категория').selectOption('category-food')
     await page.getByRole('textbox', { name: 'Описание' }).fill('E2E расход')
     const saveTransactionButton = page.getByRole('button', { name: 'Сохранить' })
+    const saveTransactionButtonElement = await saveTransactionButton.elementHandle()
     await saveTransactionButton.click()
-    await assert.doesNotReject(() => saveTransactionButton.waitFor({ state: 'visible' }))
     await page.waitForFunction(() => {
       const button = [...document.querySelectorAll('button')].find(element => element.textContent?.trim() === 'Сохранение…')
       return Boolean(button?.disabled)
     }, null, { timeout: 2000 })
-    await saveTransactionButton.evaluate(button => button.click())
+    await saveTransactionButtonElement.evaluate(button => button.click())
     await page.getByText('E2E расход', { exact: true }).waitFor()
     assert.equal(transactionInsertRequests, 1, 'a pending transaction save must reject a repeated click')
     assert.equal(state.transactions.length, 1)
