@@ -343,13 +343,17 @@ async function main() {
     await page.getByRole('heading', { name: 'Деньги дома. Спокойно, вместе.' }).waitFor()
     await page.getByText('Пока нет операций за этот месяц', { exact: true }).waitFor()
     transactionReadDelayMs = 0
+    const dashboardRevisionBaseline = revisionReadRequests
+    const dashboardRevisionDeadline = Date.now() + 3000
+    while (revisionReadRequests === dashboardRevisionBaseline && Date.now() < dashboardRevisionDeadline) await new Promise(resolve => setTimeout(resolve, 20))
+    assert.ok(revisionReadRequests > dashboardRevisionBaseline, 'dashboard realtime subscription must initialize before failure injection')
     transactionReadError = 'Тестовая ошибка главной страницы'
-    await page.reload({ waitUntil: 'domcontentloaded' })
+    tableRevisions.transactions++
     await page.getByText('Тестовая ошибка главной страницы', { exact: true }).waitFor()
     assert.equal(await page.getByRole('region', { name: 'Итоги месяца' }).count(), 0, 'dashboard must not show zero totals when financial data failed to load')
     assert.equal(await page.getByText('Пока нет операций за этот месяц', { exact: true }).count(), 0, 'dashboard must not present a failed load as an empty month')
     transactionReadError = null
-    await page.reload({ waitUntil: 'domcontentloaded' })
+    tableRevisions.transactions++
     await page.getByText('Пока нет операций за этот месяц', { exact: true }).waitFor()
 
     // Calendar must not present failed transaction reads as an empty month/day.
