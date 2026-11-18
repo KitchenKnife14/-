@@ -1052,6 +1052,28 @@ async function main() {
     await page.getByText('Операций за выбранный месяц нет.', { exact: true }).waitFor()
     state.transactions = savedTransactions
 
+    // Notification icon actions must have useful accessible names and work from the keyboard.
+    state.notifications = [
+      { id: 'notification-keyboard', family_id: familyId, kind: 'system', title: 'Проверка клавиатуры', body: 'Тестовое уведомление', read: false, created_at: '2026-11-18T08:00:00.000Z' },
+    ]
+    await page.goto(baseUrl + '/notifications', { waitUntil: 'domcontentloaded' })
+    const notificationCard = page.locator('.card').filter({ hasText: 'Проверка клавиатуры' }).first()
+    const markNotificationRead = notificationCard.getByRole('button', { name: 'Отметить уведомление «Проверка клавиатуры» прочитанным' })
+    const deleteNotification = notificationCard.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' })
+    await markNotificationRead.waitFor()
+    await deleteNotification.waitFor()
+    await markNotificationRead.focus()
+    await page.keyboard.press('Enter')
+    await page.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' }).waitFor()
+    assert.equal(state.notifications[0].read, true, 'keyboard activation must mark the selected notification as read')
+    const refreshedNotificationCard = page.locator('.card').filter({ hasText: 'Проверка клавиатуры' }).first()
+    const focusedDeleteNotification = refreshedNotificationCard.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' })
+    await focusedDeleteNotification.focus()
+    await page.keyboard.press('Enter')
+    await page.getByText('Проверка клавиатуры', { exact: true }).waitFor({ state: 'detached' })
+    assert.equal(state.notifications.length, 0, 'keyboard activation must delete only the selected notification')
+    state.notifications = []
+
     // Telegram: a delayed or failed status lookup must not be mistaken for an unlinked account.
     telegramStatusDelayMs = 400
     const telegramNavigation = page.goto(baseUrl + '/telegram', { waitUntil: 'domcontentloaded' })
