@@ -195,6 +195,18 @@ async function main() {
     await authPage.getByRole('button', { name: 'Закрыть' }).click()
     await authPage.setViewportSize({ width: 390, height: 844 })
 
+    // The mobile More disclosure supports keyboard opening, initial focus, Escape, and focus return.
+    await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
+    const moreTrigger = authPage.getByRole('button', { name: 'Открыть дополнительные разделы' })
+    await moreTrigger.focus()
+    await moreTrigger.press('Enter')
+    const keyboardMoreLinks = authPage.getByRole('navigation', { name: 'Дополнительная навигация' }).getByRole('link')
+    await keyboardMoreLinks.first().waitFor()
+    assert.equal(await keyboardMoreLinks.first().evaluate(element => element === document.activeElement), true, 'opening the More menu must move focus to its first link')
+    await authPage.keyboard.press('Escape')
+    assert.equal(await authPage.getByRole('navigation', { name: 'Дополнительная навигация' }).count(), 0, 'Escape must close the More menu')
+    assert.equal(await moreTrigger.evaluate(element => element === document.activeElement), true, 'closing the More menu must restore focus to its trigger')
+
     // Exercise the mobile More menu, invite code, Telegram destination, and logout.
     await authPage.goto(baseUrl, { waitUntil: 'networkidle' })
     await authPage.getByRole('button', { name: 'Открыть дополнительные разделы' }).click()
