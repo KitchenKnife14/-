@@ -169,7 +169,7 @@ export default function TransactionsPage() {
 
       {loading ? (
         <div className="text-sm text-slate-400">Загрузка…</div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && !error ? (
         <div className="card text-center py-8 text-sm text-slate-500">Операций за этот месяц нет.</div>
       ) : (
         <div className="space-y-2">

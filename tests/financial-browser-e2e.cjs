@@ -313,6 +313,7 @@ async function main() {
     transactionReadError = 'Тестовая ошибка загрузки операций'
     await page.getByRole('button', { name: 'Следующий месяц' }).click()
     await page.getByText('Тестовая ошибка загрузки операций', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Операций за этот месяц нет.', { exact: true }).count(), 0, 'a failed load must not be presented as an empty month')
     transactionReadError = null
     await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
     await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
