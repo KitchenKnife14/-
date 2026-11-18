@@ -29,6 +29,7 @@ let sequence = 0
 let transactionInsertRequests = 0
 let transactionReadDelayMs = 0
 let transactionReadError = null
+let transactionReadRequests = 0
 let tableRevision = 1
 let revisionReadRequests = 0
 
@@ -292,6 +293,7 @@ async function main() {
         const transactionReads = payload.action === 'batch'
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'select'
+        if (transactionReads) transactionReadRequests++
         if (transactionReads && transactionReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, transactionReadDelayMs))
         const transactionInserts = payload.action === 'batch'
           ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
@@ -333,6 +335,7 @@ async function main() {
     const revisionDeadline = Date.now() + 3000
     while (revisionReadRequests < 1 && Date.now() < revisionDeadline) await new Promise(resolve => setTimeout(resolve, 20))
     assert.ok(revisionReadRequests > 0, 'realtime subscription must read the initial table revision')
+    const transactionReadsBeforeRealtime = transactionReadRequests
     const nextMonth = new Date()
     nextMonth.setUTCDate(15)
     nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1)
@@ -344,7 +347,10 @@ async function main() {
       responsible_user_id: userId, planned: false, parent_recurring_id: null,
     })
     tableRevision++
-    await page.getByText('Обновление после подписки', { exact: true }).waitFor({ timeout: 5000 })
+    const refreshDeadline = Date.now() + 7000
+    while (transactionReadRequests <= transactionReadsBeforeRealtime && Date.now() < refreshDeadline) await new Promise(resolve => setTimeout(resolve, 20))
+    assert.ok(transactionReadRequests > transactionReadsBeforeRealtime, `revision change must trigger a fresh transactions read (revision reads: ${revisionReadRequests}, transaction reads: ${transactionReadRequests})`)
+    await page.getByText('Обновление после подписки', { exact: true }).waitFor({ timeout: 2000 })
     assert.equal(state.transactions[0].operation_date, nextMonthDate)
     await page.getByLabel('Поиск операций').fill('')
     await page.getByLabel('Фильтр по типу операции').selectOption('all')
