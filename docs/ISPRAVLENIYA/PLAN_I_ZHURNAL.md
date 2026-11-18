@@ -4166,3 +4166,15 @@ HEAD до:
 - CI [44272821146 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44272821146) на точном HEAD 958c16fefc72a9a0a7011c363cd290f17e2f72ff: production build, preview smoke, browser smoke, Financial CRUD/transfer browser E2E, All regression tests и Apps Script syntax/manifest checks — PASS; workflow завершился SUCCESS.
 - Счётчик не меняется: UX-01 — составной критерий, для которого ещё не завершены проверки остальных экранов, контраста, клавиатурной навигации, VoiceOver и реального iPhone. Общий прогресс **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
 - Изменены GoalsPage.tsx, financial-browser-e2e.cjs и этот журнал в ветке ispravleniya. main, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
+
+
+### 2026-11-18 — UX-01: состояния загрузки бюджетов, покупок и регулярных платежей
+
+- BudgetsPage.tsx: общая сводка бюджета скрывается до успешной загрузки; ошибка больше не маскируется под пустой список.
+- PurchasesPage.tsx: общая оценка стоимости покупок скрывается до успешной загрузки; пустое состояние не показывается при ошибке.
+- RecurringPage.tsx: сводка просроченных платежей и пустое состояние скрыты при загрузке/ошибке; при успешном пустом ответе штатное сообщение остаётся.
+- В tests/financial-browser-e2e.cjs добавлены независимые задержки 400 мс и внедрение ошибок чтения для budgets, planned_purchases и recurring_payments. E2E проверяет индикатор загрузки, отсутствие сводных карточек/ложных пустых состояний, корректный пустой результат и восстановление после повторной загрузки.
+- Первый общий E2E run [44273760237](https://github.com/KitchenKnife14/-/actions/runs/44273760237) выявил неточность селектора Playwright для карточки «Общий бюджет» (текст находился в нескольких элементах). Селектор уточнён до карточки `.card`; продуктовый код не менялся в ответ на этот сбой.
+- Финальный GitHub Actions [44274024490 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44274024490) на точном HEAD `51fa3576d7ced792a08e41e82d02bc58d191b2df`: TypeScript/production build, preview smoke, browser smoke, Financial CRUD/transfer browser E2E, All regression tests, Apps Script syntax/runtime/concurrency checks и manifest validation — все шаги PASS.
+- Прогресс чек-листа не увеличен: UX-01 — составной критерий по всем применимым экранам и доступности. Проверки задержки/ошибки/пустого ответа теперь дополнены для бюджетов, покупок и регулярных платежей, но полный охват экранов, контраст, клавиатура, VoiceOver и реальный iPhone ещё не подтверждены. Контрольный счётчик остаётся **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
+- Изменены BudgetsPage.tsx, PurchasesPage.tsx, RecurringPage.tsx, financial-browser-e2e.cjs и этот журнал в ветке `ispravleniya`. `main`, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
