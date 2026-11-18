@@ -18,6 +18,7 @@ const state = {
     { id: 'category-salary', family_id: familyId, name: 'Зарплата', kind: 'income', icon: '💼', archived: false, parent_id: null },
   ],
   transactions: [],
+  notifications: [],
   recurring_payments: [],
   planned_purchases: [],
   budgets: [],
