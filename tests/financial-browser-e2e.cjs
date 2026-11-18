@@ -33,6 +33,7 @@ let transactionReadDelayMs = 0
 let transactionReadError = null
 let notificationReadDelayMs = 0
 let notificationReadError = null
+let notificationWriteDelayMs = 0
 let monthlyPlanReadDelayMs = 0
 let monthlyPlanReadError = null
 let accountReadDelayMs = 0
@@ -339,6 +340,10 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'notifications' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'notifications' && payload.mode === 'select'
         if (notificationReads && notificationReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, notificationReadDelayMs))
+        const notificationWrites = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'notifications' && ['update', 'delete'].includes(request.mode))
+          : payload.action === 'query' && payload.table === 'notifications' && ['update', 'delete'].includes(payload.mode)
+        if (notificationWrites && notificationWriteDelayMs > 0) await new Promise(resolve => setTimeout(resolve, notificationWriteDelayMs))
         const monthlyPlanReads = payload.action === 'batch'
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'monthly_plans' && payload.mode === 'select'
@@ -1091,9 +1096,14 @@ async function main() {
     const deleteNotification = notificationCard.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' })
     await markNotificationRead.waitFor()
     await deleteNotification.waitFor()
+    notificationWriteDelayMs = 350
     await markNotificationRead.focus()
     await page.keyboard.press('Enter')
-    await markNotificationRead.waitFor({ state: 'detached' })
+    await page.getByRole('button', { name: 'Отметить уведомление «Проверка клавиатуры» прочитанным' }).waitFor({ state: 'attached' })
+    assert.equal(await page.getByRole('button', { name: 'Отметить уведомление «Проверка клавиатуры» прочитанным' }).isDisabled(), true, 'notification action must disable while its update is pending')
+    assert.equal(await page.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' }).isDisabled(), true, 'other action for the same notification must disable while an update is pending')
+    await page.getByRole('button', { name: 'Отметить уведомление «Проверка клавиатуры» прочитанным' }).waitFor({ state: 'detached' })
+    notificationWriteDelayMs = 0
     await page.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' }).waitFor()
     assert.equal(state.notifications[0].read, true, 'keyboard activation must mark the selected notification as read')
     const refreshedNotificationCard = page.locator('.card').filter({ hasText: 'Проверка клавиатуры' }).first()

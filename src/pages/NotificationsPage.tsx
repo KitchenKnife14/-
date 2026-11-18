@@ -14,6 +14,21 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set())
+  const pendingIdsRef = useRef(new Set<string>())
+  const [markingAllRead, setMarkingAllRead] = useState(false)
+  const markingAllReadRef = useRef(false)
+
+  const beginItemAction = (id: string) => {
+    if (markingAllReadRef.current || pendingIdsRef.current.has(id)) return false
+    pendingIdsRef.current.add(id)
+    setPendingIds(new Set(pendingIdsRef.current))
+    return true
+  }
+  const finishItemAction = (id: string) => {
+    pendingIdsRef.current.delete(id)
+    setPendingIds(new Set(pendingIdsRef.current))
+  }
 
   const load = useCallback(async () => {
     if (!familyId) return
@@ -43,16 +58,48 @@ export default function NotificationsPage() {
   }, [familyId, load])
 
 
-  const markRead = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('id', n.id).expect(n as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
-  const markAllRead = async () => {
-    if (!family) return
-    const unread = items.filter((n) => !n.read)
-    const results = await Promise.all(unread.map((n) => googleSheets.from('notifications').update({ read: true }).eq('id', n.id).expect(n as unknown as Record<string, unknown>)))
-    const conflicts = results.filter((result) => result.error)
-    if (conflicts.length) setError(`${conflicts.length} уведомлений изменились одновременно. Обновите список и повторите действие.`)
-    load()
+  const markRead = async (n: AppNotification) => {
+    if (n.read || !beginItemAction(n.id)) return
+    try {
+      const { error: err } = await googleSheets.from('notifications').update({ read: true }).eq('id', n.id).expect(n as unknown as Record<string, unknown>)
+      if (err) setError(err.message)
+      load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось обновить уведомление')
+    } finally {
+      finishItemAction(n.id)
+    }
   }
-  const remove = async (n: AppNotification) => { const { error: err } = await googleSheets.from('notifications').delete().eq('id', n.id).expect(n as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
+  const markAllRead = async () => {
+    if (!family || markingAllReadRef.current || pendingIdsRef.current.size > 0) return
+    const unread = items.filter((n) => !n.read)
+    if (unread.length === 0) return
+    markingAllReadRef.current = true
+    setMarkingAllRead(true)
+    try {
+      const results = await Promise.all(unread.map((n) => googleSheets.from('notifications').update({ read: true }).eq('id', n.id).expect(n as unknown as Record<string, unknown>)))
+      const conflicts = results.filter((result) => result.error)
+      if (conflicts.length) setError(`${conflicts.length} уведомлений изменились одновременно. Обновите список и повторите действие.`)
+      load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось обновить уведомления')
+    } finally {
+      markingAllReadRef.current = false
+      setMarkingAllRead(false)
+    }
+  }
+  const remove = async (n: AppNotification) => {
+    if (!beginItemAction(n.id)) return
+    try {
+      const { error: err } = await googleSheets.from('notifications').delete().eq('id', n.id).expect(n as unknown as Record<string, unknown>)
+      if (err) setError(err.message)
+      load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить уведомление')
+    } finally {
+      finishItemAction(n.id)
+    }
+  }
 
   const KIND_LABELS: Record<string, string> = {
     budget_warning: 'Предупреждение о бюджете', goal_progress: 'Прогресс цели', recurring_due: 'Повторяющийся платёж',
@@ -63,7 +110,7 @@ export default function NotificationsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Уведомления</h1>
-        {items.some((n) => !n.read) && <button type="button" onClick={markAllRead} className="btn-secondary"><Check size={16} /> Отметить все прочитанными</button>}
+        {items.some((n) => !n.read) && <button type="button" onClick={markAllRead} disabled={markingAllRead || pendingIds.size > 0} aria-busy={markingAllRead} className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"><Check size={16} /> Отметить все прочитанными</button>}
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
@@ -89,8 +136,8 @@ export default function NotificationsPage() {
                   <div className="text-xs text-slate-400 mt-1">{formatDateInMoscow(n.created_at)}</div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  {!n.read && <button type="button" onClick={() => markRead(n)} className="btn-ghost px-2" aria-label={`Отметить уведомление «${n.title}» прочитанным`} title="Прочитано"><Check size={16} /></button>}
-                  <button type="button" onClick={() => remove(n)} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить уведомление «${n.title}»`} title="Удалить"><Trash2 size={16} /></button>
+                  {!n.read && <button type="button" onClick={() => markRead(n)} disabled={markingAllRead || pendingIds.has(n.id)} aria-busy={pendingIds.has(n.id)} className="btn-ghost px-2 disabled:opacity-50 disabled:cursor-not-allowed" aria-label={`Отметить уведомление «${n.title}» прочитанным`} title="Прочитано"><Check size={16} /></button>}
+                  <button type="button" onClick={() => remove(n)} disabled={markingAllRead || pendingIds.has(n.id)} aria-busy={pendingIds.has(n.id)} className="btn-ghost px-2 text-danger-600 disabled:opacity-50 disabled:cursor-not-allowed" aria-label={`Удалить уведомление «${n.title}»`} title="Удалить"><Trash2 size={16} /></button>
                 </div>
               </div>
             </div>
