@@ -390,7 +390,7 @@ async function main() {
     budgetReadDelayMs = 400
     const budgetsNavigation = page.goto(baseUrl + '/budgets', { waitUntil: 'domcontentloaded' })
     await page.getByText('Загрузка…', { exact: true }).waitFor()
-    assert.equal(await page.getByText('Общий бюджет', { exact: true }).count(), 0, 'budget summary must stay hidden during loading')
+    assert.equal(await page.locator('.card').filter({ hasText: 'Общий бюджет' }).count(), 0, 'budget summary must stay hidden during loading')
     await budgetsNavigation
     await page.getByText('Бюджетов пока нет. Установите лимиты по категориям на месяц.', { exact: true }).waitFor()
     budgetReadDelayMs = 0
@@ -398,7 +398,7 @@ async function main() {
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
     await page.goto(baseUrl + '/budgets', { waitUntil: 'domcontentloaded' })
     await page.getByText('Тестовая ошибка загрузки бюджетов', { exact: true }).waitFor()
-    assert.equal(await page.getByText('Общий бюджет', { exact: true }).count(), 0, 'failed budget read must not show a summary')
+    assert.equal(await page.locator('.card').filter({ hasText: 'Общий бюджет' }).count(), 0, 'failed budget read must not show a summary')
     assert.equal(await page.getByText('Бюджетов пока нет. Установите лимиты по категориям на месяц.', { exact: true }).count(), 0, 'failed budget read must not show an empty state')
     budgetReadError = null
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
@@ -409,7 +409,7 @@ async function main() {
     purchaseReadDelayMs = 400
     const purchasesNavigation = page.goto(baseUrl + '/purchases', { waitUntil: 'domcontentloaded' })
     await page.getByText('Загрузка…', { exact: true }).waitFor()
-    assert.equal(await page.getByText('Общая стоимость запланированных покупок', { exact: true }).count(), 0, 'purchase total must stay hidden during loading')
+    assert.equal(await page.locator('.card').filter({ hasText: 'Общая стоимость запланированных покупок' }).count(), 0, 'purchase total must stay hidden during loading')
     await purchasesNavigation
     await page.getByText('Покупок пока нет. Добавьте товары, которые планируете купить.', { exact: true }).waitFor()
     purchaseReadDelayMs = 0
@@ -417,7 +417,7 @@ async function main() {
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
     await page.goto(baseUrl + '/purchases', { waitUntil: 'domcontentloaded' })
     await page.getByText('Тестовая ошибка загрузки покупок', { exact: true }).waitFor()
-    assert.equal(await page.getByText('Общая стоимость запланированных покупок', { exact: true }).count(), 0, 'failed purchase read must not show a total')
+    assert.equal(await page.locator('.card').filter({ hasText: 'Общая стоимость запланированных покупок' }).count(), 0, 'failed purchase read must not show a total')
     assert.equal(await page.getByText('Покупок пока нет. Добавьте товары, которые планируете купить.', { exact: true }).count(), 0, 'failed purchase read must not show an empty state')
     purchaseReadError = null
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
@@ -428,7 +428,7 @@ async function main() {
     recurringReadDelayMs = 400
     const recurringNavigation = page.goto(baseUrl + '/recurring', { waitUntil: 'domcontentloaded' })
     await page.getByText('Загрузка…', { exact: true }).waitFor()
-    assert.equal(await page.getByText(/Просроченные платежи/).count(), 0, 'overdue summary must stay hidden during loading')
+    assert.equal(await page.locator('.card').filter({ hasText: /Просроченные платежи/ }).count(), 0, 'overdue summary must stay hidden during loading')
     await recurringNavigation
     await page.getByText(/Регулярных платежей пока нет/).waitFor()
     recurringReadDelayMs = 0
@@ -436,7 +436,7 @@ async function main() {
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
     await page.goto(baseUrl + '/recurring', { waitUntil: 'domcontentloaded' })
     await page.getByText('Тестовая ошибка загрузки регулярных платежей', { exact: true }).waitFor()
-    assert.equal(await page.getByText(/Просроченные платежи/).count(), 0, 'failed recurring read must not show overdue summary')
+    assert.equal(await page.locator('.card').filter({ hasText: /Просроченные платежи/ }).count(), 0, 'failed recurring read must not show overdue summary')
     assert.equal(await page.getByText(/Регулярных платежей пока нет/).count(), 0, 'failed recurring read must not show an empty state')
     recurringReadError = null
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
