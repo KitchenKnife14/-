@@ -201,6 +201,27 @@ async function main() {
     const transactionDialog = authPage.getByRole('dialog', { name: 'Новая операция' })
     await transactionDialog.waitFor()
     assert.equal(await transactionDialog.evaluate(element => getComputedStyle(element).overflowY), 'auto', 'dialog content must scroll internally when it exceeds the viewport')
+
+    // Transaction type controls expose their selected state, and the dialog traps keyboard focus in both directions.
+    const typeGroup = transactionDialog.getByRole('group', { name: 'Тип операции' })
+    const expenseType = typeGroup.getByRole('button', { name: 'Расход' })
+    const incomeType = typeGroup.getByRole('button', { name: 'Доход' })
+    assert.equal(await expenseType.getAttribute('aria-pressed'), 'true', 'expense must be announced as the selected operation type')
+    assert.equal(await incomeType.getAttribute('aria-pressed'), 'false')
+    await incomeType.focus()
+    await authPage.keyboard.press('Enter')
+    assert.equal(await incomeType.getAttribute('aria-pressed'), 'true', 'keyboard activation must update the selected operation type')
+    await expenseType.focus()
+    await authPage.keyboard.press('Space')
+    assert.equal(await expenseType.getAttribute('aria-pressed'), 'true')
+
+    const dialogCloseButton = transactionDialog.getByRole('button', { name: 'Закрыть' })
+    const dialogSaveButton = transactionDialog.getByRole('button', { name: 'Сохранить' })
+    await dialogCloseButton.focus()
+    await authPage.keyboard.press('Shift+Tab')
+    assert.equal(await dialogSaveButton.evaluate(element => element === document.activeElement), true, 'Shift+Tab from the first control must wrap to the last dialog control')
+    await authPage.keyboard.press('Tab')
+    assert.equal(await dialogCloseButton.evaluate(element => element === document.activeElement), true, 'Tab from the last control must wrap to the first dialog control')
     for (const width of [390, 320]) {
       await authPage.setViewportSize({ width, height: 640 })
       const dialogBounds = await transactionDialog.evaluate(element => {
