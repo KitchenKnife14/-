@@ -29,6 +29,8 @@ let sequence = 0
 let transactionInsertRequests = 0
 let transactionReadDelayMs = 0
 let transactionReadError = null
+let tableRevision = 1
+let revisionReadRequests = 0
 
 function matches(row, filters = []) {
   return filters.every(filter => {
@@ -132,7 +134,7 @@ function rpc(name, params) {
     }
   }
   if (name === 'ensure_supplemental_categories') return { added: 0 }
-  if (name === 'get_table_revision') return String(sequence)
+  if (name === 'get_table_revision') { revisionReadRequests++; return String(tableRevision) }
   if (name === 'create_goal_with_purchase') {
     const goalId = 'goal_' + params.p_request_id
     let goal = state.goals.find(row => row.id === goalId)
@@ -256,6 +258,10 @@ async function main() {
     await waitForServer(baseUrl, server)
     browser = await chromium.launch({ headless: true })
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    await context.addInitScript(() => {
+      const nativeSetInterval = window.setInterval.bind(window)
+      window.setInterval = (handler, timeout, ...args) => nativeSetInterval(handler, timeout === 15000 ? 100 : timeout, ...args)
+    })
     await context.addInitScript(({ key, session }) => localStorage.setItem(key, JSON.stringify(session)), {
       key: 'budget_google_session_v1',
       session: {
@@ -315,6 +321,34 @@ async function main() {
     await page.getByText('Тестовая ошибка загрузки операций', { exact: true }).waitFor()
     assert.equal(await page.getByText('Операций за этот месяц нет.', { exact: true }).count(), 0, 'a failed load must not be presented as an empty month')
     transactionReadError = null
+    await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
+    await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
+
+    // Realtime refresh must use the latest month selection and keep current client-side filters.
+    await page.getByRole('button', { name: 'Следующий месяц' }).click()
+    await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
+    await page.getByLabel('Поиск операций').fill('Обновление после подписки')
+    await page.getByLabel('Фильтр по типу операции').selectOption('expense')
+    await page.getByLabel('Фильтр по категории операции').selectOption('category-food')
+    const revisionDeadline = Date.now() + 3000
+    while (revisionReadRequests < 1 && Date.now() < revisionDeadline) await new Promise(resolve => setTimeout(resolve, 20))
+    assert.ok(revisionReadRequests > 0, 'realtime subscription must read the initial table revision')
+    const nextMonth = new Date()
+    nextMonth.setUTCDate(15)
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1)
+    const nextMonthDate = nextMonth.toISOString().slice(0, 10)
+    state.transactions.push({
+      id: 'transaction-realtime-refresh', family_id: familyId, type: 'expense', amount_kopecks: 9876,
+      operation_date: nextMonthDate, operation_time: null, category_id: 'category-food', account_id: 'account-cash',
+      to_account_id: null, description: 'Обновление после подписки', created_by: userId, updated_by: userId,
+      responsible_user_id: userId, planned: false, parent_recurring_id: null,
+    })
+    tableRevision++
+    await page.getByText('Обновление после подписки', { exact: true }).waitFor({ timeout: 5000 })
+    assert.equal(state.transactions[0].operation_date, nextMonthDate)
+    await page.getByLabel('Поиск операций').fill('')
+    await page.getByLabel('Фильтр по типу операции').selectOption('all')
+    await page.getByLabel('Фильтр по категории операции').selectOption('')
     await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
     await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
 
