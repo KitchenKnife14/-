@@ -32,6 +32,8 @@ let transactionReadDelayMs = 0
 let transactionReadError = null
 let notificationReadDelayMs = 0
 let notificationReadError = null
+let monthlyPlanReadDelayMs = 0
+let monthlyPlanReadError = null
 let transactionReadRequests = 0
 let tableRevisions = { transactions: 1, accounts: 1 }
 let revisionReadRequests = 0
@@ -283,6 +285,7 @@ async function main() {
               try {
                 if (request.action === 'query' && request.table === 'transactions' && request.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
                 if (request.action === 'query' && request.table === 'notifications' && request.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
+                if (request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
                 return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null }
               } catch (error) { return { data: null, error: { message: String(error.message || error) } } }
             })
@@ -292,6 +295,7 @@ async function main() {
               ? (() => {
                   if (payload.table === 'transactions' && payload.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
                   if (payload.table === 'notifications' && payload.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
+                  if (payload.table === 'monthly_plans' && payload.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
                   return query(payload)
                 })()
               : null
@@ -304,6 +308,10 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'notifications' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'notifications' && payload.mode === 'select'
         if (notificationReads && notificationReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, notificationReadDelayMs))
+        const monthlyPlanReads = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select')
+          : payload.action === 'query' && payload.table === 'monthly_plans' && payload.mode === 'select'
+        if (monthlyPlanReads && monthlyPlanReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, monthlyPlanReadDelayMs))
         const transactionInserts = payload.action === 'batch'
           ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert' ? 1 : 0
@@ -342,6 +350,22 @@ async function main() {
     notificationReadError = null
     await page.getByRole('button', { name: 'Все', exact: true }).click()
     await page.getByText('Нет уведомлений.', { exact: true }).waitFor()
+
+    // Planning must not show zero totals or an empty-plan message before a successful read.
+    monthlyPlanReadDelayMs = 400
+    const planningNavigation = page.goto(baseUrl + '/planning', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    await planningNavigation
+    await page.getByRole('heading', { name: 'Месячное планирование' }).waitFor()
+    await page.getByText('Планов на этот месяц нет. Добавьте плановые доходы и расходы.', { exact: true }).waitFor()
+    monthlyPlanReadDelayMs = 0
+    monthlyPlanReadError = 'Тестовая ошибка загрузки планов'
+    await page.getByRole('button').filter({ has: page.locator('svg.lucide-chevron-right') }).click()
+    await page.getByText('Тестовая ошибка загрузки планов', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Планов на этот месяц нет. Добавьте плановые доходы и расходы.', { exact: true }).count(), 0, 'a failed plan read must not be presented as an empty month')
+    monthlyPlanReadError = null
+    await page.getByRole('button').filter({ has: page.locator('svg.lucide-chevron-left') }).click()
+    await page.getByText('Планов на этот месяц нет. Добавьте плановые доходы и расходы.', { exact: true }).waitFor()
 
     await page.goto(baseUrl + '/transactions', { waitUntil: 'domcontentloaded' })
     await page.getByRole('heading', { name: 'Операции' }).waitFor()
