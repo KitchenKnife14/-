@@ -202,7 +202,7 @@ export default function CalendarPage() {
         {(categoryFilter || authorFilter || filter !== 'all') && <button onClick={() => { setFilter('all'); setCategoryFilter(''); setAuthorFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}
       </div>
 
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : (
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : (
         <>
           {view === 'month' && (
             <div className="grid grid-cols-7 gap-1">
