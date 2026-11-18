@@ -605,6 +605,16 @@ async function main() {
     while (transactionReadRequests <= transactionReadsBeforeRealtime && Date.now() < refreshDeadline) await new Promise(resolve => setTimeout(resolve, 20))
     assert.ok(transactionReadRequests > transactionReadsBeforeRealtime, `revision change must trigger a fresh transactions read (revision reads: ${revisionReadRequests}, transaction reads: ${transactionReadRequests})`)
     await page.getByText('Обновление после подписки', { exact: true }).waitFor({ timeout: 2000 })
+    const realtimeTransactionCard = page.locator('.card').filter({ hasText: 'Обновление после подписки' }).first()
+    const editRealtimeTransaction = realtimeTransactionCard.getByRole('button', { name: 'Изменить операцию: Обновление после подписки' })
+    const deleteRealtimeTransaction = realtimeTransactionCard.getByRole('button', { name: 'Удалить операцию: Обновление после подписки' })
+    await editRealtimeTransaction.waitFor()
+    await deleteRealtimeTransaction.waitFor()
+    await editRealtimeTransaction.focus()
+    await page.keyboard.press('Enter')
+    await page.getByRole('dialog').waitFor()
+    await page.keyboard.press('Escape')
+    await page.getByRole('dialog').waitFor({ state: 'detached' })
     assert.equal(state.transactions[0].operation_date, nextMonthDate)
     const readsBeforeAccountChange = transactionReadRequests
     state.accounts[0].name = 'Наличные (обновлено)'
