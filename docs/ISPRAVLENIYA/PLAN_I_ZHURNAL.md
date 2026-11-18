@@ -4219,3 +4219,13 @@ HEAD до:
 - GitHub Actions [44279032646 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44279032646) на точном HEAD `5f3d08b60e19b6efbc8482d4379b6a9e1fb3a77a`: TypeScript/production build, preview smoke, browser E2E, Financial CRUD/transfer browser E2E, All regression tests, Apps Script syntax/runtime/concurrency checks и manifest validation — PASS. Предыдущий промежуточный коммит также прошёл CI [44279026511 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44279026511).
 - Это закрывает проверку доступного имени/состояния переключателя типа операции и фокус-ловушки именно в диалоге операции; полная клавиатурная проверка всех экранов и форм ещё не завершена. VoiceOver и реальный iPhone также остаются отдельными проверками. Поэтому общий прогресс **не увеличивается**: `180/227 (79,3%)`, этапы 0–6 `165/210`, UX-01 `11/13`, FC-14 `4/4`, макроэтапы `4/12`.
 - Изменены только `src/components/TransactionForm.tsx`, `tests/browser-e2e.cjs` и этот журнал в ветке `ispravleniya`. `main`, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
+
+
+### 2026-11-18 — UX-01 / FC-23: клавиатурное открытие форм категорий и регулярных платежей
+
+- В `tests/financial-browser-e2e.cjs` расширены Chromium E2E для двух оставшихся финансовых диалогов: категория и регулярный платёж.
+- Для каждой формы проверяются открытие клавишей Enter, перевод фокуса внутрь диалога, закрытие Escape и возврат фокуса на исходную кнопку; после этого сценарий повторно открывает форму и продолжает прежний CRUD-тест.
+- Коммит тестов: `807ae32892475c3941853788d5ece05093bd21ab`. GitHub Actions [44288891394](https://github.com/KitchenKnife14/-/actions/runs/44288891394) запущен на точном HEAD; на момент записи job находится на Setup Node, финальный результат ещё не получен.
+- Вместе с предыдущими проверками покупки, бюджета, счёта и цели клавиатурные сценарии открытия/закрытия и восстановления фокуса теперь добавлены для шести типов финансовых форм; диалог операции отдельно проверяет Tab/Shift+Tab focus trap и переключатель типа операции клавиатурой.
+- Счётчик не повышается до полного подтверждения CI и завершения полного UX-01: общий прогресс остаётся `180/227 (79,3%)`; этапы 0–6 `165/210`, UX-01 `11/13`, FC-14 `4/4`, макроэтапы `4/12`. Полная клавиатурная проверка остальных экранов, VoiceOver и реальная визуальная проверка на iPhone остаются незавершёнными.
+- Изменён только `tests/financial-browser-e2e.cjs` и этот журнал в ветке `ispravleniya`. `main`, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
