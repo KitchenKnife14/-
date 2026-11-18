@@ -1122,6 +1122,14 @@ async function main() {
     await page.getByRole('button', { name: 'Повторить проверку' }).click()
     await page.getByRole('button', { name: 'Создать код привязки' }).waitFor()
 
+    // Non-submit page actions must declare their button type explicitly.
+    for (const route of ['/reports', '/transactions', '/calendar', '/analysis', '/notifications']) {
+      await page.goto(baseUrl + route, { waitUntil: 'domcontentloaded' })
+      await page.locator('h1').first().waitFor()
+      const implicitButtons = await page.locator('button:not([type])').count()
+      assert.equal(implicitButtons, 0, route + ' must not contain buttons with an implicit submit type')
+    }
+
     process.stdout.write(JSON.stringify({
       result: 'PASS',
       checks: [

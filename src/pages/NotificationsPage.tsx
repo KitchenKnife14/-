@@ -63,12 +63,12 @@ export default function NotificationsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Уведомления</h1>
-        {items.some((n) => !n.read) && <button onClick={markAllRead} className="btn-secondary"><Check size={16} /> Отметить все прочитанными</button>}
+        {items.some((n) => !n.read) && <button type="button" onClick={markAllRead} className="btn-secondary"><Check size={16} /> Отметить все прочитанными</button>}
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
         {(['all', 'unread'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : 'Непрочитанные'}</button>
+          <button type="button" key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>{f === 'all' ? 'Все' : 'Непрочитанные'}</button>
         ))}
       </div>
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : items.length === 0 ? (

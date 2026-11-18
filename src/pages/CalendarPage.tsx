@@ -199,7 +199,7 @@ export default function CalendarPage() {
         </div>
         <select aria-label="Фильтр по категории операций" className="input w-auto min-w-[150px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Все категории</option>{categories.filter((c) => !c.archived).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <select aria-label="Фильтр по участнику" className="input w-auto min-w-[150px]" value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)}><option value="">Все участники</option>{memberProfiles.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}</select>
-        {(categoryFilter || authorFilter || filter !== 'all') && <button onClick={() => { setFilter('all'); setCategoryFilter(''); setAuthorFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}
+        {(categoryFilter || authorFilter || filter !== 'all') && <button type="button" onClick={() => { setFilter('all'); setCategoryFilter(''); setAuthorFilter('') }} className="text-xs text-primary-700 hover:underline">Сбросить</button>}
       </div>
 
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : (

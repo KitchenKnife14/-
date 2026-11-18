@@ -113,7 +113,7 @@ export default function Layout() {
             <div className="truncate text-sm font-medium text-ink">{profile?.display_name || 'Пользователь'}</div>
             <div className="truncate text-xs text-muted">Участник семьи</div>
           </div>
-          <button onClick={signOut} disabled={signingOut} className="rounded-xl p-2 text-muted transition-colors hover:bg-canvas hover:text-ink disabled:opacity-50" aria-label="Выйти" title="Выйти">
+          <button type="button" onClick={signOut} disabled={signingOut} className="rounded-xl p-2 text-muted transition-colors hover:bg-canvas hover:text-ink disabled:opacity-50" aria-label="Выйти" title="Выйти">
             <LogOut size={17} />
           </button>
         </div>

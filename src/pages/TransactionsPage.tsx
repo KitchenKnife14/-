@@ -125,15 +125,15 @@ export default function TransactionsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Операции</h1>
-        <button onClick={() => { setEditing(null); setShowAdd(true) }} className="btn-primary">
+        <button type="button" onClick={() => { setEditing(null); setShowAdd(true) }} className="btn-primary">
           <Plus size={18} /> Добавить
         </button>
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <button onClick={prevMonth} className="btn-ghost px-2" aria-label="Предыдущий месяц"><ChevronLeft size={18} /></button>
+        <button type="button" onClick={prevMonth} className="btn-ghost px-2" aria-label="Предыдущий месяц"><ChevronLeft size={18} /></button>
         <div className="font-medium text-slate-700">{monthLabel(cursor.year, cursor.month)}</div>
-        <button onClick={nextMonth} className="btn-ghost px-2" aria-label="Следующий месяц"><ChevronRight size={18} /></button>
+        <button type="button" onClick={nextMonth} className="btn-ghost px-2" aria-label="Следующий месяц"><ChevronRight size={18} /></button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -194,10 +194,10 @@ export default function TransactionsPage() {
                   {t.type === 'transfer' ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label={`Изменить операцию: ${t.description || cat?.name || 'Операция'}`}>
+                  <button type="button" onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label={`Изменить операцию: ${t.description || cat?.name || 'Операция'}`}>
                     <Pencil size={16} />
                   </button>
-                  <button onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить операцию: ${t.description || cat?.name || 'Операция'}`}>
+                  <button type="button" onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить операцию: ${t.description || cat?.name || 'Операция'}`}>
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -212,8 +212,8 @@ export default function TransactionsPage() {
       <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Удалить операцию?">
         <p className="text-sm text-slate-600 mb-4">Это действие нельзя отменить. Операция будет удалена безвозвратно.</p>
         <div className="flex gap-2">
-          <button onClick={() => setDeleting(null)} className="btn-secondary flex-1">Отмена</button>
-          <button onClick={confirmDelete} className="btn-danger flex-1">Удалить</button>
+          <button type="button" onClick={() => setDeleting(null)} className="btn-secondary flex-1">Отмена</button>
+          <button type="button" onClick={confirmDelete} className="btn-danger flex-1">Удалить</button>
         </div>
       </Modal>
     </div>
