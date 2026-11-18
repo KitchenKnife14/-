@@ -526,7 +526,7 @@ async function main() {
       const node = document.querySelector('.font-medium.text-slate-700')
       return node && node.textContent !== previous
     }, initialCalendarMonth)
-    await page.getByRole('button', { name: /^День \\d+ / }).first().waitFor()
+    await page.getByRole('button', { name: /^День \d+ / }).first().waitFor()
     await page.getByRole('button', { name: 'Список' }).click()
     await page.getByText('Нет операций за месяц.', { exact: true }).waitFor()
     transactionReadDelayMs = 0
