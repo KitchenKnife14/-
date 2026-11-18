@@ -157,7 +157,7 @@ export const googleSheets={
               if(sub.table==='notifications')params.p_user_id=session.user.id
               const revision=await request<string>({action:'rpc',name:'get_table_revision',params})
               const signature=String(revision??'0')
-              if(sub.previous&&signature!==sub.previous)sub.callback()
+              if(sub.previous&&signature!==sub.previous){readCache.clear();inFlightReads.clear();readCacheVersion++;sub.callback()}
               sub.previous=signature
             }catch{}
           }))
