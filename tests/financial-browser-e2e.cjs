@@ -335,6 +335,38 @@ async function main() {
     await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
     transactionReadDelayMs = 0
 
+    // Dashboard must keep financial totals hidden until its reads succeed.
+    transactionReadDelayMs = 400
+    const dashboardNavigation = page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загружаем операции…', { exact: true }).waitFor()
+    await dashboardNavigation
+    await page.getByRole('heading', { name: 'Деньги дома. Спокойно, вместе.' }).waitFor()
+    await page.getByText('Пока нет операций за этот месяц', { exact: true }).waitFor()
+    transactionReadDelayMs = 0
+    transactionReadError = 'Тестовая ошибка главной страницы'
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка главной страницы', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('region', { name: 'Итоги месяца' }).count(), 0, 'dashboard must not show zero totals when financial data failed to load')
+    assert.equal(await page.getByText('Пока нет операций за этот месяц', { exact: true }).count(), 0, 'dashboard must not present a failed load as an empty month')
+    transactionReadError = null
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByText('Пока нет операций за этот месяц', { exact: true }).waitFor()
+
+    // Calendar must not present failed transaction reads as an empty month/day.
+    transactionReadDelayMs = 400
+    const calendarNavigation = page.goto(baseUrl + '/calendar', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    await calendarNavigation
+    await page.getByRole('heading', { name: 'Финансовый календарь' }).waitFor()
+    transactionReadDelayMs = 0
+    transactionReadError = 'Тестовая ошибка календаря'
+    await page.getByRole('button').filter({ has: page.locator('svg.lucide-chevron-right') }).click()
+    await page.getByText('Тестовая ошибка календаря', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Нет операций за месяц.', { exact: true }).count(), 0, 'calendar must not present a failed month read as empty')
+    transactionReadError = null
+    await page.getByRole('button').filter({ has: page.locator('svg.lucide-chevron-left') }).click()
+    await page.getByText('Нет операций за месяц.', { exact: true }).waitFor()
+
     // Notifications must distinguish a slow successful empty response from a failed load.
     notificationReadDelayMs = 400
     const notificationsNavigation = page.goto(baseUrl + '/notifications', { waitUntil: 'domcontentloaded' })
