@@ -70,7 +70,7 @@ export default function Modal({ open, onClose, title, children }: Props) {
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="relative w-full min-w-0 max-w-[min(100%,36rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-16px)] overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface shadow-[0_16px_48px_rgba(32,42,35,0.16)] md:max-h-[min(90dvh,48rem)]">
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 sm:px-5 sm:py-4">
           <h2 id={titleId} className="min-w-0 break-words font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-canvas hover:text-slate-700" aria-label="Закрыть">
+          <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-canvas hover:text-slate-700" aria-label="Закрыть">
             <X size={20} />
           </button>
         </div>

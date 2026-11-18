@@ -1130,6 +1130,14 @@ async function main() {
       assert.equal(implicitButtons, 0, route + ' must not contain buttons with an implicit submit type')
     }
 
+    await page.goto(baseUrl + '/transactions', { waitUntil: 'domcontentloaded' })
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    const transactionDialogForButtonTypes = page.getByRole('dialog')
+    await transactionDialogForButtonTypes.waitFor()
+    assert.equal(await transactionDialogForButtonTypes.locator('button:not([type])').count(), 0, 'transaction dialog controls must declare explicit button types')
+    await page.keyboard.press('Escape')
+    await transactionDialogForButtonTypes.waitFor({ state: 'detached' })
+
     process.stdout.write(JSON.stringify({
       result: 'PASS',
       checks: [
