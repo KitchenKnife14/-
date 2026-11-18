@@ -4127,3 +4127,12 @@ HEAD до:
 - GitHub Actions run [44269001817 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44269001817) на точном HEAD `637068c8d69229adc74f00089d548d6f79fae8a0`: production build, preview smoke, Browser E2E, Financial CRUD/transfer E2E и All regression tests — PASS; workflow завершился SUCCESS.
 - Это закрывает проверку трёх состояний только для страницы «Уведомления». Общий составной критерий UX-01 остаётся открытым: аналогично нужно проверить остальные страницы и сетевые задержки. Поэтому счётчик **не меняется**: **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
 - Изменены только `NotificationsPage.tsx`, `financial-browser-e2e.cjs` и этот журнал в ветке `ispravleniya`. `main`, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
+
+
+### 2026-11-18 — UX-01: состояния загрузки месячного планирования
+
+- В `PlanningPage.tsx` состояние загрузки теперь явно отображается индикатором «Загрузка…». Сводные суммы и сообщение об отсутствии планов скрыты до успешного ответа; при ошибке остаётся видимым текст ошибки, нулевые суммы и пустой список не выдаются за достоверные данные.
+- В `tests/financial-browser-e2e.cjs` добавлен сценарий: задержка чтения планов 400 мс, проверка индикатора загрузки, успешного пустого состояния, ошибки чтения при смене месяца и восстановления пустого состояния после возврата.
+- GitHub Actions run [44269371396 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44269371396) на точном HEAD `2fa2fb155541123fbaa1ce43a575871534f13c01`: production build, preview smoke, Browser E2E, Financial CRUD/transfer E2E и All regression tests — PASS; workflow завершился SUCCESS.
+- Общий составной критерий UX-01 пока не закрывается: остаются другие страницы, сетевые сценарии и доступность. Счётчик остаётся **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
+- Изменены только `PlanningPage.tsx`, `financial-browser-e2e.cjs` и этот журнал в ветке `ispravleniya`. `main`, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
