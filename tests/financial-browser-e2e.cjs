@@ -352,6 +352,7 @@ async function main() {
     assert.ok(transactionReadRequests > transactionReadsBeforeRealtime, `revision change must trigger a fresh transactions read (revision reads: ${revisionReadRequests}, transaction reads: ${transactionReadRequests})`)
     await page.getByText('Обновление после подписки', { exact: true }).waitFor({ timeout: 2000 })
     assert.equal(state.transactions[0].operation_date, nextMonthDate)
+    state.transactions = state.transactions.filter(row => row.id !== 'transaction-realtime-refresh')
     await page.getByLabel('Поиск операций').fill('')
     await page.getByLabel('Фильтр по типу операции').selectOption('all')
     await page.getByLabel('Фильтр по категории операции').selectOption('')
