@@ -4052,3 +4052,12 @@ HEAD до:
 - Проверен состав `RuntimeAcceptanceBundle.gs`, `RuntimeAcceptanceBatch.gs`, `IsolatedTestGuard.gs` и четырёх входящих runtime probes. Guard требует изолированный TEST Script ID, TEST Spreadsheet ID и отдельный TEST Web App URL; Production deployment ID блокируется. Тесты используют уникальные синтетические сущности, удаляют строки по точным идентификаторам/семье и подтверждают cleanup. Telegram probe восстанавливает значения TEST properties; batch прекращает дальнейшие пробы после ошибки очистки.
 - M-04 не запускался и не закрыт. Реальный TEST GAS batch остаётся ручной приёмкой; пользовательские действия не запрашиваются до завершения подготовительных этапов. Никакие Apps Script проекты, deployments, таблицы, Vercel или Telegram не изменялись.
 - Последний подтверждённый кодовый CI до этой документационной записи: 304/304 regression tests PASS. CI для актуального HEAD после обновления журнала выполняется отдельно; до его завершения не заявлять новый PASS.
+
+
+### 2026-11-18 — подтверждён CI актуального HEAD
+
+- GitHub Actions run [44256508374 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44256508374) завершился успешно на точном HEAD ветки `ispravleniya`: `e8ba3981581a14e51e81c3b3e0022904d88a3820`.
+- Проверен job summary и его полный лог: 31/31 шагов PASS; regression suite — **304/304**, fail=0, skipped=0; TypeScript/production build, preview smoke, Chromium Browser E2E, financial CRUD/transfer E2E, production dependency audit, Apps Script syntax checks и manifest validation — PASS.
+- Это подтверждает автоматическую регрессию на данном коммите. Физический iPhone/Safari/VoiceOver, ручная браузерная приёмка и live TEST GAS batch не запускались и не засчитываются.
+- Прогресс без изменений: **173/227 (76,2%)**, **4/12 макроэтапов (33,3%)**. Следующий последовательный макроэтап №4 остаётся открытым из-за ручной браузерной приёмки; M-04 относится к макроэтапу №5 и не запускался.
+- Изменён только этот журнал в `ispravleniya`. `main`, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
