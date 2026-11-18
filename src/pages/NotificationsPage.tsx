@@ -89,8 +89,8 @@ export default function NotificationsPage() {
                   <div className="text-xs text-slate-400 mt-1">{formatDateInMoscow(n.created_at)}</div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  {!n.read && <button onClick={() => markRead(n)} className="btn-ghost px-2" title="Прочитано"><Check size={16} /></button>}
-                  <button onClick={() => remove(n)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                  {!n.read && <button type="button" onClick={() => markRead(n)} className="btn-ghost px-2" aria-label={`Отметить уведомление «${n.title}» прочитанным`} title="Прочитано"><Check size={16} /></button>}
+                  <button type="button" onClick={() => remove(n)} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить уведомление «${n.title}»`} title="Удалить"><Trash2 size={16} /></button>
                 </div>
               </div>
             </div>
