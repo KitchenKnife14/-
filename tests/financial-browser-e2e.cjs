@@ -27,6 +27,8 @@ const state = {
 }
 let sequence = 0
 let transactionInsertRequests = 0
+let transactionReadDelayMs = 0
+let transactionReadError = null
 
 function matches(row, filters = []) {
   return filters.every(filter => {
@@ -268,14 +270,23 @@ async function main() {
         const payload = JSON.parse(route.request().postData() || '{}')
         const result = payload.action === 'batch'
           ? (payload.requests || []).map(request => {
-              try { return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null } }
-              catch (error) { return { data: null, error: { message: String(error.message || error) } } }
+              try {
+                if (request.action === 'query' && request.table === 'transactions' && request.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
+                return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null }
+              } catch (error) { return { data: null, error: { message: String(error.message || error) } } }
             })
           : payload.action === 'rpc'
             ? rpc(payload.name, payload.params || {})
             : payload.action === 'query'
-              ? query(payload)
+              ? (() => {
+                  if (payload.table === 'transactions' && payload.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
+                  return query(payload)
+                })()
               : null
+        const transactionReads = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'select')
+          : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'select'
+        if (transactionReads && transactionReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, transactionReadDelayMs))
         const transactionInserts = payload.action === 'batch'
           ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert' ? 1 : 0
@@ -291,8 +302,21 @@ async function main() {
     })
     const page = await context.newPage()
 
-    await page.goto(baseUrl + '/transactions', { waitUntil: 'networkidle' })
+    transactionReadDelayMs = 400
+    const initialNavigation = page.goto(baseUrl + '/transactions', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    await initialNavigation
     await page.getByRole('heading', { name: 'Операции' }).waitFor()
+    await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
+    transactionReadDelayMs = 0
+
+    transactionReadError = 'Тестовая ошибка загрузки операций'
+    await page.getByRole('button', { name: 'Следующий месяц' }).click()
+    await page.getByText('Тестовая ошибка загрузки операций', { exact: true }).waitFor()
+    transactionReadError = null
+    await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
+    await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
+
     const addTransactionButton = page.getByRole('button', { name: 'Добавить' })
     await addTransactionButton.click()
     const transactionDialog = page.getByRole('dialog')
