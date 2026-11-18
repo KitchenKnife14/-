@@ -80,9 +80,9 @@ export default function RecurringPage() {
         <button onClick={() => setShowForm(true)} className="btn-primary"><Plus size={18} /> Добавить</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
-      {overdue.length > 0 && <div className="card bg-warn-50 border-warn-100"><div className="text-sm font-medium text-warn-600">Просроченные платежи ({overdue.length})</div><div className="text-xs text-slate-500 mt-1">Подтвердите оплату, чтобы создать операцию и перенести дату.</div></div>}
+      {!loading && !error && overdue.length > 0 && <div className="card bg-warn-50 border-warn-100"><div className="text-sm font-medium text-warn-600">Просроченные платежи ({overdue.length})</div><div className="text-xs text-slate-500 mt-1">Подтвердите оплату, чтобы создать операцию и перенести дату.</div></div>}
 
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : items.length === 0 ? (
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : items.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500"><Repeat size={24} className="mx-auto mb-2 text-slate-300" />Регулярных платежей пока нет. Добавьте аренду, подписки и другие повторяющиеся расходы.</div>
       ) : (
         <div className="space-y-4">
