@@ -4187,3 +4187,13 @@ HEAD до:
 - GitHub Actions [44274525815 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44274525815) на точном code HEAD `f011230674e86734bed090df9cbd22eb1195352b`: TypeScript/production build, preview smoke, browser smoke, Financial CRUD/transfer browser E2E, All regression tests, Apps Script syntax/runtime/concurrency checks и manifest validation — PASS.
 - Это проверка клавиатурного сценария мобильного меню, не полная проверка клавиатурной доступности всего приложения и не VoiceOver. Контраст, полная клавиатурная навигация, VoiceOver и реальный iPhone остаются открытыми. Контрольный прогресс не меняется: **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
 - Изменены Layout.tsx, browser-e2e.cjs и этот журнал в ветке `ispravleniya`. `main`, Production, Apps Script projects/deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
+
+
+### 2026-11-18 — UX-01: исправлен контраст второстепенного текста
+
+- В `tailwind.config.js` токен `muted` изменён с `#7b857b` на `#596559`. Старый цвет давал контраст 3,83:1 на белом и 3,53:1 на основном фоне `#f5f6f1`; новый даёт 6,12:1 и 5,64:1 соответственно.
+- На светлой зелёной поверхности `#dce9de` новый цвет даёт 4,88:1. Проверены также `#f1f5ef` и `#e4ece1`; для всех пяти базовых светлых поверхностей контраст не ниже 4,5:1.
+- В `tests/browser-e2e.cjs` добавлена браузерная проверка фактически вычисленного CSS-цвета `.text-muted` и коэффициента контраста на светлых поверхностях. Проверка выполняется на реальном отрендеренном интерфейсе в Chromium.
+- Первый тестовый коммит выявил ошибку экранирования регулярного выражения в тесте (не в приложении); исправлено. Финальный CI [44276149992 SUCCESS](https://github.com/KitchenKnife14/-/actions/runs/44276149992) на точном code HEAD `b188a5a219f57a1cda2a82f75abaff5f5b04a9bd`: TypeScript/production build, preview smoke, browser E2E, financial CRUD/transfer E2E, regression suite, Apps Script syntax/runtime/concurrency checks и manifest validation — PASS.
+- Контраст базового второстепенного текста на светлых поверхностях исправлен и покрыт тестом. Общий UX-01 пока не закрывается: полная клавиатурная навигация и VoiceOver ещё не проверены; также остаётся визуальная приёмка на реальном iPhone. Поэтому контрольные счётчики без изменений: **179/227 (78,9%)**, открыто 48; этапы 0–6: **165/210**, UX-01: **10/13**, FC-14: **4/4**; макроэтапы **4/12 (33,3%)**.
+- Изменены `tailwind.config.js`, `tests/browser-e2e.cjs` и этот журнал в ветке `ispravleniya`. Данные, `main`, Production, Apps Script deployments, Google Sheets, Vercel Production и Telegram webhook не затрагивались.
