@@ -29,6 +29,8 @@ let sequence = 0
 let transactionInsertRequests = 0
 let transactionReadDelayMs = 0
 let transactionReadError = null
+let notificationReadDelayMs = 0
+let notificationReadError = null
 let transactionReadRequests = 0
 let tableRevisions = { transactions: 1, accounts: 1 }
 let revisionReadRequests = 0
@@ -279,6 +281,7 @@ async function main() {
           ? (payload.requests || []).map(request => {
               try {
                 if (request.action === 'query' && request.table === 'transactions' && request.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
+                if (request.action === 'query' && request.table === 'notifications' && request.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                 return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null }
               } catch (error) { return { data: null, error: { message: String(error.message || error) } } }
             })
@@ -287,6 +290,7 @@ async function main() {
             : payload.action === 'query'
               ? (() => {
                   if (payload.table === 'transactions' && payload.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
+                  if (payload.table === 'notifications' && payload.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                   return query(payload)
                 })()
               : null
@@ -295,6 +299,10 @@ async function main() {
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'select'
         if (transactionReads) transactionReadRequests++
         if (transactionReads && transactionReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, transactionReadDelayMs))
+        const notificationReads = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'notifications' && request.mode === 'select')
+          : payload.action === 'query' && payload.table === 'notifications' && payload.mode === 'select'
+        if (notificationReads && notificationReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, notificationReadDelayMs))
         const transactionInserts = payload.action === 'batch'
           ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert' ? 1 : 0
@@ -318,6 +326,24 @@ async function main() {
     await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
     transactionReadDelayMs = 0
 
+    // Notifications must distinguish a slow successful empty response from a failed load.
+    notificationReadDelayMs = 400
+    const notificationsNavigation = page.goto(baseUrl + '/notifications', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    await notificationsNavigation
+    await page.getByRole('heading', { name: 'Уведомления' }).waitFor()
+    await page.getByText('Нет уведомлений.', { exact: true }).waitFor()
+    notificationReadDelayMs = 0
+    notificationReadError = 'Тестовая ошибка загрузки уведомлений'
+    await page.getByRole('button', { name: 'Непрочитанные' }).click()
+    await page.getByText('Тестовая ошибка загрузки уведомлений', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Нет уведомлений.', { exact: true }).count(), 0, 'a failed notifications load must not be presented as an empty list')
+    notificationReadError = null
+    await page.getByRole('button', { name: 'Все', exact: true }).click()
+    await page.getByText('Нет уведомлений.', { exact: true }).waitFor()
+
+    await page.goto(baseUrl + '/transactions', { waitUntil: 'domcontentloaded' })
+    await page.getByRole('heading', { name: 'Операции' }).waitFor()
     transactionReadError = 'Тестовая ошибка загрузки операций'
     await page.getByRole('button', { name: 'Следующий месяц' }).click()
     await page.getByText('Тестовая ошибка загрузки операций', { exact: true }).waitFor()
