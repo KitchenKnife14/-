@@ -342,7 +342,7 @@ async function main() {
     assert.equal(await page.getByText('Общий остаток активных счетов', { exact: true }).count(), 0, 'accounts total must stay hidden during loading')
     await accountsNavigation
     await page.getByRole('heading', { name: 'Счета' }).waitFor()
-    await page.getByText('Счетов пока нет. Создайте первый счёт.', { exact: true }).waitFor()
+    await page.getByText('Наличные', { exact: true }).waitFor()
     await page.getByText('Общий остаток активных счетов', { exact: true }).waitFor()
     accountReadDelayMs = 0
     accountReadError = 'Тестовая ошибка загрузки счетов'
@@ -350,11 +350,11 @@ async function main() {
     await page.goto(baseUrl + '/accounts', { waitUntil: 'domcontentloaded' })
     await page.getByText('Тестовая ошибка загрузки счетов', { exact: true }).waitFor()
     assert.equal(await page.getByText('Общий остаток активных счетов', { exact: true }).count(), 0, 'accounts total must stay hidden after a failed read')
-    assert.equal(await page.getByText('Счетов пока нет. Создайте первый счёт.', { exact: true }).count(), 0, 'a failed accounts read must not be presented as an empty list')
+    assert.equal(await page.getByText('Наличные', { exact: true }).count(), 0, 'a failed accounts read must not present stale account rows')
     accountReadError = null
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
     await page.goto(baseUrl + '/accounts', { waitUntil: 'domcontentloaded' })
-    await page.getByText('Счетов пока нет. Создайте первый счёт.', { exact: true }).waitFor()
+    await page.getByText('Наличные', { exact: true }).waitFor()
     await page.getByText('Общий остаток активных счетов', { exact: true }).waitFor()
 
     transactionReadDelayMs = 400
