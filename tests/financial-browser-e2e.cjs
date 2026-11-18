@@ -36,6 +36,8 @@ let monthlyPlanReadDelayMs = 0
 let monthlyPlanReadError = null
 let accountReadDelayMs = 0
 let accountReadError = null
+let goalReadDelayMs = 0
+let goalReadError = null
 let transactionReadRequests = 0
 let tableRevisions = { transactions: 1, accounts: 1 }
 let revisionReadRequests = 0
@@ -289,6 +291,7 @@ async function main() {
                 if (request.action === 'query' && request.table === 'notifications' && request.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                 if (request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
                 if (request.action === 'query' && request.table === 'accounts' && request.mode === 'select' && accountReadError) throw new Error(accountReadError)
+                if (request.action === 'query' && request.table === 'goals' && request.mode === 'select' && goalReadError) throw new Error(goalReadError)
                 return { data: request.action === 'rpc' ? rpc(request.name, request.params || {}) : query(request), error: null }
               } catch (error) { return { data: null, error: { message: String(error.message || error) } } }
             })
@@ -300,6 +303,7 @@ async function main() {
                   if (payload.table === 'notifications' && payload.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                   if (payload.table === 'monthly_plans' && payload.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
                   if (payload.table === 'accounts' && payload.mode === 'select' && accountReadError) throw new Error(accountReadError)
+                  if (payload.table === 'goals' && payload.mode === 'select' && goalReadError) throw new Error(goalReadError)
                   return query(payload)
                 })()
               : null
@@ -320,6 +324,10 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'accounts' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'accounts' && payload.mode === 'select'
         if (accountReads && accountReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, accountReadDelayMs))
+        const goalReads = payload.action === 'batch'
+          ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'goals' && request.mode === 'select')
+          : payload.action === 'query' && payload.table === 'goals' && payload.mode === 'select'
+        if (goalReads && goalReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, goalReadDelayMs))
         const transactionInserts = payload.action === 'batch'
           ? (payload.requests || []).filter(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'insert').length
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert' ? 1 : 0
@@ -334,6 +342,27 @@ async function main() {
       }
     })
     const page = await context.newPage()
+
+    // Goals must not present a failed read as a legitimate empty list or stale progress.
+    goalReadDelayMs = 400
+    const goalsNavigation = page.goto(baseUrl + '/goals', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Загрузка…', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.', { exact: true }).count(), 0, 'goals empty state must stay hidden during loading')
+    assert.equal(await page.getByText('Общий прогресс по активным целям', { exact: true }).count(), 0, 'goals progress must stay hidden during loading')
+    await goalsNavigation
+    await page.getByRole('heading', { name: 'Финансовые цели' }).waitFor()
+    await page.getByText('Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.', { exact: true }).waitFor()
+    goalReadDelayMs = 0
+    goalReadError = 'Тестовая ошибка загрузки целей'
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/goals', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Тестовая ошибка загрузки целей', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.', { exact: true }).count(), 0, 'a failed goals read must not be presented as an empty list')
+    assert.equal(await page.getByText('Общий прогресс по активным целям', { exact: true }).count(), 0, 'a failed goals read must not show stale progress')
+    goalReadError = null
+    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
+    await page.goto(baseUrl + '/goals', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Целей пока нет. Создайте первую — например, отпуск или накопление на покупку.', { exact: true }).waitFor()
 
     // Accounts must not show a fabricated zero balance while data is loading or after a failed read.
     accountReadDelayMs = 400
