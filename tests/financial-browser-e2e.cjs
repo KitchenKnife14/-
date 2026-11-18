@@ -517,6 +517,16 @@ async function main() {
     await page.getByText('Загрузка…', { exact: true }).waitFor()
     await calendarNavigation
     await page.getByRole('heading', { name: 'Финансовый календарь' }).waitFor()
+    const calendarMonth = page.locator('.font-medium.text-slate-700').first()
+    const initialCalendarMonth = await calendarMonth.textContent()
+    const nextCalendarMonth = page.getByRole('button', { name: 'Следующий месяц' })
+    await nextCalendarMonth.focus()
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(previous => {
+      const node = document.querySelector('.font-medium.text-slate-700')
+      return node && node.textContent !== previous
+    }, initialCalendarMonth)
+    await page.getByRole('button', { name: /^День \\d+ / }).first().waitFor()
     await page.getByRole('button', { name: 'Список' }).click()
     await page.getByText('Нет операций за месяц.', { exact: true }).waitFor()
     transactionReadDelayMs = 0
