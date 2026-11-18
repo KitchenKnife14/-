@@ -1050,6 +1050,15 @@ async function main() {
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
     await page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
     await page.getByText('Операций за выбранный месяц нет.', { exact: true }).waitFor()
+    const analysisMonth = page.locator('.font-medium.text-slate-700').first()
+    const previousAnalysisMonth = await analysisMonth.textContent()
+    const nextAnalysisMonth = page.getByRole('button', { name: 'Следующий месяц' })
+    await nextAnalysisMonth.focus()
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(previous => {
+      const node = document.querySelector('.font-medium.text-slate-700')
+      return node && node.textContent !== previous
+    }, previousAnalysisMonth)
     state.transactions = savedTransactions
 
     // Notification icon actions must have useful accessible names and work from the keyboard.
@@ -1064,6 +1073,7 @@ async function main() {
     await deleteNotification.waitFor()
     await markNotificationRead.focus()
     await page.keyboard.press('Enter')
+    await markNotificationRead.waitFor({ state: 'detached' })
     await page.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' }).waitFor()
     assert.equal(state.notifications[0].read, true, 'keyboard activation must mark the selected notification as read')
     const refreshedNotificationCard = page.locator('.card').filter({ hasText: 'Проверка клавиатуры' }).first()
