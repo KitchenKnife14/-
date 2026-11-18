@@ -194,10 +194,10 @@ export default function TransactionsPage() {
                   {t.type === 'transfer' ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label="Изменить">
+                  <button onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label={`Изменить операцию: ${t.description || cat?.name || 'Операция'}`}>
                     <Pencil size={16} />
                   </button>
-                  <button onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label="Удалить">
+                  <button onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить операцию: ${t.description || cat?.name || 'Операция'}`}>
                     <Trash2 size={16} />
                   </button>
                 </div>
