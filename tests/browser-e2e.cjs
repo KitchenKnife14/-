@@ -123,6 +123,38 @@ async function main() {
     await authPage.getByLabel('Пароль').fill('correct-test-password')
     await authPage.getByRole('button', { name: 'Войти' }).click()
     await authPage.getByText('Тестовый участник', { exact: true }).waitFor()
+
+    // The muted text token must meet WCAG AA for normal text on the app's light surfaces.
+    const mutedTextAudit = await authPage.locator('.text-muted').evaluateAll(elements => {
+      const luminance = hex => {
+        const channels = hex.match(/[a-f\\d]{2}/gi).map(value => parseInt(value, 16) / 255)
+        const linear = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+      }
+      const foreground = getComputedStyle(elements.find(element => element.getClientRects().length)).color
+      const channels = foreground.match(/[\\d.]+/g).slice(0, 3).map(Number)
+      const foregroundLuminance = (() => {
+        const linear = channels.map(value => {
+          const normalized = value / 255
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+      })()
+      const backgrounds = ['#ffffff', '#f5f6f1', '#f1f5ef', '#e4ece1', '#dce9de']
+      const ratios = backgrounds.map(background => {
+        const backgroundLuminance = luminance(background)
+        return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+          (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+      })
+      return {
+        visibleCount: elements.filter(element => element.getClientRects().length > 0).length,
+        foreground,
+        ratios,
+      }
+    })
+    assert.ok(mutedTextAudit.visibleCount > 0, 'the authenticated UI must expose muted text for contrast testing')
+    assert.equal(mutedTextAudit.foreground, 'rgb(89, 101, 89)', 'muted text must use the verified darker token')
+    assert.ok(mutedTextAudit.ratios.every(ratio => ratio >= 4.5), `Muted text contrast must meet 4.5:1 on light app surfaces: ${JSON.stringify(mutedTextAudit)}`)
     await authPage.getByRole('link', { name: 'Telegram' }).click()
     await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
     await authPage.getByRole('button', { name: 'Создать код привязки' }).click()
