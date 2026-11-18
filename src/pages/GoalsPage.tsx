@@ -124,13 +124,13 @@ export default function GoalsPage() {
                     </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
-                    {g.status === 'active' && <button type="button" onClick={() => setContribGoal(g)} className="btn-ghost px-2 text-accent-600" title="Пополнить"><Plus size={16} /></button>}
-                    <button type="button" onClick={() => showHistory(g)} className="btn-ghost px-2" title="История"><History size={16} /></button>
-                    {g.status === 'active' && <button type="button" onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Пауза"><Pause size={16} /></button>}
-                    {g.status === 'paused' && <button type="button" onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Возобновить"><Play size={16} /></button>}
-                    {g.status !== 'done' && remaining <= 0 && <button type="button" onClick={() => markDone(g)} className="btn-ghost px-2 text-accent-600" title="Отметить достигнутой"><Check size={16} /></button>}
-                    <button type="button" onClick={() => { setEditing(g); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
-                    <button type="button" onClick={() => remove(g)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                    {g.status === 'active' && <button type="button" onClick={() => setContribGoal(g)} className="btn-ghost px-2 text-accent-600" title="Пополнить" aria-label={`Пополнить цель: ${g.name}`}><Plus size={16} /></button>}
+                    <button type="button" onClick={() => showHistory(g)} className="btn-ghost px-2" title="История" aria-label={`История пополнений: ${g.name}`}><History size={16} /></button>
+                    {g.status === 'active' && <button type="button" onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Пауза" aria-label={`Приостановить цель: ${g.name}`}><Pause size={16} /></button>}
+                    {g.status === 'paused' && <button type="button" onClick={() => toggleStatus(g)} className="btn-ghost px-2" title="Возобновить" aria-label={`Возобновить цель: ${g.name}`}><Play size={16} /></button>}
+                    {g.status !== 'done' && remaining <= 0 && <button type="button" onClick={() => markDone(g)} className="btn-ghost px-2 text-accent-600" title="Отметить достигнутой" aria-label={`Отметить цель достигнутой: ${g.name}`}><Check size={16} /></button>}
+                    <button type="button" onClick={() => { setEditing(g); setShowForm(true) }} className="btn-ghost px-2" title="Изменить" aria-label={`Изменить цель: ${g.name}`}><Pencil size={16} /></button>
+                    <button type="button" onClick={() => remove(g)} className="btn-ghost px-2 text-danger-600" title="Удалить" aria-label={`Удалить цель: ${g.name}`}><Trash2 size={16} /></button>
                   </div>
                 </div>
                 </div>

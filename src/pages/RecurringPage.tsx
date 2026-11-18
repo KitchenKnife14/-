@@ -121,9 +121,9 @@ function Section({ title, items, catMap, accountMap, memberProfiles, onConfirm, 
                 </div>
                 <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(r.amount_kopecks)}</div>
                 <div className="flex gap-1 flex-shrink-0">
-                  {r.active && <button type="button" onClick={() => onConfirm(r)} className="btn-ghost px-2 text-accent-600" title="Подтвердить оплату"><Check size={16} /></button>}
-                  <button type="button" onClick={() => onToggle(r)} className="btn-ghost px-2" title={r.active ? 'Пауза' : 'Возобновить'}>{r.active ? <Pause size={16} /> : <Play size={16} />}</button>
-                  <button type="button" onClick={() => onRemove(r)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                  {r.active && <button type="button" onClick={() => onConfirm(r)} className="btn-ghost px-2 text-accent-600" title="Подтвердить оплату" aria-label={`Подтвердить оплату: ${r.description}`}><Check size={16} /></button>}
+                  <button type="button" onClick={() => onToggle(r)} className="btn-ghost px-2" title={r.active ? 'Пауза' : 'Возобновить'} aria-label={`${r.active ? 'Приостановить' : 'Возобновить'} платёж: ${r.description}`}>{r.active ? <Pause size={16} /> : <Play size={16} />}</button>
+                  <button type="button" onClick={() => onRemove(r)} className="btn-ghost px-2 text-danger-600" title="Удалить" aria-label={`Удалить регулярный платёж: ${r.description}`}><Trash2 size={16} /></button>
                 </div>
               </div>
             </div>

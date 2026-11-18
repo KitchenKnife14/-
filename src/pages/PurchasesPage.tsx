@@ -134,9 +134,9 @@ export default function PurchasesPage() {
                   </div>
                   <div className="text-sm font-semibold text-slate-900 flex-shrink-0">{formatRubles(p.estimated_kopecks)}</div>
                   <div className="flex gap-1 flex-shrink-0">
-                    {p.status !== 'bought' && <button type="button" onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным"><Check size={16} /></button>}
-                    <button type="button" onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить"><Pencil size={16} /></button>
-                    <button type="button" onClick={() => remove(p)} className="btn-ghost px-2 text-danger-600" title="Удалить"><Trash2 size={16} /></button>
+                    {p.status !== 'bought' && <button type="button" onClick={() => { setBuying(p); setBuyAccountId('') }} className="btn-ghost px-2 text-accent-600" title="Отметить купленным" aria-label={`Отметить покупку купленной: ${p.name}`}><Check size={16} /></button>}
+                    <button type="button" onClick={() => { setEditing(p); setShowForm(true) }} className="btn-ghost px-2" title="Изменить" aria-label={`Изменить покупку: ${p.name}`}><Pencil size={16} /></button>
+                    <button type="button" onClick={() => remove(p)} className="btn-ghost px-2 text-danger-600" title="Удалить" aria-label={`Удалить покупку: ${p.name}`}><Trash2 size={16} /></button>
                   </div>
                 </div>
               </div>

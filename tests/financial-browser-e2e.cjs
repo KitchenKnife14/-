@@ -1157,6 +1157,10 @@ async function main() {
       await page.locator('h1').first().waitFor()
       const implicitButtons = await page.locator('button:not([type])').count()
       assert.equal(implicitButtons, 0, route + ' must not contain buttons with an implicit submit type')
+      if (['/budgets', '/goals', '/purchases', '/recurring'].includes(route)) {
+        const unnamedIconButtons = await page.locator('button:has(svg)').evaluateAll(buttons => buttons.filter(button => !button.textContent.trim() && !button.getAttribute('aria-label')).length)
+        assert.equal(unnamedIconButtons, 0, route + ' must give every icon-only button an explicit accessible name')
+      }
     }
 
     await page.goto(baseUrl + '/transactions', { waitUntil: 'domcontentloaded' })
