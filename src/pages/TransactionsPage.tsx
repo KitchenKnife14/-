@@ -35,6 +35,7 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<TransactionDraft | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
   const [deletePending, setDeletePending] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const deletePendingRef = useRef(false)
   const loadSequence = useRef(createRequestSequence())
 
@@ -119,14 +120,14 @@ export default function TransactionsPage() {
     if (!deleting || deletePendingRef.current) return
     deletePendingRef.current = true
     setDeletePending(true)
-    setError(null)
+    setDeleteError(null)
     try {
       const { error: err } = await googleSheets.from('transactions').delete().eq('id', deleting.id).expect(deleting as unknown as Record<string, unknown>)
       if (err) throw err
       setDeleting(null)
       void load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось удалить операцию')
+      setDeleteError(e instanceof Error ? e.message : 'Не удалось удалить операцию')
     } finally {
       deletePendingRef.current = false
       setDeletePending(false)
@@ -209,7 +210,7 @@ export default function TransactionsPage() {
                   <button type="button" onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label={`Изменить операцию: ${t.description || cat?.name || 'Операция'}`}>
                     <Pencil size={16} />
                   </button>
-                  <button type="button" onClick={() => setDeleting(t)} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить операцию: ${t.description || cat?.name || 'Операция'}`}>
+                  <button type="button" onClick={() => { setDeleteError(null); setDeleting(t) }} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить операцию: ${t.description || cat?.name || 'Операция'}`}>
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -221,10 +222,11 @@ export default function TransactionsPage() {
 
       <TransactionForm open={showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} editing={editing} />
 
-      <Modal open={!!deleting} onClose={() => { if (!deletePendingRef.current) setDeleting(null) }} title="Удалить операцию?">
+      <Modal open={!!deleting} onClose={() => { if (!deletePendingRef.current) { setDeleting(null); setDeleteError(null) } }} title="Удалить операцию?">
         <p className="text-sm text-slate-600 mb-4">Это действие нельзя отменить. Операция будет удалена безвозвратно.</p>
+        {deleteError && <p role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2 mb-4">{deleteError}</p>}
         <div className="flex gap-2">
-          <button type="button" onClick={() => setDeleting(null)} disabled={deletePending} className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Отмена</button>
+          <button type="button" onClick={() => { setDeleting(null); setDeleteError(null) }} disabled={deletePending} className="btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">Отмена</button>
           <button type="button" onClick={confirmDelete} disabled={deletePending} aria-busy={deletePending} className="btn-danger flex-1 disabled:opacity-50 disabled:cursor-not-allowed">{deletePending ? 'Удаление…' : 'Удалить'}</button>
         </div>
       </Modal>

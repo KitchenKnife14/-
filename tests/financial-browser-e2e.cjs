@@ -30,6 +30,7 @@ const state = {
 let sequence = 0
 let transactionInsertRequests = 0
 let transactionDeleteDelayMs = 0
+let transactionDeleteError = null
 let transactionReadDelayMs = 0
 let transactionReadError = null
 let notificationReadDelayMs = 0
@@ -308,6 +309,7 @@ async function main() {
         const result = payload.action === 'batch'
           ? (payload.requests || []).map(request => {
               try {
+                if (request.action === 'query' && request.table === 'transactions' && request.mode === 'delete' && transactionDeleteError) throw new Error(transactionDeleteError)
                 if (request.action === 'query' && request.table === 'transactions' && request.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
                 if (request.action === 'query' && request.table === 'notifications' && request.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                 if (request.action === 'query' && request.table === 'monthly_plans' && request.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
@@ -324,6 +326,7 @@ async function main() {
             ? rpc(payload.name, payload.params || {})
             : payload.action === 'query'
               ? (() => {
+                  if (payload.table === 'transactions' && payload.mode === 'delete' && transactionDeleteError) throw new Error(transactionDeleteError)
                   if (payload.table === 'transactions' && payload.mode === 'select' && transactionReadError) throw new Error(transactionReadError)
                   if (payload.table === 'notifications' && payload.mode === 'select' && notificationReadError) throw new Error(notificationReadError)
                   if (payload.table === 'monthly_plans' && payload.mode === 'select' && monthlyPlanReadError) throw new Error(monthlyPlanReadError)
@@ -712,8 +715,13 @@ async function main() {
     assert.equal(await deleteTransferButton.evaluate(element => element === document.activeElement), true, 'closing a sequential dialog must restore focus to its trigger')
     await deleteTransferButton.click()
     await page.getByRole('heading', { name: 'Удалить операцию?' }).waitFor()
-    transactionDeleteDelayMs = 350
     const confirmTransferDelete = page.locator('button.btn-danger')
+    transactionDeleteError = 'Тестовая ошибка удаления'
+    await confirmTransferDelete.click()
+    await page.getByRole('alert').getByText('Тестовая ошибка удаления').waitFor()
+    assert.equal(state.transactions.length, 2, 'failed transaction delete must preserve the original row')
+    transactionDeleteError = null
+    transactionDeleteDelayMs = 350
     await confirmTransferDelete.click()
     await page.getByRole('button', { name: 'Удаление…' }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Удаление…' }).isDisabled(), true, 'transaction delete confirmation must disable while request is pending')
