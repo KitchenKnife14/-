@@ -130,9 +130,9 @@ export default function TransactionsPage() {
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <button onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
+        <button onClick={prevMonth} className="btn-ghost px-2" aria-label="Предыдущий месяц"><ChevronLeft size={18} /></button>
         <div className="font-medium text-slate-700">{monthLabel(cursor.year, cursor.month)}</div>
-        <button onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
+        <button onClick={nextMonth} className="btn-ghost px-2" aria-label="Следующий месяц"><ChevronRight size={18} /></button>
       </div>
 
       <div className="flex flex-wrap gap-2">
