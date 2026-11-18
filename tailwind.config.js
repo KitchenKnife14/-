@@ -12,7 +12,7 @@ export default {
         canvas: '#f5f6f1',
         surface: '#ffffff',
         ink: '#2f3b32',
-        muted: '#7b857b',
+        muted: '#596559',
         line: '#e4e9e0',
         primary: {
           50: '#f1f5ef', 100: '#e4ece1', 200: '#cbd9c6', 300: '#a9bea2',
