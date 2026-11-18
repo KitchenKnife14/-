@@ -117,12 +117,16 @@ export default function AccountsPage() {
         <div><h1 className="page-title">Счета</h1><p className="text-sm text-slate-500 mt-1">Остатки рассчитываются по начальному балансу и операциям</p></div>
         <button onClick={openCreate} className="btn-primary"><Plus size={18} /> Добавить счёт</button>
       </div>
-      <div className="card">
-        <div className="text-sm text-slate-500">Общий остаток активных счетов</div>
-        <div className="text-2xl font-semibold text-slate-900 mt-1">{total === null ? 'Не рассчитан' : formatRubles(total)}</div>
-      </div>
-      {invalidVisibleCount > 0 && <div role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">Для одного или нескольких счетов остаток не удалось рассчитать достоверно. Проверьте начальные остатки и операции. Значения не округлялись, данные в таблице не изменялись.</div>}
-      {total === null && invalidVisibleCount === 0 && <div role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">Сумма остатков превышает безопасный диапазон расчёта. Проверьте остатки счетов.</div>}
+      {!loading && !error && (
+        <>
+          <div className="card">
+            <div className="text-sm text-slate-500">Общий остаток активных счетов</div>
+            <div className="text-2xl font-semibold text-slate-900 mt-1">{total === null ? 'Не рассчитан' : formatRubles(total)}</div>
+          </div>
+          {invalidVisibleCount > 0 && <div role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">Для одного или нескольких счетов остаток не удалось рассчитать достоверно. Проверьте начальные остатки и операции. Значения не округлялись, данные в таблице не изменялись.</div>}
+          {total === null && invalidVisibleCount === 0 && <div role="alert" className="rounded-xl border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">Сумма остатков превышает безопасный диапазон расчёта. Проверьте остатки счетов.</div>}
+        </>
+      )}
       <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Показывать архивные счета</label>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : visible.length === 0 ? (
