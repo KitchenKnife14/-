@@ -123,7 +123,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <section aria-label="Итоги месяца" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {!loading && !error && <section aria-label="Итоги месяца" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="card">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm font-medium text-muted">
@@ -156,7 +156,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-1 text-xs text-muted">Доходы минус расходы</div>
         </div>
-      </section>
+      </section>}
 
       <section aria-label="Быстрые действия">
         <div className="mb-3 flex items-center justify-between">
@@ -186,7 +186,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {plannedExpense > 0 && (
+      {!loading && !error && plannedExpense > 0 && (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warn-100 bg-warn-50 px-4 py-4 sm:px-5">
           <div>
             <div className="text-sm font-semibold text-ink">Запланированные платежи</div>
@@ -209,7 +209,7 @@ export default function DashboardPage() {
         <div className="overflow-hidden rounded-2xl border border-line bg-surface">
           {loading ? (
             <div className="px-4 py-10 text-center text-sm text-muted">Загружаем операции…</div>
-          ) : recent.length === 0 ? (
+          ) : error ? null : recent.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-50 text-primary-700"><Wallet size={22} /></div>
               <p className="mt-3 text-sm font-medium text-ink">Пока нет операций за этот месяц</p>
