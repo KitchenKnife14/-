@@ -80,6 +80,7 @@ export default function TransactionsPage() {
     const channel = googleSheets
       .channel('tx-page')
       .on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${familyId}` }, () => { void load() })
+      .on('table_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${familyId}` }, () => { void load() })
       .subscribe()
     return () => { googleSheets.removeChannel(channel) }
   }, [familyId, load])
