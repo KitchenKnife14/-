@@ -117,6 +117,7 @@ export default function PlanningPage() {
         <div className="font-medium text-slate-700">{monthLabel(cursor.year, cursor.month)}</div>
         <button onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
       </div>
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="card"><div className="text-sm text-slate-500">Доходы: план / факт</div><div className="text-lg font-semibold text-slate-900 mt-1">{formatRubles(planIncome)}</div><div className="text-xs text-accent-600">{formatRubles(factIncome)}</div></div>
         <div className="card"><div className="text-sm text-slate-500">Расходы: план / факт</div><div className="text-lg font-semibold text-slate-900 mt-1">{formatRubles(planExpense)}</div><div className="text-xs text-danger-600">{formatRubles(factExpense)}</div></div>
@@ -149,6 +150,7 @@ export default function PlanningPage() {
           </div>
         )}
       </div>
+      </>}
       <PlanForm open={showForm} onClose={() => setShowForm(false)} onSaved={load} categories={categories} familyId={family?.id ?? null} monthDate={monthDate} />
     </div>
   )
