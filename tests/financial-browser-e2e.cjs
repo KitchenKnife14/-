@@ -26,6 +26,7 @@ const state = {
   goal_contributions: [],
 }
 let sequence = 0
+let transactionInsertRequests = 0
 
 function matches(row, filters = []) {
   return filters.every(filter => {
@@ -275,6 +276,10 @@ async function main() {
             : payload.action === 'query'
               ? query(payload)
               : null
+        if (payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'insert') {
+          transactionInsertRequests++
+          await new Promise(resolve => setTimeout(resolve, 250))
+        }
         sequence++
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: result, error: null }) })
       } catch (error) {
@@ -309,8 +314,16 @@ async function main() {
     await page.getByLabel('Счёт (для расчёта остатка)').selectOption('account-cash')
     await page.getByLabel('Категория').selectOption('category-food')
     await page.getByRole('textbox', { name: 'Описание' }).fill('E2E расход')
-    await page.getByRole('button', { name: 'Сохранить' }).click()
+    const saveTransactionButton = page.getByRole('button', { name: 'Сохранить' })
+    await saveTransactionButton.click()
+    await assert.doesNotReject(() => saveTransactionButton.waitFor({ state: 'visible' }))
+    await page.waitForFunction(() => {
+      const button = [...document.querySelectorAll('button')].find(element => element.textContent?.trim() === 'Сохранение…')
+      return Boolean(button?.disabled)
+    }, null, { timeout: 2000 })
+    await saveTransactionButton.evaluate(button => button.click())
     await page.getByText('E2E расход', { exact: true }).waitFor()
+    assert.equal(transactionInsertRequests, 1, 'a pending transaction save must reject a repeated click')
     assert.equal(state.transactions.length, 1)
     assert.equal(state.transactions[0].amount_kopecks, 12345)
     assert.equal(state.transactions[0].type, 'expense')
