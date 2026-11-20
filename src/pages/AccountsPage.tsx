@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createRequestSequence } from '../lib/requestSequence'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import type { Account, Transaction } from '../lib/types'
@@ -12,6 +13,8 @@ type AccountDraft = Account | null
 
 export default function AccountsPage() {
   const { family } = useAuth()
+  const familyId = family?.id
+  const loadSequence = useRef(createRequestSequence())
   const [accounts, setAccounts] = useState<Account[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,43 +26,50 @@ export default function AccountsPage() {
   const [kind, setKind] = useState<Account['kind']>('bank')
   const [startingBalance, setStartingBalance] = useState('0')
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
 
-  const load = async () => {
-    if (!family) return
+  const load = useCallback(async () => {
+    if (!familyId) return
+    const requestId = loadSequence.current.begin()
     setLoading(true)
     setError(null)
     try {
       const [accountRes, txRes] = await Promise.all([
-        googleSheets.from('accounts').select('*').eq('family_id', family.id).order('created_at', { ascending: true }),
-        googleSheets.from('transactions').select('*').eq('family_id', family.id),
+        googleSheets.from('accounts').select('*').eq('family_id', familyId).order('created_at', { ascending: true }),
+        googleSheets.from('transactions').select('*').eq('family_id', familyId),
       ])
+      if (!loadSequence.current.isCurrent(requestId)) return
       if (accountRes.error) throw accountRes.error
       if (txRes.error) throw txRes.error
       setAccounts((accountRes.data ?? []) as Account[])
       setTransactions((txRes.data ?? []) as Transaction[])
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить счета')
+      if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Не удалось загрузить счета')
     } finally {
-      setLoading(false)
+      if (loadSequence.current.isCurrent(requestId)) setLoading(false)
     }
-  }
+  }, [familyId])
 
-  useEffect(() => { load() }, [family?.id])
   useEffect(() => {
-    if (!family) return
-    const accountsChannel = googleSheets.channel('accounts-page-accounts').on('table_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    const transactionsChannel = googleSheets.channel('accounts-page-transactions').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
+    void load()
+    return () => { loadSequence.current.invalidate() }
+  }, [load])
+  useEffect(() => {
+    if (!familyId) return
+    const accountsChannel = googleSheets.channel('accounts-page-accounts').on('table_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${familyId}` }, () => { void load() }).subscribe()
+    const transactionsChannel = googleSheets.channel('accounts-page-transactions').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${familyId}` }, () => { void load() }).subscribe()
     return () => { googleSheets.removeChannel(accountsChannel); googleSheets.removeChannel(transactionsChannel) }
-  }, [family?.id])
+  }, [familyId, load])
 
   const balances = useMemo(() => calculateAccountBalances(accounts, transactions), [accounts, transactions])
 
   const openCreate = () => {
-    setEditing(null); setName(''); setKind('bank'); setStartingBalance('0'); setError(null); setModalOpen(true)
+    setEditing(null); setName(''); setKind('bank'); setStartingBalance('0'); setFormError(null); setModalOpen(true)
   }
   const openEdit = (account: Account) => {
     setEditing(account)
-    setName(account.name); setKind(account.kind); setStartingBalance((account.starting_balance_kopecks / 100).toString()); setError(null); setModalOpen(true)
+    setName(account.name); setKind(account.kind); setStartingBalance((account.starting_balance_kopecks / 100).toString()); setFormError(null); setModalOpen(true)
   }
 
   const save = async (event: React.FormEvent) => {
@@ -67,9 +77,9 @@ export default function AccountsPage() {
     if (!family) return
     const normalizedName = name.trim()
     const balance = parseRublesToKopecks(startingBalance, { allowNegative: true })
-    if (!normalizedName) { setError('Введите название счёта'); return }
-    if (balance === null) { setError('Введите корректный начальный остаток с точностью до копейки'); return }
-    setSaving(true); setError(null)
+    if (!normalizedName) { setFormError('Введите название счёта'); return }
+    if (balance === null) { setFormError('Введите корректный начальный остаток с точностью до копейки'); return }
+    setSaving(true); setFormError(null)
     try {
       const payload = { family_id: family.id, name: normalizedName, kind, starting_balance_kopecks: balance }
       let result
@@ -88,13 +98,14 @@ export default function AccountsPage() {
       setModalOpen(false)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить счёт')
+      setFormError(e instanceof Error ? e.message : 'Не удалось сохранить счёт')
     } finally { setSaving(false) }
   }
 
   const toggleArchived = async (account: Account) => {
+    setArchiveError(null)
     const { error: err } = await googleSheets.from('accounts').update({ archived: !account.archived }).eq('id', account.id).expect(account as unknown as Record<string, unknown>)
-    if (err) setError(err.message)
+    if (err) setArchiveError(err.message)
     else await load()
   }
 
@@ -128,8 +139,13 @@ export default function AccountsPage() {
         </>
       )}
       <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Показывать архивные счета</label>
-      {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
-      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : visible.length === 0 ? (
+      {archiveError && <div role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{archiveError}</div>}
+      {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? (
+        <div role="alert" className="card space-y-2">
+          <p className="text-sm text-danger-600">{error}</p>
+          <button type="button" className="btn-secondary" onClick={() => void load()}>Повторить загрузку</button>
+        </div>
+      ) : visible.length === 0 ? (
         <div className="card text-center py-8 text-sm text-slate-500">Счетов пока нет. Создайте первый счёт.</div>
       ) : <div className="space-y-2">{visible.map(account => (
         <div key={account.id} className="card flex items-center gap-3">
@@ -142,6 +158,7 @@ export default function AccountsPage() {
       ))}</div>}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Изменить счёт' : 'Новый счёт'}>
         <form onSubmit={save} className="space-y-3">
+          {formError && <div role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{formError}</div>}
           <div><label className="label" htmlFor="account-name">Название</label><input id="account-name" className="input" required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Например, Основная карта" /></div>
           <div><label className="label" htmlFor="account-kind">Тип</label><select id="account-kind" className="input" value={kind} onChange={e => setKind(e.target.value as Account['kind'])}><option value="bank">Банковский счёт</option><option value="cash">Наличные</option><option value="savings">Накопительный</option><option value="other">Другой</option></select></div>
           <div><label className="label" htmlFor="account-opening-balance">Начальный остаток, ₽</label><input id="account-opening-balance" className="input" type="number" step="0.01" value={startingBalance} onChange={e => setStartingBalance(e.target.value)} /></div>

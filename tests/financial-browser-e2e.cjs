@@ -501,9 +501,9 @@ async function main() {
     await page.getByText('Тестовая ошибка загрузки счетов', { exact: true }).waitFor()
     assert.equal(await page.getByText('Общий остаток активных счетов', { exact: true }).count(), 0, 'accounts total must stay hidden after a failed read')
     assert.equal(await page.getByText('Наличные', { exact: true }).count(), 0, 'a failed accounts read must not present stale account rows')
+    assert.equal(await page.getByText('Счетов пока нет.', { exact: false }).count(), 0, 'a failed read must not claim the family has no accounts')
     accountReadError = null
-    await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
-    await page.goto(baseUrl + '/accounts', { waitUntil: 'domcontentloaded' })
+    await page.getByRole('button', { name: 'Повторить загрузку' }).click()
     await page.getByText('Наличные', { exact: true }).waitFor()
     await page.getByText('Общий остаток активных счетов', { exact: true }).waitFor()
 
@@ -860,6 +860,9 @@ async function main() {
     await addAccountButton.focus()
     await page.keyboard.press('Enter')
     await page.getByRole('dialog').waitFor()
+    await accountCreateDialog.getByLabel('Название', { exact: true }).fill('   ')
+    await accountCreateDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await accountCreateDialog.getByText('Введите название счёта', { exact: true }).waitFor()
     await page.getByLabel('Название', { exact: true }).fill('E2E накопительный')
     await page.getByRole('dialog').getByLabel('Тип').selectOption('savings')
     await page.getByLabel('Начальный остаток, ₽').fill('-25.50')
