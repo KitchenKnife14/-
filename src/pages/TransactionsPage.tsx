@@ -112,6 +112,7 @@ export default function TransactionsPage() {
   const clearFilters = () => { setSearch(''); setTypeFilter('all'); setCategoryFilter(''); setAuthorFilter(''); setResponsibleFilter(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount('') }
 
   const { income, expense } = calculateRealizedTotals(filtered)
+  const resultsReady = !loading && !error
 
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
@@ -173,18 +174,25 @@ export default function TransactionsPage() {
       </div>
       {hasFilters && <button type="button" onClick={clearFilters} className="text-xs text-primary-700 hover:underline">Сбросить фильтры</button>}
 
-      <div className="flex gap-3 text-sm">
-        <div className="text-accent-600">Доходы: {formatRubles(income)}</div>
-        <div className="text-slate-700">Расходы: {formatRubles(expense)}</div>
-        <div className={income - expense >= 0 ? 'text-slate-500' : 'text-danger-600'}>Разница за период: {formatRubles(income - expense)}</div>
-      </div>
-
-      {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
+      {resultsReady && (
+        <div className="flex gap-3 text-sm">
+          <div className="text-accent-600">Доходы: {formatRubles(income)}</div>
+          <div className="text-slate-700">Расходы: {formatRubles(expense)}</div>
+          <div className={income - expense >= 0 ? 'text-slate-500' : 'text-danger-600'}>Разница за период: {formatRubles(income - expense)}</div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-slate-400">Загрузка…</div>
-      ) : filtered.length === 0 && !error ? (
-        <div className="card text-center py-8 text-sm text-slate-500">Операций за этот месяц нет.</div>
+      ) : error ? (
+        <div role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">
+          <p>{error}</p>
+          <button type="button" className="btn-secondary mt-2" onClick={() => void load()}>Повторить загрузку</button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card text-center py-8 text-sm text-slate-500">
+          {hasFilters ? 'По выбранным фильтрам операций нет.' : 'Операций за этот месяц нет.'}
+        </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((t) => {

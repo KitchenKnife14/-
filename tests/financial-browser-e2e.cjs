@@ -6,6 +6,7 @@ const baseUrl = 'http://127.0.0.1:4174'
 const apiUrl = 'https://test-gas.invalid/exec'
 const familyId = 'family-e2e'
 const userId = 'user-e2e'
+const partnerId = 'partner-e2e'
 
 const state = {
   accounts: [
@@ -17,7 +18,10 @@ const state = {
     { id: 'category-home', family_id: familyId, name: 'Дом', kind: 'expense', icon: '🏠', archived: false, parent_id: null },
     { id: 'category-salary', family_id: familyId, name: 'Зарплата', kind: 'income', icon: '💼', archived: false, parent_id: null },
   ],
-  profiles: [{ id: userId, display_name: 'Тестовый пользователь' }],
+  profiles: [
+    { id: userId, display_name: 'Тестовый пользователь' },
+    { id: partnerId, display_name: 'Тестовый партнёр' },
+  ],
   transactions: [],
   notifications: [],
   recurring_payments: [],
@@ -159,8 +163,8 @@ function rpc(name, params) {
     return {
       profile: { id: userId, display_name: 'Тестовый пользователь', email: 'e2e@example.test' },
       family: { id: familyId, name: 'Тестовая семья' },
-      members: [{ user_id: userId, role: 'owner' }],
-      member_profiles: [{ id: userId, display_name: 'Тестовый пользователь' }],
+      members: [{ user_id: userId, role: 'owner' }, { user_id: partnerId, role: 'member' }],
+      member_profiles: state.profiles,
     }
   }
   if (name === 'ensure_supplemental_categories') return { added: 0 }
@@ -681,6 +685,7 @@ async function main() {
     await page.getByLabel('Сумма, ₽').fill('123.45')
     await page.getByLabel('Счёт (для расчёта остатка)').selectOption('account-cash')
     await page.getByLabel('Категория').selectOption('category-food')
+    await page.getByLabel('Ответственный участник').selectOption(partnerId)
     await page.getByRole('textbox', { name: 'Описание' }).fill('E2E расход')
     const saveTransactionButton = page.getByRole('button', { name: 'Сохранить' })
     const saveTransactionButtonElement = await saveTransactionButton.elementHandle()
@@ -697,6 +702,31 @@ async function main() {
     assert.equal(state.transactions[0].type, 'expense')
 
     const expenseCard = page.locator('.card').filter({ hasText: 'E2E расход' }).first()
+    await expenseCard.getByText(/Автор: Тестовый пользователь · Ответственный: Тестовый партнёр/).waitFor()
+    const authorFilter = page.getByLabel('Фильтр по автору записи')
+    const responsibleFilter = page.getByLabel('Фильтр по ответственному участнику')
+    const noMatches = page.getByText('По выбранным фильтрам операций нет.', { exact: true })
+    await authorFilter.selectOption(userId)
+    await responsibleFilter.selectOption(partnerId)
+    await expenseCard.waitFor()
+    await responsibleFilter.selectOption(userId)
+    await noMatches.waitFor()
+    await responsibleFilter.selectOption(partnerId)
+    await authorFilter.selectOption(partnerId)
+    await noMatches.waitFor()
+    await page.getByRole('button', { name: 'Сбросить фильтры' }).click()
+    await expenseCard.waitFor()
+
+    transactionReadError = 'Не удалось загрузить следующий месяц'
+    await page.getByRole('button', { name: 'Следующий месяц' }).click()
+    await page.getByRole('alert').getByText(transactionReadError).waitFor()
+    assert.equal(await expenseCard.count(), 0, 'failed period must hide transactions from the previous month')
+    assert.equal(await page.getByText(/^Разница за период:/).count(), 0, 'failed period must hide totals from the previous month')
+    transactionReadError = null
+    await page.getByRole('button', { name: 'Повторить загрузку' }).click()
+    await page.getByText('Операций за этот месяц нет.', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
+    await expenseCard.waitFor()
     await expenseCard.getByRole('button', { name: 'Изменить' }).click()
     await page.getByLabel('Сумма, ₽').fill('200.00')
     await page.getByRole('textbox', { name: 'Описание' }).fill('E2E расход изменён')
