@@ -1193,10 +1193,11 @@ async function main() {
 
     // Notification icon actions must have useful accessible names and work from the keyboard.
     state.notifications = [
-      { id: 'notification-keyboard', family_id: familyId, kind: 'system', title: 'Проверка клавиатуры', body: 'Тестовое уведомление', read: false, created_at: '2026-11-18T08:00:00.000Z' },
+      { id: 'notification-keyboard', family_id: familyId, kind: 'system', title: 'Проверка клавиатуры', body: 'Тестовое уведомление', read: false, created_at: '2026-10-31T21:00:00.000Z' },
     ]
     await page.goto(baseUrl + '/notifications', { waitUntil: 'domcontentloaded' })
     const notificationCard = page.locator('.card').filter({ hasText: 'Проверка клавиатуры' }).first()
+    await notificationCard.getByText(/^1 нояб\.? 2026$/).waitFor()
     const markNotificationRead = notificationCard.getByRole('button', { name: 'Отметить уведомление «Проверка клавиатуры» прочитанным' })
     const deleteNotification = notificationCard.getByRole('button', { name: 'Удалить уведомление «Проверка клавиатуры»' })
     await markNotificationRead.waitFor()

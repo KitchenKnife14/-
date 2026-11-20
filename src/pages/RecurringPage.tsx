@@ -77,8 +77,9 @@ export default function RecurringPage() {
   const toggleActive = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').update({ active: !r.active }).eq('id', r.id).expect(r as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
   const remove = async (r: RecurringPayment) => { const { error: err } = await googleSheets.from('recurring_payments').delete().eq('id', r.id).expect(r as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
 
-  const overdue = items.filter((r) => r.active && r.next_due_date < todayISO())
-  const upcoming = items.filter((r) => r.active && r.next_due_date >= todayISO())
+  const today = todayISO()
+  const overdue = items.filter((r) => r.active && r.next_due_date < today)
+  const upcoming = items.filter((r) => r.active && r.next_due_date >= today)
   const paused = items.filter((r) => !r.active)
 
   return (
@@ -154,7 +155,7 @@ function RecurringForm({ open, onClose, onSaved, categories, accounts, members, 
   const [description, setDescription] = useState('')
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'>('monthly')
   const [customDays, setCustomDays] = useState('30')
-  const [startDate, setStartDate] = useState(todayISO())
+  const [startDate, setStartDate] = useState(todayISO)
   const [endDate, setEndDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)

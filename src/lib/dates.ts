@@ -1,6 +1,10 @@
 import { format, parseISO } from 'date-fns'
 import { ru } from 'date-fns/locale'
 
+let moscowShortDateFormatter: Intl.DateTimeFormat | undefined
+let moscowDateTimeFormatter: Intl.DateTimeFormat | undefined
+let moscowCalendarFormatter: Intl.DateTimeFormat | undefined
+
 export const formatDate = (iso: string): string => {
   try {
     return format(parseISO(iso), 'd MMM yyyy', { locale: ru })
@@ -13,9 +17,10 @@ export const formatDate = (iso: string): string => {
 // continue to use parseISO so their calendar day is not shifted by the device TZ.
 export const formatDateInMoscow = (iso: string): string => {
   try {
-    const parts = new Intl.DateTimeFormat('ru-RU', {
+    moscowShortDateFormatter ??= new Intl.DateTimeFormat('ru-RU', {
       timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', year: 'numeric',
-    }).formatToParts(new Date(iso))
+    })
+    const parts = moscowShortDateFormatter.formatToParts(new Date(iso))
     const part = (type: string) => parts.find((item) => item.type === type)?.value ?? ''
     const day = part('day')
     const month = part('month')
@@ -29,10 +34,11 @@ export const formatDateInMoscow = (iso: string): string => {
 
 export const formatDateTimeInMoscow = (iso: string): string => {
   try {
-    return new Intl.DateTimeFormat('ru-RU', {
+    moscowDateTimeFormatter ??= new Intl.DateTimeFormat('ru-RU', {
       timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    }).format(new Date(iso))
+    })
+    return moscowDateTimeFormatter.format(new Date(iso))
   } catch {
     return iso
   }
@@ -75,9 +81,10 @@ export const monthLabel = (year: number, month: number): string =>
   format(new Date(year, month, 1), 'LLLL yyyy', { locale: ru })
 
 export const todayISO = (): string => {
-  const parts = new Intl.DateTimeFormat('en-GB', {
+  moscowCalendarFormatter ??= new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date())
+  })
+  const parts = moscowCalendarFormatter.formatToParts(new Date())
   const part = (type: string) => parts.find((item) => item.type === type)?.value ?? ''
   return `${part('year')}-${part('month')}-${part('day')}`
 }
