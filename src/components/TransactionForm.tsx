@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { BackendRequestError, googleSheets } from '../lib/googleSheets'
 import Modal from './Modal'
-import type { Account, Category, TxType } from '../lib/types'
+import type { Account, Category, Transaction, TxType } from '../lib/types'
 import { parseRublesToKopecks } from '../lib/money'
 import { clearPendingTransaction, fingerprintTransactionPayload, getOrCreatePendingTransactionId, pendingTransactionStorageKey, getPendingStorage } from '../lib/pendingTransaction'
 import { todayISO } from '../lib/dates'
@@ -15,22 +15,8 @@ interface Props {
   categories: Category[]
   accounts: Account[]
   userId: string | null
-  editing?: TransactionDraft | null
+  editing?: Transaction | null
   initialType?: TxType
-}
-
-export interface TransactionDraft {
-  id: string
-  type: TxType
-  amount_kopecks: number
-  operation_date: string
-  category_id: string | null
-  account_id: string | null
-  to_account_id: string | null
-  description: string
-  planned: boolean
-  responsible_user_id?: string | null
-  created_by?: string | null
 }
 
 function createTransactionRequestId(): string {
@@ -117,7 +103,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         planned,
       }
       if (editing) {
-        const { error: err } = await googleSheets.from('transactions').update(payload).eq('id', editing.id).expect(editing as unknown as Record<string, unknown>)
+        const { error: err } = await googleSheets.from('transactions').update(payload).eq('id', editing.id).expect({ ...editing })
         if (err) throw err
       } else {
         const insertPayload = { ...payload, created_by: userId }

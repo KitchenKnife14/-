@@ -7,7 +7,7 @@ import type { Transaction, Category, Account } from '../lib/types'
 import { formatRubles, formatRublesShort } from '../lib/money'
 import { formatDate, monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
 import { Plus, Search, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
-import TransactionForm, { type TransactionDraft } from '../components/TransactionForm'
+import TransactionForm from '../components/TransactionForm'
 import Modal from '../components/Modal'
 import { ensureSupplementalCategories } from '../lib/categories'
 import { getTransactionAttribution, matchesTransactionAttribution } from '../lib/transactionAttribution'
@@ -32,7 +32,7 @@ export default function TransactionsPage() {
   const [minAmount, setMinAmount] = useState('')
   const [maxAmount, setMaxAmount] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  const [editing, setEditing] = useState<TransactionDraft | null>(null)
+  const [editing, setEditing] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
   const [deletePending, setDeletePending] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -215,7 +215,7 @@ export default function TransactionsPage() {
                   {t.type === 'transfer' ? '⇄' : isIncome ? '+' : '−'} {formatRublesShort(t.amount_kopecks)}
                 </div>
                 <div className="flex gap-1">
-                  <button type="button" onClick={() => { setEditing({ id: t.id, type: t.type, amount_kopecks: t.amount_kopecks, operation_date: t.operation_date, category_id: t.category_id, account_id: t.account_id, to_account_id: t.to_account_id, description: t.description, planned: t.planned, responsible_user_id: t.responsible_user_id, created_by: t.created_by }); setShowAdd(true) }} className="btn-ghost px-2" aria-label={`Изменить операцию: ${t.description || cat?.name || 'Операция'}`}>
+                  <button type="button" onClick={() => { setEditing(t); setShowAdd(true) }} className="btn-ghost px-2" aria-label={`Изменить операцию: ${t.description || cat?.name || 'Операция'}`}>
                     <Pencil size={16} />
                   </button>
                   <button type="button" onClick={() => { setDeleteError(null); setDeleting(t) }} className="btn-ghost px-2 text-danger-600" aria-label={`Удалить операцию: ${t.description || cat?.name || 'Операция'}`}>

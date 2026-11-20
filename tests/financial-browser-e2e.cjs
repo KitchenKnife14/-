@@ -122,7 +122,12 @@ function query(payload) {
         else rows.push({ ...value, id: value.id || 'fixture-' + payload.table + '-' + (++sequence) })
       } else {
         if (rows.some(row => row.id === value.id)) throw new Error('Duplicate id in E2E fixture')
-        rows.push({ ...value })
+        if (payload.table === 'transactions') {
+          const now = new Date().toISOString()
+          rows.push({ operation_time: null, parent_recurring_id: null, updated_by: userId, created_at: now, updated_at: now, ...value })
+        } else {
+          rows.push({ ...value })
+        }
       }
     }
     if (payload.table === 'goal_contributions') syncGoalTotals(values.map(row => row.goal_id))
@@ -131,6 +136,17 @@ function query(payload) {
   if (payload.mode === 'update') {
     const values = payload.values || {}
     const affectedGoalIds = selected.flatMap(row => [row.goal_id, values.goal_id])
+    if (payload.table === 'transactions') {
+      for (const row of selected) {
+        const columns = Object.keys(row)
+        if (!payload.expected || columns.some(column => !Object.hasOwn(payload.expected, column))) {
+          throw new Error('Некорректный или неполный снимок записи для проверки изменений')
+        }
+        if (columns.some(column => payload.expected[column] !== row[column])) {
+          throw new Error('Запись была изменена другим участником. Обновите данные и повторите изменение.')
+        }
+      }
+    }
     for (const row of selected) Object.assign(row, values)
     if (payload.table === 'goal_contributions') syncGoalTotals(affectedGoalIds)
     return payload.returning ? selected : null
@@ -728,11 +744,21 @@ async function main() {
     await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
     await expenseCard.waitFor()
     await expenseCard.getByRole('button', { name: 'Изменить' }).click()
+    state.transactions[0].operation_time = '09:15'
+    await page.getByLabel('Сумма, ₽').fill('15.67')
+    await page.getByRole('button', { name: 'Сохранить' }).click()
+    await page.getByRole('dialog').getByText(/Запись была изменена другим участником/).waitFor()
+    assert.equal(state.transactions[0].amount_kopecks, 12345, 'stale edit must leave the amount intact')
+    await page.getByRole('dialog').getByRole('button', { name: 'Отмена' }).click()
+    await page.reload()
+    await expenseCard.getByRole('button', { name: 'Изменить' }).click()
     await page.getByLabel('Сумма, ₽').fill('200.00')
     await page.getByRole('textbox', { name: 'Описание' }).fill('E2E расход изменён')
     await page.getByRole('button', { name: 'Сохранить' }).click()
     await page.getByText('E2E расход изменён', { exact: true }).waitFor()
     assert.equal(state.transactions[0].amount_kopecks, 20000)
+    assert.equal(state.transactions.length, 1, 'editing must not create another transaction')
+    assert.equal(state.transactions[0].operation_time, '09:15', 'uneditable server fields must survive the edit')
 
     await page.getByRole('button', { name: 'Добавить' }).click()
     await page.getByRole('button', { name: 'Перевод' }).click()
