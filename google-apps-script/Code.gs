@@ -85,7 +85,8 @@ function isStableConsistencyState_(value){return typeof value==='string'&&/^stab
 function beginWriteConsistency_(){
   const marker='writing:'+Utilities.getUuid();
   // The marker must be durable before any application data or session state is changed.
-  PropertiesService.getScriptProperties().setProperty(READ_CONSISTENCY_PROPERTY,marker);
+  try{PropertiesService.getScriptProperties().setProperty(READ_CONSISTENCY_PROPERTY,marker);}
+  catch(err){CONSISTENCY_MARKER_WRITE_FAILURES++;throw err;}
   return 'stable:'+marker.slice('writing:'.length);
 }
 function finishWriteConsistency_(stableState){

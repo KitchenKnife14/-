@@ -10,7 +10,7 @@ function makeHarness() {
   const scriptCache = new Map();
   let uuidCounter = 0;
   let scriptId = 'TEST_SCRIPT_ID', spreadsheetId = 'TEST_SPREADSHEET_ID', spreadsheetName = 'Семейный бюджет';
-  let lockAcquires = 0, lockReleases = 0, failNextLockWait = false;
+  let lockAcquires = 0, lockReleases = 0, failNextLockWait = false, failPropertySetKey = null;
   let setValuesCalls = 0, failSetValuesAt = null;
   let deleteRowsCalls = 0, failDeleteRowsAt = null;
   class Range {
@@ -92,7 +92,10 @@ function makeHarness() {
     }) },
     PropertiesService: { getScriptProperties: () => ({
       getProperty: key => properties.get(key) ?? null,
-      setProperty: (key, value) => { properties.set(key, value); return this; },
+      setProperty: (key, value) => {
+        if (failPropertySetKey === key) { failPropertySetKey = null; throw new Error('Injected ScriptProperties setProperty failure'); }
+        properties.set(key, value); return this;
+      },
       deleteProperty: key => properties.delete(key),
       getProperties: () => Object.fromEntries(properties)
     }) },
@@ -126,6 +129,7 @@ function makeHarness() {
     lockStats: () => ({ acquires: lockAcquires, releases: lockReleases }),
     resetLockStats: () => { lockAcquires = 0; lockReleases = 0; },
     failNextLockWait: () => { failNextLockWait = true; },
+    failNextPropertySet: key => { failPropertySetKey = key; },
     failSetValuesAfter: offset => { failSetValuesAt = setValuesCalls + offset; },
     failDeleteRowsAfter: offset => { failDeleteRowsAt = deleteRowsCalls + offset; },
     clearRowsCache: () => vm.runInContext('ROWS_CACHE = {}', context)
@@ -232,6 +236,7 @@ test('doPost diagnostics measure optimistic reads, locked retry, writes and lock
   });
   assert.equal(signup.error, null, signup.error?.message);
   assert.ok(signup.data.token);
+  assert.deepEqual(Object.keys(signup).sort(), ['data', 'diagnostics', 'error']);
   assert.ok(signup.diagnostics);
   assert.ok(signup.diagnostics.lockMs >= 0);
   assert.ok(signup.diagnostics.workMs >= 0);
@@ -260,6 +265,21 @@ test('doPost diagnostics measure optimistic reads, locked retry, writes and lock
   assert.equal(timedOut.diagnostics.readRetry, false);
   assert.ok(timedOut.diagnostics.lockMs >= 0);
   assert.ok(timedOut.diagnostics.totalMs >= timedOut.diagnostics.lockMs);
+});
+
+test('doPost diagnostics count a failed consistency-marker write and preserve the failure response', () => {
+  const h = makeHarness();
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('DOPOST_DIAGNOSTICS_TEST_ONLY', 'ISOLATED_TEST_ONLY');
+  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
+  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  h.setTestIdentity({ spreadsheetName: 'TEST Семейный бюджет' });
+  h.failNextPropertySet('api_read_consistency_v1');
+
+  const response = h.call({ action: 'unknownDiagnosticProbe' });
+  assert.match(response.error?.message || '', /Injected ScriptProperties setProperty failure/);
+  assert.equal(response.diagnostics.consistencyMarkerWriteFailures, 1);
+  assert.equal(response.diagnostics.revisionWriteFailures, 0);
 });
 
 test('Apps Script request logs contain metrics only and never payload secrets or financial values', () => {
