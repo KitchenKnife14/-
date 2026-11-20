@@ -82,13 +82,15 @@ export default function PlanningPage() {
 
   const copyFromPrev = async () => {
     if (!family) return
-    const { data: prevPlans, error } = await googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', prevMonthDate)
-    if (error) { setError(error.message); return }
-    if (!prevPlans || prevPlans.length === 0) { setError('В предыдущем месяце нет планов для копирования'); return }
-    const { data: currentPlans, error: currentError } = await googleSheets.from('monthly_plans').select('*').eq('family_id', family.id).eq('month_date', monthDate)
-    if (currentError) { setError(currentError.message); return }
-    const currentByKey = new Map((currentPlans as MonthlyPlan[]).map((p) => [JSON.stringify([p.family_id, p.month_date, p.category_id ?? null, p.type]), p]))
-    const copyRows = (prevPlans as MonthlyPlan[]).map((p) => ({
+    const { data, error: readError } = await googleSheets.from('monthly_plans')
+      .select('*').eq('family_id', family.id).in('month_date', [prevMonthDate, monthDate])
+    if (readError) { setError(readError.message); return }
+    const plansForBothMonths = (data ?? []) as MonthlyPlan[]
+    const prevPlans = plansForBothMonths.filter((p) => p.month_date === prevMonthDate)
+    if (!prevPlans.length) { setError('В предыдущем месяце нет планов для копирования'); return }
+    const currentPlans = plansForBothMonths.filter((p) => p.month_date === monthDate)
+    const currentByKey = new Map(currentPlans.map((p) => [JSON.stringify([p.family_id, p.month_date, p.category_id ?? null, p.type]), p]))
+    const copyRows = prevPlans.map((p) => ({
       family_id: family.id, month_date: monthDate, category_id: p.category_id, type: p.type, planned_kopecks: p.planned_kopecks, note: p.note,
     }))
     const expectedRows = copyRows.map((p) => currentByKey.get(JSON.stringify([p.family_id, p.month_date, p.category_id ?? null, p.type])) ?? null)
@@ -96,7 +98,10 @@ export default function PlanningPage() {
       copyRows,
       { onConflict: 'family_id,month_date,category_id,type' }
     ).expectUpsert(expectedRows)
-    if (copyError) setError(`Не удалось скопировать планы: ${copyError.message}`)
+    if (copyError) {
+      setError(`Не удалось скопировать планы: ${copyError.message}`)
+      return
+    }
     await load()
   }
 
@@ -113,9 +118,9 @@ export default function PlanningPage() {
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
+        <button aria-label="Предыдущий месяц" onClick={prevMonth} className="btn-ghost px-2"><ChevronLeft size={18} /></button>
         <div className="font-medium text-slate-700">{monthLabel(cursor.year, cursor.month)}</div>
-        <button onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
+        <button aria-label="Следующий месяц" onClick={nextMonth} className="btn-ghost px-2"><ChevronRight size={18} /></button>
       </div>
       {loading ? <div className="text-sm text-slate-400">Загрузка…</div> : error ? null : <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

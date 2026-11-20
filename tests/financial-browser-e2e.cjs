@@ -784,6 +784,15 @@ async function main() {
     assert.equal(state.monthly_plans[0].planned_kopecks, 700000)
     assert.equal(state.monthly_plans[0].note, 'E2E план обновлён')
 
+    await page.getByRole('button', { name: 'Следующий месяц' }).click()
+    await page.getByText('Планов на этот месяц нет.', { exact: false }).waitFor()
+    await page.getByRole('button', { name: 'Из предыдущего' }).click()
+    await page.getByText('E2E план обновлён', { exact: true }).waitFor()
+    assert.equal(state.monthly_plans.length, 2, 'copy must retain the source plan and create the destination plan')
+    assert.equal(new Set(state.monthly_plans.map(plan => plan.month_date)).size, 2)
+    assert.ok(state.monthly_plans.every(plan => plan.planned_kopecks === 700000))
+
+
     await page.goto(baseUrl + '/goals', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Финансовые цели' }).waitFor()
     const addGoalButton = page.getByRole('button', { name: 'Цель' })
