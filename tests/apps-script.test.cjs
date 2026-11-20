@@ -9,6 +9,7 @@ function makeHarness() {
   const properties = new Map();
   const scriptCache = new Map();
   let uuidCounter = 0;
+  let scriptId = 'TEST_SCRIPT_ID', spreadsheetId = 'TEST_SPREADSHEET_ID', spreadsheetName = 'Семейный бюджет';
   let lockAcquires = 0, lockReleases = 0, failNextLockWait = false;
   let setValuesCalls = 0, failSetValuesAt = null;
   let deleteRowsCalls = 0, failDeleteRowsAt = null;
@@ -67,7 +68,8 @@ function makeHarness() {
     isSheetHidden() { return this.hidden; }
   }
   const spreadsheet = {
-    getName: () => 'Семейный бюджет',
+    getName: () => spreadsheetName,
+    getId: () => spreadsheetId,
     getSheetByName: name => sheets.get(name) || null,
     insertSheet: name => { const sheet = new Sheet(name); sheets.set(name, sheet); return sheet; },
     deleteSheet: sheet => sheets.delete(sheet.name),
@@ -76,6 +78,7 @@ function makeHarness() {
   const context = {
     console,
     Date,
+    ScriptApp: { getScriptId: () => scriptId },
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, },
     CacheService: { getScriptCache: () => ({ get: key => scriptCache.get(key) ?? null, put: (key, value) => scriptCache.set(key, value), remove: key => scriptCache.delete(key) }) },
     ContentService: {
@@ -115,6 +118,11 @@ function makeHarness() {
   };
   return {
     context, call, signup,
+    setTestIdentity: values => {
+      if (values.scriptId !== undefined) scriptId = values.scriptId;
+      if (values.spreadsheetId !== undefined) spreadsheetId = values.spreadsheetId;
+      if (values.spreadsheetName !== undefined) spreadsheetName = values.spreadsheetName;
+    },
     lockStats: () => ({ acquires: lockAcquires, releases: lockReleases }),
     resetLockStats: () => { lockAcquires = 0; lockReleases = 0; },
     failNextLockWait: () => { failNextLockWait = true; },
@@ -179,6 +187,79 @@ test('DEBUG_INFO is enabled only by the exact flag and hideInfo removes the diag
   const normal = parse(h.context.doGet());
   assert.deepEqual(Object.keys(normal).sort(), ['message', 'status', 'version']);
   assert.equal(normal.status, 'ok');
+});
+
+test('doPost diagnostics are fail-closed behind TEST-only flag and exact environment allowlists', () => {
+  const h = makeHarness();
+  const props = h.context.PropertiesService.getScriptProperties();
+  const call = () => h.call({ action: 'unknownDiagnosticProbe' });
+
+  assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
+  props.setProperty('DOPOST_DIAGNOSTICS_TEST_ONLY', 'ISOLATED_TEST_ONLY');
+  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
+  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+
+  h.setTestIdentity({ spreadsheetName: 'Семейный бюджет' });
+  assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
+  h.setTestIdentity({ spreadsheetName: 'TEST Семейный бюджет', scriptId: 'WRONG_SCRIPT' });
+  assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
+  h.setTestIdentity({ scriptId: 'TEST_SCRIPT_ID', spreadsheetId: 'WRONG_SPREADSHEET' });
+  assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
+
+  h.setTestIdentity({ spreadsheetId: 'TEST_SPREADSHEET_ID', spreadsheetName: 'TEST Семейный бюджет' });
+  const response = call();
+  assert.ok(response.diagnostics);
+  assert.ok(response.error);
+  assert.equal(response.data, null);
+  assert.deepEqual(Object.keys(response.diagnostics).sort(), [
+    'consistencyMarkerWriteFailures', 'lockMs', 'pbkdf2Ms', 'readMs',
+    'readRetry', 'reads', 'revisionWriteFailures', 'totalMs', 'workMs',
+    'writeMs', 'writes'
+  ]);
+});
+
+test('doPost diagnostics measure optimistic reads, locked retry, writes and lock timeout without changing API envelope', () => {
+  const h = makeHarness();
+  const props = h.context.PropertiesService.getScriptProperties();
+  props.setProperty('DOPOST_DIAGNOSTICS_TEST_ONLY', 'ISOLATED_TEST_ONLY');
+  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
+  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  h.setTestIdentity({ spreadsheetName: 'TEST Семейный бюджет' });
+
+  const signup = h.call({
+    action: 'signup', email: 'diagnostics-runtime@example.test',
+    password: 'diagnostics-test-password'
+  });
+  assert.equal(signup.error, null, signup.error?.message);
+  assert.ok(signup.data.token);
+  assert.ok(signup.diagnostics);
+  assert.ok(signup.diagnostics.lockMs >= 0);
+  assert.ok(signup.diagnostics.workMs >= 0);
+  assert.ok(signup.diagnostics.totalMs >= signup.diagnostics.lockMs);
+  assert.ok(signup.diagnostics.writes > 0);
+  assert.ok(signup.diagnostics.reads > 0);
+
+  const optimistic = h.call({ action: 'getSession', token: signup.data.token });
+  assert.equal(optimistic.error, null, optimistic.error?.message);
+  assert.ok(optimistic.data.user);
+  assert.equal(optimistic.diagnostics.readRetry, false);
+  assert.equal(optimistic.diagnostics.lockMs, 0);
+  assert.ok(optimistic.diagnostics.totalMs >= optimistic.diagnostics.workMs);
+
+  props.setProperty('api_read_consistency_v1', 'writing:simulated-overlap');
+  const retried = h.call({ action: 'getSession', token: signup.data.token });
+  assert.equal(retried.error, null, retried.error?.message);
+  assert.equal(retried.diagnostics.readRetry, true);
+  assert.ok(retried.diagnostics.lockMs >= 0);
+  assert.ok(h.lockStats().acquires >= 2);
+
+  h.failNextLockWait();
+  const timedOut = h.call({ action: 'unknownDiagnosticProbe' });
+  assert.match(timedOut.error?.message || '', /Injected lock timeout/);
+  assert.ok(timedOut.diagnostics);
+  assert.equal(timedOut.diagnostics.readRetry, false);
+  assert.ok(timedOut.diagnostics.lockMs >= 0);
+  assert.ok(timedOut.diagnostics.totalMs >= timedOut.diagnostics.lockMs);
 });
 
 test('Apps Script request logs contain metrics only and never payload secrets or financial values', () => {

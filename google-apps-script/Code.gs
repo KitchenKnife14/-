@@ -113,56 +113,80 @@ function postResult_(req){
   }catch(err){return {data:null,error:{message:String(err&&err.message||err)}};}
 }
 function doPost(e) {
-  const t0=Date.now();let req=null,lockMs=0,tLocked=t0,lockWaitStarted=t0,optimisticReadMs=0,readRetry=false,lockAcquired=false,lockAttempted=false,writeState=null;
+  const t0=Date.now();
+  let req=null,lockMs=0,lockWaitStarted=t0,optimisticReadMs=0,readRetry=false;
+  let lockAcquired=false,lockAttempted=false,writeState=null,responseBody=null,diagnosticsEnabled=false;
   const lock=LockService.getScriptLock();
   try{
     ROWS_CACHE={};TZ_CACHE=null;SS_CACHE=null;READ_ONLY_REQUEST=false;SHEET_SCHEMA_VALIDATED={};
     PBKDF2_MS=0;SHEET_READS=0;SHEET_WRITES=0;SHEET_READ_MS=0;SHEET_WRITE_MS=0;REVISION_WRITE_FAILURES=0;CONSISTENCY_MARKER_WRITE_FAILURES=0;
+    diagnosticsEnabled=testDoPostDiagnosticsEnabled_();
     req=JSON.parse((e&&e.postData&&e.postData.contents)||'{}');
     READ_ONLY_REQUEST=requestLockMode_(req)==='read-candidate';
     if(!req.action)throw new Error('Не указано действие');
     if(READ_ONLY_REQUEST){
       // Optimistic read: no lock wait when no writer overlaps this request.
       const before=readConsistencyState_();
+      let acceptedOptimisticRead=false;
       if(isStableConsistencyState_(before)){
         const readStarted=Date.now();
         const result=postResult_(req);
         optimisticReadMs+=Date.now()-readStarted;
         const after=readConsistencyState_();
-        if(after===before)return json_(result);
+        if(after===before){responseBody=result;acceptedOptimisticRead=true;}
       }
-      // A writer overlapped the read, or the marker could not be trusted. Discard
-      // the entire result and retry once while holding the same lock as writers.
-      readRetry=true;
+      if(!acceptedOptimisticRead){
+        // Discard the entire result and retry once under the same lock as writers.
+        readRetry=true;
+        lockAttempted=true;lockWaitStarted=Date.now();lock.waitLock(20000);lockAcquired=true;
+        lockMs=Date.now()-lockWaitStarted;
+        // Never reuse rows cached by the discarded optimistic attempt.
+        ROWS_CACHE={};TZ_CACHE=null;SHEET_SCHEMA_VALIDATED={};
+        try{recoverConsistencyUnderLock_();responseBody=postResult_(req);}
+        finally{lock.releaseLock();}
+      }
+    }else{
       lockAttempted=true;lockWaitStarted=Date.now();lock.waitLock(20000);lockAcquired=true;
-      tLocked=Date.now();lockMs=tLocked-lockWaitStarted;
-      // Never reuse rows cached by the discarded optimistic attempt.
-      ROWS_CACHE={};TZ_CACHE=null;SHEET_SCHEMA_VALIDATED={};
-      try{recoverConsistencyUnderLock_();return json_(postResult_(req));}
-      finally{lock.releaseLock();}
-    }
-    lockAttempted=true;lockWaitStarted=Date.now();lock.waitLock(20000);lockAcquired=true;
-    tLocked=Date.now();lockMs=tLocked-lockWaitStarted;
-    try{
-      writeState=beginWriteConsistency_();
-      return json_(postResult_(req));
-    }finally{
-      finishWriteConsistency_(writeState);
-      lock.releaseLock();
+      lockMs=Date.now()-lockWaitStarted;
+      try{
+        writeState=beginWriteConsistency_();
+        responseBody=postResult_(req);
+      }finally{
+        finishWriteConsistency_(writeState);
+        lock.releaseLock();
+      }
     }
   }catch(err){
     if(lockAttempted&&!lockAcquired)lockMs=Date.now()-lockWaitStarted;
     try{if(lock.hasLock())lock.releaseLock();}catch(_){}
-    return json_({data:null,error:{message:String(err&&err.message||err)}});
+    responseBody={data:null,error:{message:String(err&&err.message||err)}};
   }finally{
     READ_ONLY_REQUEST=false;
     const ended=Date.now();
+    const metrics={
+      lockMs:lockMs,
+      workMs:Math.max(0,ended-t0-lockMs),
+      totalMs:ended-t0,
+      pbkdf2Ms:PBKDF2_MS,
+      reads:SHEET_READS,
+      writes:SHEET_WRITES,
+      readMs:SHEET_READ_MS,
+      writeMs:SHEET_WRITE_MS,
+      readRetry:readRetry,
+      revisionWriteFailures:REVISION_WRITE_FAILURES,
+      consistencyMarkerWriteFailures:CONSISTENCY_MARKER_WRITE_FAILURES
+    };
     try{
       const action=req&&req.action;
       const loggedAction=typeof action==='string'&&['telegramWebhook','signup','signin','signout','batch','getSession','getUser','ensureProfile','createFamily','joinFamily','query','rpc'].includes(action)?action:'unknown';
-      console.log(JSON.stringify({act:loggedAction,n:req&&req.requests?req.requests.length:undefined,lockMs,workMs:lockAcquired?ended-tLocked:optimisticReadMs,optimisticReadMs,pbkdf2Ms:PBKDF2_MS,readRetry,totalMs:ended-t0,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS,revisionWriteFailures:REVISION_WRITE_FAILURES,consistencyMarkerWriteFailures:CONSISTENCY_MARKER_WRITE_FAILURES}));
+      console.log(JSON.stringify({act:loggedAction,n:req&&req.requests?req.requests.length:undefined,lockMs,workMs:metrics.workMs,optimisticReadMs,pbkdf2Ms:PBKDF2_MS,readRetry,totalMs:metrics.totalMs,reads:SHEET_READS,writes:SHEET_WRITES,readMs:SHEET_READ_MS,writeMs:SHEET_WRITE_MS,revisionWriteFailures:REVISION_WRITE_FAILURES,consistencyMarkerWriteFailures:CONSISTENCY_MARKER_WRITE_FAILURES}));
     }catch(_){}
+    if(diagnosticsEnabled){
+      if(!responseBody||typeof responseBody!=='object'||Array.isArray(responseBody))responseBody={data:null,error:{message:'Не удалось сформировать ответ'}};
+      responseBody.diagnostics=metrics;
+    }
   }
+  return json_(responseBody||{data:null,error:{message:'Не удалось сформировать ответ'}});
 }
 function batch_(req){
  const list=req.requests;if(!Array.isArray(list)||!list.length)throw new Error('Пустой пакет запросов');
@@ -172,6 +196,26 @@ function batch_(req){
 }
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * TEST-only doPost diagnostics. Fail closed unless the separate flag, exact
+ * TEST Script ID, exact TEST Spreadsheet ID and TEST spreadsheet name all match.
+ * This helper performs no writes and never returns identity or financial data.
+ */
+function testDoPostDiagnosticsEnabled_(){
+  try{
+    const props=PropertiesService.getScriptProperties();
+    if(props.getProperty('DOPOST_DIAGNOSTICS_TEST_ONLY')!=='ISOLATED_TEST_ONLY')return false;
+    const scriptId=String(ScriptApp.getScriptId()||'');
+    const allowedScriptId=String(props.getProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID')||'').trim();
+    if(!scriptId||!allowedScriptId||scriptId!==allowedScriptId)return false;
+    const spreadsheet=SpreadsheetApp.getActiveSpreadsheet();
+    const allowedSpreadsheetId=String(props.getProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID')||'').trim();
+    if(!spreadsheet||!allowedSpreadsheetId||spreadsheet.getId()!==allowedSpreadsheetId)return false;
+    if(!/test|тест/i.test(String(spreadsheet.getName()||'')))return false;
+    return true;
+  }catch(_){return false;}
 }
 function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSpreadsheet(); if(!s) throw new Error('Скрипт должен быть привязан к таблице бюджета'); return SS_CACHE=s; }
 function sheet_(name) {
