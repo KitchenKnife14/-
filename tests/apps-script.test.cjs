@@ -5089,7 +5089,7 @@ test('read-candidate requests fail closed on incomplete headers without repairin
 });
 
 
-test('readRows_ fetches only schema columns and skips the header row', () => {
+test('readRows_ reads the header with the body once and preserves physical row numbers', () => {
   const h = makeHarness();
   const sheet = seedTable(h, 'transactions');
   h.context.appendRows_('transactions', [
@@ -5101,20 +5101,24 @@ test('readRows_ fetches only schema columns and skips the header row', () => {
   sheet.getRange(2, width + 1, 2, 1).setValues([['ignore-a'], ['ignore-b']]);
 
   let dataRangeCalls = 0;
-  const bodyReads = [];
+  const dataReads = [];
   const originalGetDataRange = sheet.getDataRange.bind(sheet);
   const originalGetRange = sheet.getRange.bind(sheet);
   sheet.getDataRange = (...args) => { dataRangeCalls++; return originalGetDataRange(...args); };
   sheet.getRange = (...args) => {
-    if (args[0] >= 2) bodyReads.push(args);
+    dataReads.push(args);
     return originalGetRange(...args);
   };
 
+  vm.runInContext('SHEET_SCHEMA_VALIDATED = {}; READ_ONLY_REQUEST = true', h.context);
   const rows = h.context.readRows_('transactions');
   assert.equal(dataRangeCalls, 0);
   assert.deepEqual(rows.map(row => row.id), ['bounded-read-a', 'bounded-read-b']);
   assert.deepEqual(rows.map(row => row.amount_kopecks), [101, 202]);
-  assert.deepEqual(bodyReads, [[2, 1, 2, width]]);
+  assert.deepEqual(rows.map(row => row.__row), [2, 3]);
+  assert.deepEqual(dataReads, [[1, 1, 3, width]]);
+  h.context.readRows_('transactions');
+  assert.deepEqual(dataReads[1], [2, 1, 2, width]);
 });
 
 

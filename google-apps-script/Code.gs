@@ -222,18 +222,16 @@ function testDoPostDiagnosticsEnabled_(){
   }catch(_){return false;}
 }
 function ss_(){ if(SS_CACHE) return SS_CACHE; const s=SpreadsheetApp.getActiveSpreadsheet(); if(!s) throw new Error('Скрипт должен быть привязан к таблице бюджета'); return SS_CACHE=s; }
-function sheet_(name) {
+function getOrCreateSheet_(name) {
   if (!TABLES[name]) throw new Error('Неизвестная таблица: '+name);
   const ss=ss_(); let sh=ss.getSheetByName(name);
   if (!sh) {
     if (READ_ONLY_REQUEST) throw new Error('Лист '+name+' отсутствует; чтение остановлено без автоматического создания структуры');
     sh=ss.insertSheet(name); SHEET_WRITES++; timedSheetWrite_(()=>sh.getRange(1,1,1,TABLES[name].length).setValues([TABLES[name]])); sh.setFrozenRows(1); formatSheet_(sh,name);
   }
-  // Validate once per execution for both reads and writes. A persistent cache can hide
-  // manual schema changes for hours and allow writes against shifted columns.
-  if (SHEET_SCHEMA_VALIDATED[name]) return sh;
-  SHEET_READS++;
-  const header=timedSheetRead_(()=>sh.getRange(1,1,1,TABLES[name].length).getValues())[0];
+  return sh;
+}
+function validateSheetHeader_(name,sh,header) {
   let used=header.length;
   while(used>0&&(header[used-1]===''||header[used-1]===null))used--;
   const current=header.slice(0,used), expected=TABLES[name];
@@ -248,19 +246,28 @@ function sheet_(name) {
     SHEET_WRITES++;
   }
   SHEET_SCHEMA_VALIDATED[name] = true;
-  return sh;
+}
+function sheet_(name) {
+  const sheet=getOrCreateSheet_(name);
+  if(!SHEET_SCHEMA_VALIDATED[name]){
+    SHEET_READS++;
+    const header=timedSheetRead_(()=>sheet.getRange(1,1,1,TABLES[name].length).getValues())[0];
+    validateSheetHeader_(name,sheet,header);
+  }
+  return sheet;
 }
 function rows_(name) {
   if(ROWS_CACHE[name]) return ROWS_CACHE[name];
   return ROWS_CACHE[name]=readRows_(name);
 }
 function readRows_(name) {
+  const sheet=getOrCreateSheet_(name);
+  const firstRow=SHEET_SCHEMA_VALIDATED[name]?2:1;
+  const rowCount=Math.max(1,sheet.getLastRow())-firstRow+1;
+  if(rowCount===0)return [];
   SHEET_READS++;
-  const sh=sheet_(name), last=sh.getLastRow();
-  if(last<2)return [];
-  // Read only the schema-defined body: skip the header and ignore unrelated
-  // trailing columns that may exist in a manually edited spreadsheet.
-  const values=timedSheetRead_(()=>sh.getRange(2,1,last-1,TABLES[name].length).getValues());
+  const values=timedSheetRead_(()=>sheet.getRange(firstRow,1,rowCount,TABLES[name].length).getValues());
+  if(firstRow===1)validateSheetHeader_(name,sheet,values.shift());
   return values.map((r,i)=>({values:r,row:i+2})).filter(x=>x.values.some(v=>v!==''&&v!==null)).map(({values:r,row})=>{
     const o={}; TABLES[name].forEach((k,j)=>o[k]=normal_(r[j],k));if((name==='categories'||name==='accounts')&&(o.archived===''||o.archived===null))o.archived=false;o.__row=row;return o;
   });
