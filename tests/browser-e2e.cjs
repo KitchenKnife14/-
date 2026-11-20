@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const { spawn } = require('node:child_process')
-const { chromium } = require('playwright')
+const { chromium, webkit } = require('playwright')
 
 const baseUrl = 'http://127.0.0.1:4173'
 
@@ -17,6 +17,87 @@ async function waitForServer(url, child) {
   throw new Error('Vite preview did not become ready within 20 seconds')
 }
 
+async function checkMobileRoutes(browser) {
+  // Smoke every authenticated page with empty, well-formed test data at narrow iPhone widths.
+  const routesPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  const routePageErrors = []
+  routesPage.on('pageerror', error => routePageErrors.push(error.message))
+  await routesPage.route('https://test-gas.invalid/exec', async route => {
+    const payload = route.request().postDataJSON()
+    const resolveRequest = request => {
+      if (request.action === 'signin') return {
+        token: 'synthetic-route-smoke-session',
+        user: { id: 'route-smoke-user', email: 'route-smoke@example.com' },
+      }
+      if (request.action === 'rpc' && request.name === 'get_my_context') return {
+        profile: { id: 'route-smoke-user', display_name: 'Проверка экранов' },
+        family: { id: 'route-smoke-family', name: 'Тестовая семья', invite_code: 'ROUTE-SMOKE' },
+        members: [],
+        member_profiles: [{ id: 'route-smoke-user', display_name: 'Проверка экранов' }],
+      }
+      if (request.action === 'rpc' && request.name === 'get_table_revision') return '1'
+      if (request.action === 'rpc' && request.name === 'get_telegram_link_status') return { linked: false }
+      if (request.action === 'rpc') return {}
+      if (request.action === 'query') return []
+      if (request.action === 'signout') return {}
+      throw new Error('Unexpected route smoke API request: ' + JSON.stringify(request))
+    }
+    const data = payload.action === 'batch'
+      ? payload.requests.map(request => ({ data: resolveRequest(request), error: null }))
+      : resolveRequest(payload)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ data, error: null }),
+    })
+  })
+  await routesPage.goto(baseUrl, { waitUntil: 'networkidle' })
+  await routesPage.getByLabel('Email').fill('route-smoke@example.com')
+  await routesPage.getByLabel('Пароль').fill('correct-test-password')
+  await routesPage.getByRole('button', { name: 'Войти' }).click()
+  await routesPage.locator('main h1').first().waitFor({ state: 'visible' })
+  const authenticatedRoutes = [
+    ['/', 'Деньги дома. Спокойно, вместе.'],
+    ['/transactions', 'Операции'],
+    ['/accounts', 'Счета'],
+    ['/calendar', 'Финансовый календарь'],
+    ['/recurring', 'Регулярные платежи'],
+    ['/budgets', 'Бюджеты'],
+    ['/goals', 'Финансовые цели'],
+    ['/purchases', 'Планируемые покупки'],
+    ['/planning', 'Месячное планирование'],
+    ['/reports', 'Отчёты'],
+    ['/analysis', 'Анализ доходов по участникам'],
+    ['/notifications', 'Уведомления'],
+    ['/categories', 'Категории'],
+    ['/telegram', 'Telegram'],
+  ]
+  for (const [routePath, heading] of authenticatedRoutes) {
+    await routesPage.goto(baseUrl + routePath, { waitUntil: 'networkidle' })
+    await routesPage.getByRole('heading', { name: heading, level: 1 }).waitFor({ state: 'visible' })
+    for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
+      await routesPage.setViewportSize(viewport)
+      const widths = await routesPage.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        document: document.documentElement.scrollWidth,
+        body: document.body.scrollWidth,
+      }))
+      assert.equal(widths.viewport, viewport.width, `Unexpected CSS viewport on ${routePath}`)
+      assert.ok(widths.document <= widths.viewport + 1, `Horizontal overflow on ${routePath} at ${viewport.width}px: ${JSON.stringify(widths)}`)
+      assert.ok(widths.body <= widths.viewport + 1, `Body overflow on ${routePath} at ${viewport.width}px: ${JSON.stringify(widths)}`)
+    }
+  }
+  await routesPage.goto(baseUrl + '/transactions', { waitUntil: 'networkidle' })
+  await routesPage.getByRole('button', { name: 'Добавить', exact: true }).tap()
+  const entryDialog = routesPage.getByRole('dialog')
+  await entryDialog.getByLabel('Сумма, ₽').fill('1.37')
+  await entryDialog.getByRole('button', { name: 'Отмена', exact: true }).tap()
+  await entryDialog.waitFor({ state: 'hidden' })
+  assert.deepEqual(routePageErrors, [], 'authenticated pages must render without uncaught browser errors')
+  await routesPage.close()
+}
+
 async function main() {
   const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], {
     stdio: 'ignore',
@@ -25,6 +106,12 @@ async function main() {
   let browser
   try {
     await waitForServer(baseUrl, server)
+    if (process.argv.includes('--webkit-mobile')) {
+      browser = await webkit.launch({ headless: true })
+      await checkMobileRoutes(browser)
+      process.stdout.write('PASS: WebKit mobile login, 14 routes at 320 and 390 CSS pixels, and transaction entry dialog\n')
+      return
+    }
     browser = await chromium.launch({ headless: true })
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
 
@@ -327,77 +414,7 @@ async function main() {
     assert.deepEqual(pageErrors, [], 'malformed dashboard payload must not cause an uncaught render error')
     await invalidDataPage.close()
 
-    // Smoke every authenticated page with empty, well-formed test data at narrow iPhone widths.
-    const routesPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-    const routePageErrors = []
-    routesPage.on('pageerror', error => routePageErrors.push(error.message))
-    await routesPage.route('https://test-gas.invalid/exec', async route => {
-      const payload = route.request().postDataJSON()
-      const resolveRequest = request => {
-        if (request.action === 'signin') return {
-          token: 'synthetic-route-smoke-session',
-          user: { id: 'route-smoke-user', email: 'route-smoke@example.com' },
-        }
-        if (request.action === 'rpc' && request.name === 'get_my_context') return {
-          profile: { id: 'route-smoke-user', display_name: 'Проверка экранов' },
-          family: { id: 'route-smoke-family', name: 'Тестовая семья', invite_code: 'ROUTE-SMOKE' },
-          members: [],
-          member_profiles: [{ id: 'route-smoke-user', display_name: 'Проверка экранов' }],
-        }
-        if (request.action === 'rpc' && request.name === 'get_table_revision') return '1'
-        if (request.action === 'rpc' && request.name === 'get_telegram_link_status') return { linked: false }
-        if (request.action === 'rpc') return {}
-        if (request.action === 'query') return []
-        if (request.action === 'signout') return {}
-        throw new Error('Unexpected route smoke API request: ' + JSON.stringify(request))
-      }
-      const data = payload.action === 'batch'
-        ? payload.requests.map(request => ({ data: resolveRequest(request), error: null }))
-        : resolveRequest(payload)
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        headers: { 'access-control-allow-origin': '*' },
-        body: JSON.stringify({ data, error: null }),
-      })
-    })
-    await routesPage.goto(baseUrl, { waitUntil: 'networkidle' })
-    await routesPage.getByLabel('Email').fill('route-smoke@example.com')
-    await routesPage.getByLabel('Пароль').fill('correct-test-password')
-    await routesPage.getByRole('button', { name: 'Войти' }).click()
-    await routesPage.locator('main h1').first().waitFor({ state: 'visible' })
-    const authenticatedRoutes = [
-      ['/', 'Деньги дома. Спокойно, вместе.'],
-      ['/transactions', 'Операции'],
-      ['/accounts', 'Счета'],
-      ['/calendar', 'Финансовый календарь'],
-      ['/recurring', 'Регулярные платежи'],
-      ['/budgets', 'Бюджеты'],
-      ['/goals', 'Финансовые цели'],
-      ['/purchases', 'Планируемые покупки'],
-      ['/planning', 'Месячное планирование'],
-      ['/reports', 'Отчёты'],
-      ['/analysis', 'Анализ доходов по участникам'],
-      ['/notifications', 'Уведомления'],
-      ['/categories', 'Категории'],
-      ['/telegram', 'Telegram'],
-    ]
-    for (const [routePath, heading] of authenticatedRoutes) {
-      await routesPage.goto(baseUrl + routePath, { waitUntil: 'networkidle' })
-      await routesPage.getByRole('heading', { name: heading, level: 1 }).waitFor({ state: 'visible' })
-      for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
-        await routesPage.setViewportSize(viewport)
-        const widths = await routesPage.evaluate(() => ({
-          viewport: document.documentElement.clientWidth,
-          document: document.documentElement.scrollWidth,
-          body: document.body.scrollWidth,
-        }))
-        assert.ok(widths.document <= widths.viewport + 1, `Horizontal overflow on ${routePath} at ${viewport.width}px: ${JSON.stringify(widths)}`)
-        assert.ok(widths.body <= widths.viewport + 1, `Body overflow on ${routePath} at ${viewport.width}px: ${JSON.stringify(widths)}`)
-      }
-    }
-    assert.deepEqual(routePageErrors, [], 'authenticated pages must render without uncaught browser errors')
-    await routesPage.close()
+    await checkMobileRoutes(browser)
 
     process.stdout.write(JSON.stringify({
       result: 'PASS',

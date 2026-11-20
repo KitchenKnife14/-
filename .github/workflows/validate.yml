@@ -35,6 +35,12 @@ jobs:
         run: npx --yes playwright@1.56.1 install chromium
       - name: Browser E2E smoke test
         run: npx --yes --package=playwright@1.56.1 -c 'NODE_PATH="$(dirname "$(dirname "$(readlink -f "$(command -v playwright)")")")" node tests/browser-e2e.cjs'
+      - name: Install WebKit for TEST mobile checks
+        if: github.ref == 'refs/heads/ispravleniya'
+        run: npx --yes playwright@1.56.1 install --with-deps webkit
+      - name: Mobile routes and transaction form in WebKit
+        if: github.ref == 'refs/heads/ispravleniya'
+        run: npx --yes --package=playwright@1.56.1 -c 'NODE_PATH="$(dirname "$(dirname "$(readlink -f "$(command -v playwright)")")")" node tests/browser-e2e.cjs --webkit-mobile'
       - name: Financial CRUD and transfer browser E2E
         run: npx --yes --package=playwright@1.56.1 -c 'NODE_PATH="$(dirname "$(dirname "$(readlink -f "$(command -v playwright)")")")" node tests/financial-browser-e2e.cjs'
       - name: All regression tests
