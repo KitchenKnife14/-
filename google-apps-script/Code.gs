@@ -204,16 +204,19 @@ function json_(obj) {
  * TEST Script ID, exact TEST Spreadsheet ID and TEST spreadsheet name all match.
  * This helper performs no writes and never returns identity or financial data.
  */
+const DOPOST_DIAGNOSTICS_TEST_SCRIPT_ID='1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF';
+const DOPOST_DIAGNOSTICS_TEST_SPREADSHEET_ID='17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ';
 function testDoPostDiagnosticsEnabled_(){
   try{
     const props=PropertiesService.getScriptProperties();
     if(props.getProperty('DOPOST_DIAGNOSTICS_TEST_ONLY')!=='ISOLATED_TEST_ONLY')return false;
     const scriptId=String(ScriptApp.getScriptId()||'');
     const allowedScriptId=String(props.getProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID')||'').trim();
-    if(!scriptId||!allowedScriptId||scriptId!==allowedScriptId)return false;
+    if(scriptId!==DOPOST_DIAGNOSTICS_TEST_SCRIPT_ID||allowedScriptId!==DOPOST_DIAGNOSTICS_TEST_SCRIPT_ID)return false;
     const spreadsheet=SpreadsheetApp.getActiveSpreadsheet();
     const allowedSpreadsheetId=String(props.getProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID')||'').trim();
-    if(!spreadsheet||!allowedSpreadsheetId||spreadsheet.getId()!==allowedSpreadsheetId)return false;
+    if(!spreadsheet||spreadsheet.getId()!==DOPOST_DIAGNOSTICS_TEST_SPREADSHEET_ID||
+       allowedSpreadsheetId!==DOPOST_DIAGNOSTICS_TEST_SPREADSHEET_ID)return false;
     if(!/test|тест/i.test(String(spreadsheet.getName()||'')))return false;
     return true;
   }catch(_){return false;}

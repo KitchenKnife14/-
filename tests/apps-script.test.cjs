@@ -9,7 +9,8 @@ function makeHarness() {
   const properties = new Map();
   const scriptCache = new Map();
   let uuidCounter = 0;
-  let scriptId = 'TEST_SCRIPT_ID', spreadsheetId = 'TEST_SPREADSHEET_ID', spreadsheetName = 'Семейный бюджет';
+  let scriptId = '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF';
+  let spreadsheetId = '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ', spreadsheetName = 'Семейный бюджет';
   let lockAcquires = 0, lockReleases = 0, failNextLockWait = false, failPropertySetKey = null;
   let setValuesCalls = 0, failSetValuesAt = null;
   let deleteRowsCalls = 0, failDeleteRowsAt = null;
@@ -200,17 +201,17 @@ test('doPost diagnostics are fail-closed behind TEST-only flag and exact environ
 
   assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
   props.setProperty('DOPOST_DIAGNOSTICS_TEST_ONLY', 'ISOLATED_TEST_ONLY');
-  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
-  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF');
+  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ');
 
   h.setTestIdentity({ spreadsheetName: 'Семейный бюджет' });
   assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
   h.setTestIdentity({ spreadsheetName: 'TEST Семейный бюджет', scriptId: 'WRONG_SCRIPT' });
   assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
-  h.setTestIdentity({ scriptId: 'TEST_SCRIPT_ID', spreadsheetId: 'WRONG_SPREADSHEET' });
+  h.setTestIdentity({ scriptId: '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF', spreadsheetId: 'WRONG_SPREADSHEET' });
   assert.equal(Object.hasOwn(call(), 'diagnostics'), false);
 
-  h.setTestIdentity({ spreadsheetId: 'TEST_SPREADSHEET_ID', spreadsheetName: 'TEST Семейный бюджет' });
+  h.setTestIdentity({ spreadsheetId: '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ', spreadsheetName: 'TEST Семейный бюджет' });
   const response = call();
   assert.ok(response.diagnostics);
   assert.ok(response.error);
@@ -226,8 +227,8 @@ test('doPost diagnostics measure optimistic reads, locked retry, writes and lock
   const h = makeHarness();
   const props = h.context.PropertiesService.getScriptProperties();
   props.setProperty('DOPOST_DIAGNOSTICS_TEST_ONLY', 'ISOLATED_TEST_ONLY');
-  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
-  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF');
+  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ');
   h.setTestIdentity({ spreadsheetName: 'TEST Семейный бюджет' });
 
   const signup = h.call({
@@ -271,8 +272,8 @@ test('doPost diagnostics count a failed consistency-marker write and preserve th
   const h = makeHarness();
   const props = h.context.PropertiesService.getScriptProperties();
   props.setProperty('DOPOST_DIAGNOSTICS_TEST_ONLY', 'ISOLATED_TEST_ONLY');
-  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
-  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  props.setProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF');
+  props.setProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID', '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ');
   h.setTestIdentity({ spreadsheetName: 'TEST Семейный бюджет' });
   h.failNextPropertySet('api_read_consistency_v1');
 
@@ -849,8 +850,8 @@ test('PBKDF2 benchmark runtime guard rejects wrong project and spreadsheet befor
   const logs = [];
   const context = {
     PropertiesService: { getScriptProperties: () => ({ getProperty: key => properties.get(key) ?? null }) },
-    ScriptApp: { getScriptId: () => 'TEST_SCRIPT_ID' },
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getName: () => 'TEST Семейный бюджет', getId: () => 'TEST_SPREADSHEET_ID' }) },
+    ScriptApp: { getScriptId: () => '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF' },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getName: () => 'TEST Семейный бюджет', getId: () => '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ' }) },
     pbkdf2Hex_: () => { hashCalls++; return 'a'.repeat(64); },
     Logger: { log: value => logs.push(String(value)) },
   };
@@ -861,14 +862,14 @@ test('PBKDF2 benchmark runtime guard rejects wrong project and spreadsheet befor
   assert.equal(hashCalls, 0);
   properties.set('PBKDF2_DIAGNOSTICS_CONFIRM', 'ISOLATED_TEST_ONLY');
   properties.set('PBKDF2_ALLOWED_SCRIPT_ID', 'WRONG_SCRIPT_ID');
-  properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ');
   assert.throws(() => context.runPbkdf2RuntimeDiagnostics(), /Script ID/);
   assert.equal(hashCalls, 0);
-  properties.set('PBKDF2_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID');
+  properties.set('PBKDF2_ALLOWED_SCRIPT_ID', '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF');
   properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', 'WRONG_SPREADSHEET_ID');
   assert.throws(() => context.runPbkdf2RuntimeDiagnostics(), /ID таблицы/);
   assert.equal(hashCalls, 0);
-  properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID');
+  properties.set('PBKDF2_ALLOWED_SPREADSHEET_ID', '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ');
 
   const report = context.runPbkdf2RuntimeDiagnostics();
   assert.equal(report.pbkdf2_30000.samplesMs.length, 5);
@@ -5368,8 +5369,8 @@ test('backend diagnostics do not create a missing profiles sheet', () => {
   const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
   const properties = new Map([
     ['BACKEND_DIAGNOSTICS_CONFIRM', 'ISOLATED_TEST_ONLY'],
-    ['BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID'],
-    ['BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID', '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ'],
   ]);
   let insertSheetCalls = 0;
   const logs = [];
@@ -5378,12 +5379,12 @@ test('backend diagnostics do not create a missing profiles sheet', () => {
       getProperty: key => properties.get(key) ?? null,
     }) },
     ScriptApp: {
-      getScriptId: () => 'TEST_SCRIPT_ID',
+      getScriptId: () => '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF',
       getService: () => ({ getUrl: () => '' }),
     },
     SpreadsheetApp: { getActiveSpreadsheet: () => ({
       getName: () => 'TEST Семейный бюджет',
-      getId: () => 'TEST_SPREADSHEET_ID',
+      getId: () => '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ',
       getSpreadsheetTimeZone: () => 'Europe/Moscow',
       getSheetByName: () => null,
       insertSheet: () => { insertSheetCalls++; throw new Error('must not create sheets'); },
@@ -5443,20 +5444,20 @@ test('backend diagnostics report INCOMPLETE when profile timezone metadata canno
   const source = fs.readFileSync('tests/gas/BackendSecurityDiagnostics.gs', 'utf8');
   const properties = new Map([
     ['BACKEND_DIAGNOSTICS_CONFIRM', 'ISOLATED_TEST_ONLY'],
-    ['BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT_ID'],
-    ['BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID', 'TEST_SPREADSHEET_ID'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF'],
+    ['BACKEND_DIAGNOSTICS_ALLOWED_SPREADSHEET_ID', '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ'],
   ]);
   const context = {
     PropertiesService: { getScriptProperties: () => ({
       getProperty: key => properties.get(key) ?? null,
     }) },
     ScriptApp: {
-      getScriptId: () => 'TEST_SCRIPT_ID',
+      getScriptId: () => '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF',
       getService: () => ({ getUrl: () => '' }),
     },
     SpreadsheetApp: { getActiveSpreadsheet: () => ({
       getName: () => 'TEST Семейный бюджет',
-      getId: () => 'TEST_SPREADSHEET_ID',
+      getId: () => '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ',
       getSpreadsheetTimeZone: () => 'Europe/Moscow',
       getSheetByName: () => { throw new Error('simulated sheet read failure'); },
     }) },
