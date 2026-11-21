@@ -5,6 +5,9 @@ const { chromium } = require('playwright')
 const baseUrl = 'http://127.0.0.1:4174'
 const apiUrl = 'https://test-gas.invalid/exec'
 const familyId = 'family-e2e'
+const alternateFamilyId = 'family-isolation-e2e'
+let activeFamilyId = familyId
+let assertActiveFamilyQuery = false
 const userId = 'user-e2e'
 const partnerId = 'partner-e2e'
 
@@ -99,6 +102,12 @@ function query(payload) {
   const rows = state[payload.table]
   if (!Array.isArray(rows)) throw new Error('Unknown E2E table: ' + payload.table)
   const filters = payload.filters || []
+  if (assertActiveFamilyQuery && payload.mode === 'select' && payload.table === 'transactions') {
+    assert.ok(
+      filters.some(filter => filter.column === 'family_id' && filter.op === 'eq' && filter.value === activeFamilyId),
+      'transaction reads must be scoped to the currently active family',
+    )
+  }
   const selected = rows.filter(row => matches(row, filters))
   if (payload.mode === 'select') {
     let result = selected.slice()
@@ -187,7 +196,7 @@ function rpc(name, params) {
   if (name === 'get_my_context') {
     return {
       profile: { id: userId, display_name: 'Тестовый пользователь', email: 'e2e@example.test' },
-      family: { id: familyId, name: 'Тестовая семья' },
+      family: { id: activeFamilyId, name: 'Тестовая семья' },
       members: [{ user_id: userId, role: 'owner' }, { user_id: partnerId, role: 'member' }],
       member_profiles: state.profiles,
     }
@@ -747,6 +756,43 @@ async function main() {
     await noMatches.waitFor()
     await page.getByRole('button', { name: 'Сбросить фильтры' }).click()
     await expenseCard.waitFor()
+
+    // UX-01: changing the family context must never show or attribute another family's transactions.
+    // This tests the client's family-scoped queries against an intercepted, fully synthetic API.
+    const alternateTransaction = {
+      id: 'transaction-isolated-family-e2e', family_id: alternateFamilyId,
+      type: 'expense', amount_kopecks: 777, operation_date: state.transactions[0].operation_date,
+      operation_time: null, category_id: null, account_id: null, to_account_id: null,
+      description: 'E2E изолированная семья', created_by: userId, updated_by: userId,
+      responsible_user_id: partnerId, planned: false, parent_recurring_id: null,
+      created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+    }
+    state.transactions.push(alternateTransaction)
+    assertActiveFamilyQuery = true
+    const alternateCard = page.locator('.card').filter({ hasText: alternateTransaction.description })
+    await page.reload({ waitUntil: 'networkidle' })
+    await expenseCard.waitFor()
+    assert.equal(await alternateCard.count(), 0, 'the original family must not see transactions from a second family')
+    activeFamilyId = alternateFamilyId
+    await page.reload({ waitUntil: 'networkidle' })
+    await alternateCard.waitFor()
+    assert.equal(await expenseCard.count(), 0, 'the second family must not see the original family transaction')
+    await page.getByLabel('Фильтр по автору записи').selectOption(userId)
+    await page.getByLabel('Фильтр по ответственному участнику').selectOption(partnerId)
+    await alternateCard.waitFor()
+    await page.getByRole('button', { name: 'Следующий месяц' }).click()
+    await page.getByText('По выбранным фильтрам операций нет.', { exact: true }).waitFor()
+    assert.equal(await alternateCard.count(), 0, 'month navigation must not show a transaction from the previous month')
+    await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
+    await alternateCard.waitFor()
+    assert.equal(await page.getByLabel('Фильтр по автору записи').inputValue(), userId, 'month navigation must retain the selected author')
+    assert.equal(await page.getByLabel('Фильтр по ответственному участнику').inputValue(), partnerId, 'month navigation must retain the selected responsible participant')
+    activeFamilyId = familyId
+    await page.reload({ waitUntil: 'networkidle' })
+    await expenseCard.waitFor()
+    assert.equal(await alternateCard.count(), 0, 'switching back must not retain the second family data')
+    state.transactions = state.transactions.filter(row => row.id !== alternateTransaction.id)
+    assertActiveFamilyQuery = false
 
     transactionReadError = 'Не удалось загрузить следующий месяц'
     await page.getByRole('button', { name: 'Следующий месяц' }).click()
