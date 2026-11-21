@@ -122,7 +122,15 @@ function query(payload) {
         if (existing) Object.assign(existing, value)
         else rows.push({ ...value, id: value.id || 'fixture-' + payload.table + '-' + (++sequence) })
       } else {
-        if (rows.some(row => row.id === value.id)) throw new Error('Duplicate id in E2E fixture')
+        const existing = rows.find(row => row.id === value.id)
+        if (existing) {
+          // Simulate the idempotent TEST backend: a retry with the same ID and payload
+          // returns the original transaction without inserting a second row.
+          const matchesOriginal = payload.table === 'transactions'
+            && Object.entries(value).every(([key, field]) => JSON.stringify(existing[key]) === JSON.stringify(field))
+          if (!matchesOriginal) throw new Error('Duplicate id in E2E fixture')
+          continue
+        }
         if (payload.table === 'transactions') {
           const now = new Date().toISOString()
           rows.push({ operation_time: null, parent_recurring_id: null, updated_by: userId, created_at: now, updated_at: now, ...value })
@@ -1312,6 +1320,30 @@ async function main() {
     assert.equal(state.transactions.length, committedRowsBeforeUncertainSave + 1, 'changed payload must not create a second transaction')
     assert.equal(state.transactions.at(-1).id, originalUncertainId, 'uncertain transaction ID must remain unchanged')
     await uncertainDialog.getByRole('button', { name: 'Отмена' }).click()
+
+    // Reload must not silently discard the pending ID for a potentially committed expense.
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    const reloadDialog = page.getByRole('dialog', { name: 'Новая операция' })
+    await reloadDialog.getByLabel('Сумма, ₽').fill('8.77')
+    await reloadDialog.getByRole('textbox', { name: 'Описание' }).fill('E2E неопределённая запись')
+    await reloadDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await reloadDialog.getByText(/Предыдущий запрос ещё не подтверждён/).waitFor()
+    assert.equal(transactionInsertRequests, insertsBeforeUncertainSave + 1, 'changed payload after reload must not be sent')
+    assert.equal(state.transactions.length, committedRowsBeforeUncertainSave + 1, 'reloading must not permit a duplicate')
+
+    // Repeating the original payload must reuse the same ID; the backend responds idempotently.
+    await reloadDialog.getByLabel('Сумма, ₽').fill('8.76')
+    await reloadDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await reloadDialog.waitFor({ state: 'detached' })
+    assert.equal(transactionInsertRequests, insertsBeforeUncertainSave + 2, 'matching retry must be sent exactly once')
+    assert.equal(state.transactions.length, committedRowsBeforeUncertainSave + 1, 'matching retry must not create a second row')
+    assert.equal(state.transactions.at(-1).id, originalUncertainId, 'reloaded retry must preserve original ID')
+    const pendingCleared = await page.evaluate(({ familyId, userId }) => {
+      const key = `budget:pending-transaction:v1:${encodeURIComponent(familyId)}:${encodeURIComponent(userId)}`
+      return localStorage.getItem(key) === null
+    }, { familyId, userId })
+    assert.equal(pendingCleared, true, 'confirmed idempotent retry must clear the pending ID')
 
     process.stdout.write(JSON.stringify({
       result: 'PASS',
