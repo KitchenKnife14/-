@@ -1327,6 +1327,66 @@ async function main() {
     await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
     await page.getByText('Нет данных за период.', { exact: true }).first().waitFor()
 
+    // An export must follow the selected period even if the previous response arrives late.
+    const reportMonth = sourceBudget.month_date
+    const previousMonthStart = new Date(reportMonth + 'T00:00:00Z')
+    previousMonthStart.setUTCMonth(previousMonthStart.getUTCMonth() - 1)
+    const previousReportDate = previousMonthStart.toISOString().slice(0, 10)
+    state.transactions = [
+      { ...savedTransactions[0], id: 'report-current', family_id: familyId, operation_date: reportMonth, planned: false, description: 'CSV текущего месяца' },
+      { ...savedTransactions[0], id: 'report-previous', family_id: familyId, operation_date: previousReportDate, planned: false, description: 'CSV предыдущего месяца' },
+    ]
+    await page.reload()
+    const exportButton = page.getByRole('button', { name: 'Экспорт CSV' })
+    const reportPeriod = page.getByLabel('Период отчёта')
+    await page.getByText('Доходы', { exact: true }).waitFor()
+    assert.equal(await exportButton.isEnabled(), true)
+    const isPreviousReport = request => {
+      if (request.url() !== apiUrl || request.method() !== 'POST') return false
+      const payload = request.postDataJSON()
+      const items = payload.action === 'batch' ? payload.requests : [payload]
+      return items.some(item => item.table === 'transactions' && item.filters?.some(filter =>
+        filter.column === 'operation_date' && filter.op === 'gte' && filter.value === previousReportDate))
+    }
+    let releasePreviousReport
+    const gate = new Promise(resolve => { releasePreviousReport = resolve })
+    const delayPreviousReport = async route => {
+      if (isPreviousReport(route.request())) await gate
+      await route.fallback()
+    }
+    await page.route(apiUrl, delayPreviousReport)
+    try {
+      const pending = page.waitForRequest(isPreviousReport)
+      await reportPeriod.selectOption('prev')
+      const previousRequest = await pending
+      assert.equal(await exportButton.isDisabled(), true, 'old rows must not be exported under the new dates')
+      await reportPeriod.selectOption('current')
+      await page.getByText('Доходы', { exact: true }).waitFor()
+      const late = page.waitForResponse(response => response.request() === previousRequest)
+      releasePreviousReport()
+      await (await late).finished()
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      const downloaded = page.waitForEvent('download')
+      await exportButton.click()
+      const download = await downloaded
+      const calendarEnd = new Date(reportMonth + 'T00:00:00Z')
+      calendarEnd.setUTCMonth(calendarEnd.getUTCMonth() + 1, 0)
+      assert.equal(download.suggestedFilename(), 'report_' + reportMonth + '_' + calendarEnd.toISOString().slice(0, 10) + '.csv')
+      const csv = await require('node:fs/promises').readFile(await download.path(), 'utf8')
+      assert.equal(csv.trim().split(/\r?\n/).length, 2)
+      assert.ok(csv.includes('CSV текущего месяца'))
+      assert.ok(!csv.includes('CSV предыдущего месяца'))
+      transactionReadError = 'Период отчёта недоступен'
+      await reportPeriod.selectOption('6m')
+      await page.getByText(transactionReadError, { exact: true }).waitFor()
+      assert.equal(await exportButton.isDisabled(), true, 'a failed period must not export a previous successful report')
+    } finally {
+      releasePreviousReport()
+      await page.unroute(apiUrl, delayPreviousReport)
+      transactionReadError = null
+      state.transactions = []
+    }
+
     transactionReadDelayMs = 400
     const analysisNavigation = page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
     await page.getByText('Загрузка…', { exact: true }).waitFor()

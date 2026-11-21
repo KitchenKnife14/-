@@ -11,13 +11,14 @@ import { Download } from 'lucide-react'
 
 type Period = 'current' | 'prev' | '3m' | '6m' | 'year' | 'custom'
 
+const emptyReport = {
+  txs: [] as Transaction[],
+  categories: [] as Category[],
+  profiles: [] as Profile[],
+}
+
 export default function ReportsPage() {
   const { family, members } = useAuth()
-  const [txs, setTxs] = useState<Transaction[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [profiles, setProfiles] = useState<Profile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>('current')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -33,30 +34,57 @@ export default function ReportsPage() {
     return { start: customStart || `${now.getFullYear()}-01-01`, end: customEnd || `${now.getFullYear()}-12-31` }
   }, [period, customStart, customEnd])
 
-  const load = async () => {
-    if (!family) return
-    setLoading(true); setError(null)
-    try {
-      const categoryMigration = ensureSupplementalCategories(family.id)
-      const memberIds = members.map((m) => m.user_id)
-      const [, tRes, cRes, pRes] = await Promise.all([
-        categoryMigration,
-        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id),
-        memberIds.length > 0 ? googleSheets.from('profiles').select('*').in('id', memberIds) : Promise.resolve({ data: [], error: null }),
-      ])
-      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error; if (pRes.error) throw pRes.error
-      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[]); setProfiles((pRes.data ?? []) as Profile[])
-    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
-    finally { setLoading(false) }
-  }
+  const familyId = family?.id
+  const selection = useMemo(() => ({
+    familyId, start: range.start, end: range.end, memberIds: members.map(member => member.user_id),
+  }), [familyId, range.start, range.end, members])
+  const [report, setReport] = useState<{
+    selection: typeof selection
+    data: typeof emptyReport
+    error: string | null
+  } | null>(null)
 
-  useEffect(() => { load() }, [family?.id, range.start, range.end])
+  useEffect(() => {
+    const { familyId, start, end, memberIds } = selection
+    if (!familyId) return
+    let active = true
+    const load = async () => {
+      try {
+        const [, transactions, categories, profiles] = await Promise.all([
+          ensureSupplementalCategories(familyId),
+          googleSheets.from('transactions').select('*').eq('family_id', familyId).eq('planned', false).gte('operation_date', start).lte('operation_date', end).order('operation_date', { ascending: true }),
+          googleSheets.from('categories').select('*').eq('family_id', familyId),
+          memberIds.length ? googleSheets.from('profiles').select('*').in('id', memberIds) : Promise.resolve({ data: [], error: null }),
+        ])
+        if (!active) return
+        if (transactions.error) throw transactions.error
+        if (categories.error) throw categories.error
+        if (profiles.error) throw profiles.error
+        if (!Array.isArray(transactions.data) || !Array.isArray(categories.data) || !Array.isArray(profiles.data)) {
+          throw new Error('Сервер вернул неполные данные отчёта')
+        }
+        setReport({
+          selection,
+          error: null,
+          data: { txs: transactions.data, categories: categories.data, profiles: profiles.data },
+        })
+      } catch (cause) {
+        if (active) setReport({ selection, data: emptyReport, error: cause instanceof Error ? cause.message : 'Ошибка загрузки' })
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [selection])
 
+  const current = report?.selection === selection ? report : null
+  const loading = !current
+  const error = current?.error
+  const { txs, categories, profiles } = current?.data ?? emptyReport
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const profMap = useMemo(() => new Map(profiles.map((p) => [p.id, p])), [profiles])
 
-  const filteredTxs = txs.filter((t) => memberFilter === 'all' || (t.responsible_user_id || t.created_by) === memberFilter)
+  const filteredTxs = useMemo(() => memberFilter === 'all' ? txs :
+    txs.filter(t => (t.responsible_user_id || t.created_by) === memberFilter), [txs, memberFilter])
   const { income, expense } = calculateRealizedTotals(filteredTxs)
 
   const byCategory = useMemo(() => {
@@ -77,7 +105,9 @@ export default function ReportsPage() {
     return [...m.entries()]
   }, [filteredTxs])
 
+  const canExport = !!current && !error && filteredTxs.length > 0
   const exportCSV = () => {
+    if (!canExport) return
     const rows = [['Дата', 'Тип', 'Сумма (₽)', 'Категория', 'Описание', 'Автор записи', 'Ответственный']]
     for (const t of filteredTxs) {
       rows.push([t.operation_date, t.type === 'income' ? 'Доход' : t.type === 'expense' ? 'Расход' : 'Перевод', String(kopecksToRubles(t.amount_kopecks)), t.category_id ? catMap.get(t.category_id)?.name ?? '' : '', t.description, t.created_by ? profMap.get(t.created_by)?.display_name ?? '' : '', (t.responsible_user_id || t.created_by) ? profMap.get(t.responsible_user_id || t.created_by || '')?.display_name ?? '' : ''])
@@ -96,7 +126,7 @@ export default function ReportsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Отчёты</h1>
-        <button type="button" onClick={exportCSV} disabled={filteredTxs.length === 0} className="btn-secondary"><Download size={16} /> Экспорт CSV</button>
+        <button type="button" onClick={exportCSV} disabled={!canExport} className="btn-secondary"><Download size={16} /> Экспорт CSV</button>
       </div>
       {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex flex-wrap gap-2">
