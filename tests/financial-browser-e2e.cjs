@@ -57,6 +57,8 @@ let accountReadDelayMs = 0
 let accountReadError = null
 let goalReadDelayMs = 0
 let goalReadError = null
+const budgetMonthsRead = []
+let budgetResponseGate = null
 let budgetReadDelayMs = 0
 let budgetReadError = null
 let purchaseReadDelayMs = 0
@@ -68,7 +70,7 @@ let categoryReadError = null
 let telegramStatusDelayMs = 0
 let telegramStatusError = null
 let transactionReadRequests = 0
-let tableRevisions = { transactions: 1, accounts: 1 }
+let tableRevisions = { transactions: 1, accounts: 1, budgets: 1 }
 let revisionReadRequests = 0
 
 function matches(row, filters = []) {
@@ -108,6 +110,9 @@ function query(payload) {
       filters.some(filter => filter.column === 'family_id' && filter.op === 'eq' && filter.value === activeFamilyId),
       'transaction reads must be scoped to the currently active family',
     )
+  }
+  if (payload.mode === 'select' && payload.table === 'budgets') {
+    budgetMonthsRead.push(filters.find(filter => filter.column === 'month_date')?.value)
   }
   const selected = rows.filter(row => matches(row, filters))
   if (payload.mode === 'select') {
@@ -393,6 +398,11 @@ async function main() {
                   return query(payload)
                 })()
               : null
+        const requests = payload.action === 'batch' ? payload.requests : [payload]
+        if (budgetResponseGate && requests.some(request => request.table === 'budgets' && request.mode === 'select'
+          && request.filters.some(filter => filter.column === 'month_date' && filter.value === budgetResponseGate.month))) {
+          await budgetResponseGate.release
+        }
         const transactionReads = payload.action === 'batch'
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'transactions' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'transactions' && payload.mode === 'select'
@@ -904,6 +914,49 @@ async function main() {
     await page.getByText('Продукты', { exact: false }).first().waitFor()
     assert.equal(state.budgets.length, 1)
     assert.equal(state.budgets[0].limit_kopecks, 1200000)
+
+    // Both revisions arrive in one poll after the user moves to another month.
+    const sourceBudget = state.budgets[0]
+    const followingMonth = new Date(sourceBudget.month_date + 'T00:00:00Z')
+    followingMonth.setUTCMonth(followingMonth.getUTCMonth() + 1)
+    const followingDate = followingMonth.toISOString().slice(0, 10)
+    await page.getByRole('button', { name: 'Следующий месяц' }).click()
+    await page.getByText('Бюджетов пока нет. Установите лимиты по категориям на месяц.', { exact: true }).waitFor()
+    const readsBeforeBudgetRefresh = budgetMonthsRead.length
+    state.budgets.push({ ...sourceBudget, id: 'next-month-budget', month_date: followingDate, category_id: 'category-home', limit_kopecks: 543200 })
+    tableRevisions.budgets++
+    tableRevisions.transactions++
+    await page.getByRole('button', { name: 'Изменить бюджет: Дом' }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Изменить бюджет: Продукты' }).count(), 0)
+    assert.deepEqual(budgetMonthsRead.slice(readsBeforeBudgetRefresh), [followingDate], 'both changes require one budget read for the visible month')
+    // Hold an older month's response while the user returns to the month containing «Дом».
+    const laterMonth = new Date(followingMonth)
+    laterMonth.setUTCMonth(laterMonth.getUTCMonth() + 1)
+    let releaseResponse
+    const release = new Promise(resolve => { releaseResponse = resolve })
+    budgetResponseGate = { month: laterMonth.toISOString().slice(0, 10), release }
+    try {
+      const requestStarted = page.waitForRequest(req => {
+        if (req.url() !== apiUrl) return false
+        const payload = req.postDataJSON()
+        const requests = payload.action === 'batch' ? payload.requests : [payload]
+        return requests.some(request => request.table === 'budgets' && request.filters?.some(filter => filter.value === budgetResponseGate.month))
+      })
+      await page.getByRole('button', { name: 'Следующий месяц' }).click()
+      const delayedRequest = await requestStarted
+      await page.getByRole('button', { name: 'Предыдущий месяц' }).click()
+      const visibleBudget = page.getByRole('button', { name: 'Изменить бюджет: Дом' })
+      await visibleBudget.waitFor()
+      const lateResponse = page.waitForResponse(response => response.request() === delayedRequest)
+      releaseResponse()
+      await (await lateResponse).finished()
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      assert.equal(await visibleBudget.count(), 1, 'a delayed empty month must not replace the visible budget')
+    } finally {
+      releaseResponse()
+      budgetResponseGate = null
+    }
+    state.budgets = state.budgets.filter(row => row.id !== 'next-month-budget')
 
     await page.goto(baseUrl + '/planning', { waitUntil: 'networkidle' })
     await page.getByRole('heading', { name: 'Месячное планирование' }).waitFor()

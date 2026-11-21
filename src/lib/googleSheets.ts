@@ -86,9 +86,14 @@ const readCache=new Map<string,{expiresAt:number;value:unknown}>()
 const inFlightReads=new Map<string,Promise<unknown>>()
 let readCacheVersion=0
 const READ_ONLY_RPCS = new Set(['get_table_revision', 'get_my_context', 'get_telegram_link_status'])
+function invalidateReadCache() {
+  readCache.clear()
+  inFlightReads.clear()
+  readCacheVersion++
+}
 function request<T>(payload:Record<string,unknown>):Promise<T>{
   const isRead=(payload.action==='query'&&payload.mode==='select') || (payload.action==='rpc'&&READ_ONLY_RPCS.has(String(payload.name||'')))
-  if(!isRead){readCache.clear();inFlightReads.clear();readCacheVersion++;return requestUncached<T>(payload)}
+  if(!isRead){invalidateReadCache();return requestUncached<T>(payload)}
   const key=JSON.stringify(payload)
   const cached=readCache.get(key)
   if(cached&&cached.expiresAt>Date.now())return Promise.resolve(cached.value as T)
@@ -129,46 +134,63 @@ class QueryBuilder<T=Record<string,unknown>> implements PromiseLike<{data:T[]|nu
 const listeners=new Set<(event:string,session:GoogleSession|null)=>void>();function notify(event:string,s:GoogleSession|null){listeners.forEach(f=>f(event,s))}
 export const googleSheets={
  // Discard a successful but malformed response before the user retries a read.
- invalidateReadCache:()=>{readCache.clear();inFlightReads.clear();readCacheVersion++},
+ invalidateReadCache,
  from:(table:string)=>new QueryBuilder<any>(table),
  rpc:async(name:string,params:Record<string,unknown>={})=>{try{return{data:await request({action:'rpc',name,params}),error:null}}catch(e){return{data:null,error:e instanceof Error?e:new Error('Ошибка RPC')}}},
  channel:(_name:string)=>{
   const subs:{table:string;familyId:string;callback:()=>void;previous:string}[]=[]
-  let timer:ReturnType<typeof setInterval>|null=null
-  const subscription={unsubscribe:()=>{if(timer!==null)clearInterval(timer);timer=null}}
-  const channel:{on:(event:string,config:unknown,cb:()=>void)=>any;subscribe:()=>{unsubscribe:()=>void};unsubscribe:()=>void}={
-    on:(_event:string,config:unknown,cb:()=>void)=>{
-      const cfg=config as {table?:string;filter?:string}
-      if(cfg.table){
-        const match=(cfg.filter||'').match(/^family_id=eq\.(.+)$/)
-        subs.push({table:cfg.table,familyId:match?.[1]||'',callback:cb,previous:''})
+  let stopPolling: (() => void) | undefined
+  const channel = {
+    on: (_event: string, config: unknown, callback: () => void) => {
+      const cfg = config as {table?: string; filter?: string}
+      if (cfg.table) {
+        const match = (cfg.filter || '').match(/^family_id=eq\.(.+)$/)
+        subs.push({table: cfg.table, familyId: match?.[1] || '', callback, previous: ''})
       }
       return channel
     },
-    subscribe:()=>{
-      let running=false
-      const poll=async()=>{
-        const session=readSession()
-        if(running||!subs.length||!session||document.hidden)return
-        running=true
-        try{
-          await Promise.all(subs.map(async sub=>{
-            if(!sub.familyId)return
-            try{
-              const params:Record<string,unknown>={p_table:sub.table,p_family_id:sub.familyId}
-              if(sub.table==='notifications')params.p_user_id=session.user.id
-              const revision=await request<string>({action:'rpc',name:'get_table_revision',params})
-              const signature=String(revision??'0')
-              if(sub.previous&&signature!==sub.previous){readCache.clear();inFlightReads.clear();readCacheVersion++;sub.callback()}
-              sub.previous=signature
-            }catch{}
+    subscribe: () => {
+      stopPolling?.()
+      let active = true
+      let running = false
+      const poll = async () => {
+        const session = readSession()
+        if (!active || running || !subs.length || !session || document.hidden) return
+        running = true
+        try {
+          const changed = new Set<() => void>()
+          await Promise.all(subs.map(async sub => {
+            if (!sub.familyId) return
+            const params: Record<string, unknown> = { p_table: sub.table, p_family_id: sub.familyId }
+            if (sub.table === 'notifications') params.p_user_id = session.user.id
+            try {
+              const revision = await request<string>({action: 'rpc', name: 'get_table_revision', params})
+              if (!active) return
+              const signature = String(revision ?? '0')
+              if (sub.previous && signature !== sub.previous) changed.add(sub.callback)
+              sub.previous = signature
+            } catch {
+              // Keep the previous revision so the next successful poll can detect a change.
+            }
           }))
-        }finally{running=false}
+          if (active && changed.size) {
+            invalidateReadCache()
+            changed.forEach(callback => callback())
+          }
+        } finally {
+          running = false
+        }
       }
-      if(timer!==null)clearInterval(timer)
-      void poll();timer=setInterval(()=>void poll(),15000);return subscription
+      const timer = setInterval(() => void poll(), 15000)
+      const unsubscribe = () => {
+        active = false
+        clearInterval(timer)
+      }
+      stopPolling = unsubscribe
+      void poll()
+      return {unsubscribe}
     },
-    unsubscribe:()=>subscription.unsubscribe()
+    unsubscribe: () => stopPolling?.(),
   }
   return channel
   },

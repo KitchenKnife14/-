@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useReducer, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { googleSheets } from '../lib/googleSheets'
 import { ensureSupplementalCategories } from '../lib/categories'
@@ -20,33 +20,49 @@ export default function BudgetsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Budget | null>(null)
 
+  const familyId = family?.id
+  const [revision, refresh] = useReducer((value: number) => value + 1, 0)
   const monthDate = firstDayOfMonth(cursor.year, cursor.month)
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
 
-  const load = async () => {
-    if (!family) return
-    setLoading(true); setError(null)
-    try {
-      const categoryMigration = ensureSupplementalCategories(family.id)
-      const [, bRes, cRes, tRes] = await Promise.all([
-        categoryMigration,
-        googleSheets.from('budgets').select('*').eq('family_id', family.id).eq('month_date', monthDate),
-        googleSheets.from('categories').select('*').eq('family_id', family.id),
-        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).eq('type', 'expense').gte('operation_date', range.start).lte('operation_date', range.end),
-      ])
-      if (bRes.error) throw bRes.error; if (cRes.error) throw cRes.error; if (tRes.error) throw tRes.error
-      setBudgets(bRes.data as Budget[]); setCategories(cRes.data as Category[]); setTxs(tRes.data as Transaction[])
-    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [family?.id, monthDate])
   useEffect(() => {
-    if (!family) return
-    const budgetChannel = googleSheets.channel('bud-page-budgets').on('table_changes', { event: '*', schema: 'public', table: 'budgets', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    const transactionChannel = googleSheets.channel('bud-page-transactions').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` }, () => load()).subscribe()
-    return () => { googleSheets.removeChannel(budgetChannel); googleSheets.removeChannel(transactionChannel) }
-  }, [family?.id])
+    if (!familyId) return
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const [, budgetResult, categoryResult, transactionResult] = await Promise.all([
+          ensureSupplementalCategories(familyId),
+          googleSheets.from('budgets').select('*').eq('family_id', familyId).eq('month_date', monthDate),
+          googleSheets.from('categories').select('*').eq('family_id', familyId),
+          googleSheets.from('transactions').select('*').eq('family_id', familyId).eq('planned', false).eq('type', 'expense').gte('operation_date', range.start).lte('operation_date', range.end),
+        ])
+        if (!active) return
+        if (budgetResult.error) throw budgetResult.error
+        if (categoryResult.error) throw categoryResult.error
+        if (transactionResult.error) throw transactionResult.error
+        setBudgets(budgetResult.data as Budget[])
+        setCategories(categoryResult.data as Category[])
+        setTxs(transactionResult.data as Transaction[])
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [familyId, monthDate, range.start, range.end, revision])
+
+  useEffect(() => {
+    if (!familyId) return
+    const channel = googleSheets.channel('budgets-page')
+      .on('table_changes', { table: 'budgets', filter: `family_id=eq.${familyId}` }, refresh)
+      .on('table_changes', { table: 'transactions', filter: `family_id=eq.${familyId}` }, refresh)
+      .subscribe()
+    return () => { googleSheets.removeChannel(channel) }
+  }, [familyId])
 
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const spentByCat = useMemo(() => {
@@ -69,7 +85,7 @@ export default function BudgetsPage() {
   const totalSpent = budgets.reduce((s, b) => s + (spentByCat.get(b.category_id) ?? 0), 0)
   const totalPct = totalLimit > 0 ? (totalSpent / totalLimit) * 100 : 0
 
-  const remove = async (b: Budget) => { const { error: err } = await googleSheets.from('budgets').delete().eq('id', b.id).expect(b as unknown as Record<string, unknown>); if (err) setError(err.message); load() }
+  const remove = async (b: Budget) => { const { error: err } = await googleSheets.from('budgets').delete().eq('id', b.id).expect(b as unknown as Record<string, unknown>); if (err) setError(err.message); else refresh() }
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
 
@@ -125,7 +141,7 @@ export default function BudgetsPage() {
           })}
         </div>
       )}
-      <BudgetForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={load} categories={categories} familyId={family?.id ?? null} userId={session?.user.id ?? null} monthDate={monthDate} editing={editing} />
+      <BudgetForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} onSaved={refresh} categories={categories} familyId={family?.id ?? null} userId={session?.user.id ?? null} monthDate={monthDate} editing={editing} />
     </div>
   )
 }

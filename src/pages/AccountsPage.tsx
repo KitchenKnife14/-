@@ -57,9 +57,11 @@ export default function AccountsPage() {
   }, [load])
   useEffect(() => {
     if (!familyId) return
-    const accountsChannel = googleSheets.channel('accounts-page-accounts').on('table_changes', { event: '*', schema: 'public', table: 'accounts', filter: `family_id=eq.${familyId}` }, () => { void load() }).subscribe()
-    const transactionsChannel = googleSheets.channel('accounts-page-transactions').on('table_changes', { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${familyId}` }, () => { void load() }).subscribe()
-    return () => { googleSheets.removeChannel(accountsChannel); googleSheets.removeChannel(transactionsChannel) }
+    const channel = googleSheets.channel('accounts-page')
+      .on('table_changes', { table: 'accounts', filter: `family_id=eq.${familyId}` }, load)
+      .on('table_changes', { table: 'transactions', filter: `family_id=eq.${familyId}` }, load)
+      .subscribe()
+    return () => { googleSheets.removeChannel(channel) }
   }, [familyId, load])
 
   const balances = useMemo(() => calculateAccountBalances(accounts, transactions), [accounts, transactions])

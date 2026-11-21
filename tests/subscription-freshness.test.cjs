@@ -19,7 +19,7 @@ for (const [file, dependencies] of cases) {
     assert.match(source, /const load = useCallback\(async \(\) => \{/)
     assert.match(source, /useEffect\(\(\) => \{\s*void load\(\)\s*return \(\) => \{ loadSequence\.current\.invalidate\(\) \}\s*\}, \[load\]\)/)
     assert.match(source, dependencies)
-    assert.match(source, /\(\) => \{ void load\(\) \}/)
+    assert.match(source, /\.on\([^\n]*, (?:load|\(\) => \{ void load\(\) \})\)/)
     assert.doesNotMatch(source, /\(\) => load\(\)/)
   })
 }
