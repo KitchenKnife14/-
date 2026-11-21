@@ -370,6 +370,8 @@ async function main() {
     await authPage.getByRole('button', { name: 'Выйти' }).click()
     await authPage.getByRole('heading', { name: 'Бюджет для двоих' }).waitFor()
 
+    await authPage.setViewportSize({ width: 1280, height: 900 })
+
     // A browser may deny localStorage access (privacy settings, sandbox or security policy).
     // Login should still work in memory for this tab, without persisting the bearer token.
     const blockedStorageErrors = []
