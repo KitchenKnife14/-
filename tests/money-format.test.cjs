@@ -20,6 +20,18 @@ test('compact ruble formatting preserves kopecks instead of rounding to whole ru
   assert.equal(formatRublesShort(-1), '-0,01 ₽')
 })
 
+test('ruble and numeric labels retain Russian grouping, precision and currency spacing', async () => {
+  const { formatRubles, formatRublesShort, formatNumber } = await loadMoneyModule()
+  const rubles = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  const decimal = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 })
+  for (const kopecks of [0, -0, 17, -120045, 8765432101, Number.MAX_SAFE_INTEGER]) {
+    assert.equal(formatRubles(kopecks), rubles.format(kopecks / 100))
+    assert.equal(formatRublesShort(kopecks), decimal.format(kopecks / 100) + ' ₽')
+  }
+  for (const value of [-12345.678, 0, 1000, 9876543.219]) {
+    assert.equal(formatNumber(value), decimal.format(value))
+  }
+})
 
 test('ruble input parsing converts decimal text exactly without rounding', async () => {
   const { parseRublesToKopecks } = await loadMoneyModule()

@@ -30,23 +30,14 @@ export const parseRublesToKopecks = (
 
 export const rublesToKopecks = (r: number): number => Math.round(r * 100)
 
-export const formatRubles = (k: number): string => {
-  const r = k / 100
-  return new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(r)
-}
+const rubleFormatter = new Intl.NumberFormat('ru-RU', {
+  style: 'currency',
+  currency: 'RUB',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+})
+const numberFormatter = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 })
 
-export const formatRublesShort = (k: number): string => {
-  const r = k / 100
-  return new Intl.NumberFormat('ru-RU', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(r) + ' ₽'
-}
-
-export const formatNumber = (r: number): string =>
-  new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(r)
+export const formatRubles = (k: number): string => rubleFormatter.format(kopecksToRubles(k))
+export const formatRublesShort = (k: number): string => numberFormatter.format(kopecksToRubles(k)) + ' ₽'
+export const formatNumber = (r: number): string => numberFormatter.format(r)
