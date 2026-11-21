@@ -132,6 +132,7 @@ export default function TransactionsPage() {
   const { income, expense } = calculateRealizedTotals(filtered)
   const resultsPending = loading || (!!familyId && loadedFamilyId !== familyId && !error)
   const resultsReady = !!familyId && !resultsPending && !error
+  const modalsAllowed = !!familyId && loadedFamilyId === familyId && !error
 
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
@@ -247,9 +248,9 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <TransactionForm open={resultsReady && showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} editing={editing} />
+      <TransactionForm open={modalsAllowed && showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} editing={editing} />
 
-      <Modal open={resultsReady && !!deleting} onClose={() => { if (!deletePendingRef.current) { setDeleting(null); setDeleteError(null) } }} title="Удалить операцию?">
+      <Modal open={modalsAllowed && !!deleting} onClose={() => { if (!deletePendingRef.current) { setDeleting(null); setDeleteError(null) } }} title="Удалить операцию?">
         <p className="text-sm text-slate-600 mb-4">Это действие нельзя отменить. Операция будет удалена безвозвратно.</p>
         {deleteError && <p role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2 mb-4">{deleteError}</p>}
         <div className="flex gap-2">
