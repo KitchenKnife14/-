@@ -721,6 +721,18 @@ async function main() {
     await firstDialogControl.focus()
     await page.keyboard.press('Shift+Tab')
     assert.equal(await lastDialogControl.evaluate(element => element === document.activeElement), true, 'Shift+Tab from the first dialog control must wrap to the last')
+
+    // A background refresh in the same family must not close the form or discard unsaved edits.
+    await transactionDialog.getByLabel('Сумма, ₽').fill('43.21')
+    const readsBeforeModalRefresh = transactionReadRequests
+    tableRevisions.transactions++
+    const modalRefreshDeadline = Date.now() + 7000
+    while (transactionReadRequests <= readsBeforeModalRefresh && Date.now() < modalRefreshDeadline) {
+      await new Promise(resolve => setTimeout(resolve, 20))
+    }
+    assert.ok(transactionReadRequests > readsBeforeModalRefresh, 'background refresh must be observed during editing')
+    await transactionDialog.getByLabel('Сумма, ₽').waitFor()
+    assert.equal(await transactionDialog.getByLabel('Сумма, ₽').inputValue(), '43.21', 'background refresh must preserve the unsaved amount')
     await page.keyboard.press('Escape')
     await transactionDialog.waitFor({ state: 'detached' })
     assert.equal(await addTransactionButton.evaluate(element => element === document.activeElement), true, 'closing the dialog must restore focus to its trigger')
