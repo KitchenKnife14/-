@@ -370,6 +370,29 @@ async function main() {
     await authPage.getByRole('button', { name: 'Выйти' }).click()
     await authPage.getByRole('heading', { name: 'Бюджет для двоих' }).waitFor()
 
+    // A browser may deny localStorage access (privacy settings, sandbox or security policy).
+    // Login should still work in memory for this tab, without persisting the bearer token.
+    const blockedStorageErrors = []
+    authPage.on('pageerror', error => blockedStorageErrors.push(error.message))
+    await authPage.evaluate(() => {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() { throw new DOMException('Storage access denied', 'SecurityError') },
+      })
+    })
+    assert.equal(await authPage.evaluate(() => {
+      try { localStorage.getItem('budget_google_session_v1'); return false } catch { return true }
+    }), true, 'localStorage must actually be inaccessible during this scenario')
+    await authPage.getByLabel('Email').fill('browser-test@example.com')
+    await authPage.getByLabel('Пароль').fill('correct-test-password')
+    await authPage.getByRole('button', { name: 'Войти' }).click()
+    await authPage.getByText('Тестовый участник', { exact: true }).waitFor()
+    await authPage.getByRole('link', { name: 'Telegram' }).click()
+    await authPage.getByRole('heading', { name: 'Telegram' }).waitFor()
+    await authPage.reload({ waitUntil: 'networkidle' })
+    await authPage.getByRole('heading', { name: 'Бюджет для двоих' }).waitFor()
+    assert.deepEqual(blockedStorageErrors, [], 'blocked storage must not cause uncaught browser errors')
+
     await authPage.close()
 
     // Malformed dashboard row payloads must become a visible load error, not a render crash.
