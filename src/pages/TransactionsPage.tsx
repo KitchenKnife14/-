@@ -19,6 +19,7 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadedFamilyId, setLoadedFamilyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cursor, setCursor] = useState(currentMoscowMonth)
   const [search, setSearch] = useState('')
@@ -64,9 +65,18 @@ export default function TransactionsPage() {
       if (txRes.error) throw txRes.error
       if (catRes.error) throw catRes.error
       if (accountRes.error) throw accountRes.error
+      // A wrong-family or malformed response must fail closed even if the server
+      // unexpectedly disregards the family_id query filter.
+      if (!Array.isArray(txRes.data) || !Array.isArray(catRes.data) || !Array.isArray(accountRes.data)
+        || txRes.data.some((row: Transaction) => row.family_id !== familyId)
+        || catRes.data.some((row: Category) => row.family_id !== familyId)
+        || accountRes.data.some((row: Account) => row.family_id !== familyId)) {
+        throw new Error('Ответ сервера содержит некорректные данные или записи другой семьи')
+      }
       setTxs(txRes.data as Transaction[])
       setCategories(catRes.data as Category[])
       setAccounts(accountRes.data as Account[])
+      setLoadedFamilyId(familyId)
     } catch (e) {
       if (loadSequence.current.isCurrent(requestId)) setError(e instanceof Error ? e.message : 'Ошибка загрузки')
     } finally {
@@ -78,6 +88,14 @@ export default function TransactionsPage() {
     void load()
     return () => { loadSequence.current.invalidate() }
   }, [load])
+  useEffect(() => {
+    // Close forms and clear member filters when a different family becomes active.
+    setShowAdd(false)
+    setEditing(null)
+    setDeleting(null)
+    setAuthorFilter('')
+    setResponsibleFilter('')
+  }, [familyId])
   useEffect(() => {
     if (!familyId) return
     const channel = googleSheets
@@ -112,7 +130,8 @@ export default function TransactionsPage() {
   const clearFilters = () => { setSearch(''); setTypeFilter('all'); setCategoryFilter(''); setAuthorFilter(''); setResponsibleFilter(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount('') }
 
   const { income, expense } = calculateRealizedTotals(filtered)
-  const resultsReady = !loading && !error
+  const resultsPending = loading || (!!familyId && loadedFamilyId !== familyId && !error)
+  const resultsReady = !!familyId && !resultsPending && !error
 
   const prevMonth = () => setCursor((c) => ({ year: c.month === 0 ? c.year - 1 : c.year, month: c.month === 0 ? 11 : c.month - 1 }))
   const nextMonth = () => setCursor((c) => ({ year: c.month === 11 ? c.year + 1 : c.year, month: c.month === 11 ? 0 : c.month + 1 }))
@@ -139,7 +158,7 @@ export default function TransactionsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Операции</h1>
-        <button type="button" onClick={() => { setEditing(null); setShowAdd(true) }} className="btn-primary">
+        <button type="button" disabled={!resultsReady} onClick={() => { setEditing(null); setShowAdd(true) }} className="btn-primary">
           <Plus size={18} /> Добавить
         </button>
       </div>
@@ -182,7 +201,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {loading ? (
+      {resultsPending ? (
         <div className="text-sm text-slate-400">Загрузка…</div>
       ) : error ? (
         <div role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">
@@ -228,9 +247,9 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <TransactionForm open={showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} editing={editing} />
+      <TransactionForm open={resultsReady && showAdd} onClose={() => { setShowAdd(false); setEditing(null) }} onSaved={load} categories={categories} accounts={accounts} userId={session?.user.id ?? null} editing={editing} />
 
-      <Modal open={!!deleting} onClose={() => { if (!deletePendingRef.current) { setDeleting(null); setDeleteError(null) } }} title="Удалить операцию?">
+      <Modal open={resultsReady && !!deleting} onClose={() => { if (!deletePendingRef.current) { setDeleting(null); setDeleteError(null) } }} title="Удалить операцию?">
         <p className="text-sm text-slate-600 mb-4">Это действие нельзя отменить. Операция будет удалена безвозвратно.</p>
         {deleteError && <p role="alert" className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2 mb-4">{deleteError}</p>}
         <div className="flex gap-2">

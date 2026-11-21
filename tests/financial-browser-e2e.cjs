@@ -8,6 +8,7 @@ const familyId = 'family-e2e'
 const alternateFamilyId = 'family-isolation-e2e'
 let activeFamilyId = familyId
 let assertActiveFamilyQuery = false
+let injectForeignTransactionRow = false
 const userId = 'user-e2e'
 const partnerId = 'partner-e2e'
 
@@ -120,6 +121,9 @@ function query(payload) {
       })
     }
     if (Number.isInteger(payload.limit)) result = result.slice(0, payload.limit)
+    if (injectForeignTransactionRow && payload.table === 'transactions') {
+      result.push(...rows.filter(row => row.family_id !== activeFamilyId))
+    }
     return result
   }
   if (payload.mode === 'insert' || payload.mode === 'upsert') {
@@ -773,6 +777,15 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' })
     await expenseCard.waitFor()
     assert.equal(await alternateCard.count(), 0, 'the original family must not see transactions from a second family')
+    injectForeignTransactionRow = true
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.getByRole('alert').getByText('Ответ сервера содержит некорректные данные или записи другой семьи').waitFor()
+    assert.equal(await expenseCard.count(), 0, 'a mixed-family response must not show previously loaded operations')
+    assert.equal(await alternateCard.count(), 0, 'a mixed-family response must never show the foreign operation')
+    assert.equal(await page.getByRole('button', { name: 'Добавить' }).isDisabled(), true, 'financial editing must be blocked after a mixed-family response')
+    injectForeignTransactionRow = false
+    await page.getByRole('button', { name: 'Повторить загрузку' }).click()
+    await expenseCard.waitFor()
     activeFamilyId = alternateFamilyId
     await page.reload({ waitUntil: 'networkidle' })
     await alternateCard.waitFor()
