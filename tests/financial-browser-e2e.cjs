@@ -1345,6 +1345,46 @@ async function main() {
     }, { familyId, userId })
     assert.equal(pendingCleared, true, 'confirmed idempotent retry must clear the pending ID')
 
+    // An isolated browser may deny all localStorage access. The pending ID must survive
+    // form remounts in memory, blocking changed payloads after an uncertain insert.
+    const deniedStoragePageErrors = []
+    page.on('pageerror', error => deniedStoragePageErrors.push(error.message))
+    const storageDenied = await page.evaluate(() => {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() { throw new DOMException('Storage denied', 'SecurityError') },
+      })
+      try { window.localStorage.getItem('budget_google_session_v1'); return false } catch { return true }
+    })
+    assert.equal(storageDenied, true, 'browser storage must actually be denied for this scenario')
+    const blockedStorageStartRows = state.transactions.length
+    const blockedStorageStartInserts = transactionInsertRequests
+    transactionAbortAfterInsertOnce = true
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    const blockedStorageDialog = page.getByRole('dialog', { name: 'Новая операция' })
+    await blockedStorageDialog.getByLabel('Сумма, ₽').fill('9.43')
+    await blockedStorageDialog.getByRole('textbox', { name: 'Описание' }).fill('E2E закрытое хранилище')
+    await blockedStorageDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await blockedStorageDialog.getByText(/Не удалось связаться с сервером|Сервер не ответил вовремя/).waitFor()
+    assert.equal(state.transactions.length, blockedStorageStartRows + 1)
+    const blockedStorageOriginalId = state.transactions.at(-1).id
+    await blockedStorageDialog.getByRole('button', { name: 'Отмена' }).click()
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    const reopenedStorageDialog = page.getByRole('dialog', { name: 'Новая операция' })
+    await reopenedStorageDialog.getByLabel('Сумма, ₽').fill('9.44')
+    await reopenedStorageDialog.getByRole('textbox', { name: 'Описание' }).fill('E2E закрытое хранилище')
+    await reopenedStorageDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await reopenedStorageDialog.getByText(/Предыдущий запрос ещё не подтверждён/).waitFor()
+    assert.equal(transactionInsertRequests, blockedStorageStartInserts + 1, 'changed payload with denied storage must not insert')
+    assert.equal(state.transactions.length, blockedStorageStartRows + 1, 'denied storage must not permit a duplicate')
+    await reopenedStorageDialog.getByLabel('Сумма, ₽').fill('9.43')
+    await reopenedStorageDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await reopenedStorageDialog.waitFor({ state: 'detached' })
+    assert.equal(transactionInsertRequests, blockedStorageStartInserts + 2, 'original payload must reuse its ID after form remount')
+    assert.equal(state.transactions.length, blockedStorageStartRows + 1, 'idempotent retry must retain one row with denied storage')
+    assert.equal(state.transactions.at(-1).id, blockedStorageOriginalId, 'volatile fallback must keep the original pending ID')
+    assert.deepEqual(deniedStoragePageErrors, [], 'denied storage must not cause unhandled browser errors')
+
     process.stdout.write(JSON.stringify({
       result: 'PASS',
       checks: [
