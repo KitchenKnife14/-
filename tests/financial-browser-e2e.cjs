@@ -33,6 +33,7 @@ const state = {
 }
 let sequence = 0
 let transactionInsertRequests = 0
+let transactionAbortAfterInsertOnce = false
 let transactionDeleteDelayMs = 0
 let transactionDeleteError = null
 let purchaseConfirmDelayMs = 0
@@ -418,6 +419,12 @@ async function main() {
         if (transactionInserts) {
           transactionInsertRequests += transactionInserts
           await new Promise(resolve => setTimeout(resolve, 250))
+          if (transactionAbortAfterInsertOnce) {
+            // The mock server has already committed the row, but the client loses the response.
+            transactionAbortAfterInsertOnce = false
+            await route.abort('failed')
+            return
+          }
         }
         sequence++
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: result, error: null }) })
@@ -1283,6 +1290,28 @@ async function main() {
     assert.equal(await transactionDialogForButtonTypes.locator('button:not([type])').count(), 0, 'transaction dialog controls must declare explicit button types')
     await page.keyboard.press('Escape')
     await transactionDialogForButtonTypes.waitFor({ state: 'detached' })
+
+    // A lost response after a committed insert must not permit a different payload to get a new ID.
+    // This scenario contacts only the synthetic intercepted API; no GAS or Sheets write occurs.
+    const committedRowsBeforeUncertainSave = state.transactions.length
+    const insertsBeforeUncertainSave = transactionInsertRequests
+    transactionAbortAfterInsertOnce = true
+    await page.getByRole('button', { name: 'Добавить' }).click()
+    const uncertainDialog = page.getByRole('dialog', { name: 'Новая операция' })
+    await uncertainDialog.getByLabel('Сумма, ₽').fill('8.76')
+    await uncertainDialog.getByRole('textbox', { name: 'Описание' }).fill('E2E неопределённая запись')
+    await uncertainDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await uncertainDialog.getByText(/Не удалось связаться с сервером|Сервер не ответил вовремя/).waitFor()
+    assert.equal(transactionInsertRequests, insertsBeforeUncertainSave + 1)
+    assert.equal(state.transactions.length, committedRowsBeforeUncertainSave + 1, 'mock server committed the first insert despite a lost response')
+    const originalUncertainId = state.transactions.at(-1).id
+    await uncertainDialog.getByLabel('Сумма, ₽').fill('8.77')
+    await uncertainDialog.getByRole('button', { name: 'Сохранить' }).click()
+    await uncertainDialog.getByText(/Предыдущий запрос ещё не подтверждён/).waitFor()
+    assert.equal(transactionInsertRequests, insertsBeforeUncertainSave + 1, 'changed payload must not trigger a second insert')
+    assert.equal(state.transactions.length, committedRowsBeforeUncertainSave + 1, 'changed payload must not create a second transaction')
+    assert.equal(state.transactions.at(-1).id, originalUncertainId, 'uncertain transaction ID must remain unchanged')
+    await uncertainDialog.getByRole('button', { name: 'Отмена' }).click()
 
     process.stdout.write(JSON.stringify({
       result: 'PASS',

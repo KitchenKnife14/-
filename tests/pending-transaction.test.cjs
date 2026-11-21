@@ -252,3 +252,10 @@ test('category create form keeps a stable pending ID for an uncertain insert', (
   assert.match(source, /runPendingMutation\(storage, pendingKey, fingerprint/)
   assert.match(source, /from\('categories'\)\.insert\(\{ \.\.\.insertPayload, id \}\)/)
 })
+
+
+test('transaction form never converts a pending-payload conflict into a fresh transaction ID', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/components/TransactionForm.tsx'), 'utf8')
+  assert.match(source, /requestId = getOrCreatePendingTransactionId\(getPendingStorage\(\), storageKey, fingerprint, createTransactionRequestId\)/)
+  assert.doesNotMatch(source, /getPendingStorage\(\)\.removeItem\(storageKey\)/)
+})

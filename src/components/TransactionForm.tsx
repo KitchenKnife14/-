@@ -114,13 +114,9 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         if (pendingInsertRef.current?.key === storageKey && pendingInsertRef.current.fingerprint === fingerprint) {
           requestId = pendingInsertRef.current.id
         } else {
-          try {
-            requestId = getOrCreatePendingTransactionId(getPendingStorage(), storageKey, fingerprint, createTransactionRequestId)
-          } catch {
-            // Storage may be disabled or full. Remove any stale record before using the in-memory fallback.
-            try { getPendingStorage().removeItem(storageKey) } catch { /* Storage is unavailable. */ }
-            requestId = createTransactionRequestId()
-          }
+          // getPendingStorage already falls back to memory when browser storage is unavailable.
+          // Never swallow a pending-payload conflict: an uncertain write must retain its original ID.
+          requestId = getOrCreatePendingTransactionId(getPendingStorage(), storageKey, fingerprint, createTransactionRequestId)
           pendingInsertRef.current = { key: storageKey, fingerprint, id: requestId }
         }
 
