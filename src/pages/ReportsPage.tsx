@@ -1,21 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { googleSheets } from '../lib/googleSheets'
+import { usePeriodReport } from '../hooks/usePeriodReport'
 import { calculateRealizedTotals } from '../lib/realizedTotals'
-import { ensureSupplementalCategories } from '../lib/categories'
-import type { Transaction, Category, Profile } from '../lib/types'
 import { formatRubles, kopecksToRubles } from '../lib/money'
 import { monthRange, currentMoscowDate } from '../lib/dates'
 import { toCsv } from '../lib/csv'
 import { Download } from 'lucide-react'
 
 type Period = 'current' | 'prev' | '3m' | '6m' | 'year' | 'custom'
-
-const emptyReport = {
-  txs: [] as Transaction[],
-  categories: [] as Category[],
-  profiles: [] as Profile[],
-}
 
 export default function ReportsPage() {
   const { family, members } = useAuth()
@@ -34,54 +26,7 @@ export default function ReportsPage() {
     return { start: customStart || `${now.getFullYear()}-01-01`, end: customEnd || `${now.getFullYear()}-12-31` }
   }, [period, customStart, customEnd])
 
-  const familyId = family?.id
-  const selection = useMemo(() => ({
-    familyId, start: range.start, end: range.end, memberIds: members.map(member => member.user_id),
-  }), [familyId, range.start, range.end, members])
-  const [report, setReport] = useState<{
-    selection: typeof selection
-    data: typeof emptyReport
-    error: string | null
-  } | null>(null)
-
-  useEffect(() => {
-    const { familyId, start, end, memberIds } = selection
-    if (!familyId) return
-    let active = true
-    const load = async () => {
-      try {
-        const [, transactions, categories, profiles] = await Promise.all([
-          ensureSupplementalCategories(familyId),
-          googleSheets.from('transactions').select('*').eq('family_id', familyId).eq('planned', false).gte('operation_date', start).lte('operation_date', end).order('operation_date', { ascending: true }),
-          googleSheets.from('categories').select('*').eq('family_id', familyId),
-          memberIds.length ? googleSheets.from('profiles').select('*').in('id', memberIds) : Promise.resolve({ data: [], error: null }),
-        ])
-        if (!active) return
-        if (transactions.error) throw transactions.error
-        if (categories.error) throw categories.error
-        if (profiles.error) throw profiles.error
-        if (!Array.isArray(transactions.data) || !Array.isArray(categories.data) || !Array.isArray(profiles.data)) {
-          throw new Error('Сервер вернул неполные данные отчёта')
-        }
-        setReport({
-          selection,
-          error: null,
-          data: { txs: transactions.data, categories: categories.data, profiles: profiles.data },
-        })
-      } catch (cause) {
-        if (active) setReport({ selection, data: emptyReport, error: cause instanceof Error ? cause.message : 'Ошибка загрузки' })
-      }
-    }
-    void load()
-    return () => { active = false }
-  }, [selection])
-
-  const current = report?.selection === selection ? report : null
-  const loading = !current
-  const error = current?.error
-  const { txs, categories, profiles } = current?.data ?? emptyReport
-  const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
-  const profMap = useMemo(() => new Map(profiles.map((p) => [p.id, p])), [profiles])
+  const { txs, catMap, profMap, loading, error } = usePeriodReport(family?.id, members, range)
 
   const filteredTxs = useMemo(() => memberFilter === 'all' ? txs :
     txs.filter(t => (t.responsible_user_id || t.created_by) === memberFilter), [txs, memberFilter])
@@ -105,7 +50,7 @@ export default function ReportsPage() {
     return [...m.entries()]
   }, [filteredTxs])
 
-  const canExport = !!current && !error && filteredTxs.length > 0
+  const canExport = !loading && !error && filteredTxs.length > 0
   const exportCSV = () => {
     if (!canExport) return
     const rows = [['Дата', 'Тип', 'Сумма (₽)', 'Категория', 'Описание', 'Автор записи', 'Ответственный']]

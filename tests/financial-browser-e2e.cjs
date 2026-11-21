@@ -326,6 +326,29 @@ function rpc(name, params) {
   throw new Error('Unexpected RPC in financial E2E: ' + name)
 }
 
+async function deliverLateResponse(page, matches, startRequest, whilePending) {
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const hold = async route => {
+    if (matches(route.request())) await gate
+    await route.fallback()
+  }
+  await page.route(apiUrl, hold)
+  try {
+    const pending = page.waitForRequest(matches)
+    await startRequest()
+    const request = await pending
+    await whilePending()
+    const late = page.waitForResponse(response => response.request() === request)
+    release()
+    await (await late).finished()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  } finally {
+    release()
+    await page.unroute(apiUrl, hold)
+  }
+}
+
 async function waitForServer(url, child) {
   const deadline = Date.now() + 20000
   while (Date.now() < deadline) {
@@ -1348,24 +1371,12 @@ async function main() {
       return items.some(item => item.table === 'transactions' && item.filters?.some(filter =>
         filter.column === 'operation_date' && filter.op === 'gte' && filter.value === previousReportDate))
     }
-    let releasePreviousReport
-    const gate = new Promise(resolve => { releasePreviousReport = resolve })
-    const delayPreviousReport = async route => {
-      if (isPreviousReport(route.request())) await gate
-      await route.fallback()
-    }
-    await page.route(apiUrl, delayPreviousReport)
     try {
-      const pending = page.waitForRequest(isPreviousReport)
-      await reportPeriod.selectOption('prev')
-      const previousRequest = await pending
-      assert.equal(await exportButton.isDisabled(), true, 'old rows must not be exported under the new dates')
-      await reportPeriod.selectOption('current')
-      await page.getByText('Доходы', { exact: true }).waitFor()
-      const late = page.waitForResponse(response => response.request() === previousRequest)
-      releasePreviousReport()
-      await (await late).finished()
-      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      await deliverLateResponse(page, isPreviousReport, () => reportPeriod.selectOption('prev'), async () => {
+        assert.equal(await exportButton.isDisabled(), true, 'old rows must not be exported under the new dates')
+        await reportPeriod.selectOption('current')
+        await page.getByText('Доходы', { exact: true }).waitFor()
+      })
       const downloaded = page.waitForEvent('download')
       await exportButton.click()
       const download = await downloaded
@@ -1381,8 +1392,6 @@ async function main() {
       await page.getByText(transactionReadError, { exact: true }).waitFor()
       assert.equal(await exportButton.isDisabled(), true, 'a failed period must not export a previous successful report')
     } finally {
-      releasePreviousReport()
-      await page.unroute(apiUrl, delayPreviousReport)
       transactionReadError = null
       state.transactions = []
     }
@@ -1414,6 +1423,36 @@ async function main() {
       const node = document.querySelector('.font-medium.text-slate-700')
       return node && node.textContent !== previous
     }, previousAnalysisMonth)
+
+    // Current month: the responsible participant overrides the author. Older rows retain author attribution.
+    const analysisRow = { ...savedTransactions[0], family_id: familyId, operation_date: reportMonth, planned: false, created_by: userId, responsible_user_id: null }
+    state.transactions = [
+      { ...analysisRow, id: 'analysis-income', type: 'income', amount_kopecks: 20011 },
+      { ...analysisRow, id: 'analysis-legacy', type: 'expense', amount_kopecks: 456, category_id: 'category-home' },
+      { ...analysisRow, id: 'analysis-partner-a', responsible_user_id: partnerId, type: 'expense', amount_kopecks: 1234, category_id: 'category-food' },
+      { ...analysisRow, id: 'analysis-partner-b', responsible_user_id: partnerId, type: 'expense', amount_kopecks: 766, category_id: 'category-food' },
+      { ...analysisRow, id: 'analysis-transfer', type: 'transfer', amount_kopecks: 61111 },
+      { ...analysisRow, id: 'analysis-planned', type: 'expense', amount_kopecks: 81234, planned: true },
+      { ...analysisRow, id: 'analysis-previous', operation_date: previousReportDate, type: 'income', amount_kopecks: 99999 },
+    ]
+    await page.reload()
+    const ownerCard = page.locator('.card').filter({ has: page.getByText('Тестовый пользователь', { exact: true }) })
+    const partnerCard = page.locator('.card').filter({ has: page.getByText('Тестовый партнёр', { exact: true }) })
+    await ownerCard.waitFor()
+    await deliverLateResponse(page, isPreviousReport,
+      () => page.getByRole('button', { name: 'Предыдущий месяц' }).click(),
+      async () => {
+        await page.getByText('Загрузка…', { exact: true }).waitFor()
+        assert.equal(await ownerCard.count(), 0)
+        await nextAnalysisMonth.click()
+        await ownerCard.waitFor()
+      })
+    const ownerText = (await ownerCard.innerText()).replace(/\s+/g, ' ')
+    const partnerText = (await partnerCard.innerText()).replace(/\s+/g, ' ')
+    assert.ok(ownerText.includes('Зарплата / доходы 200,11 ₽') && ownerText.includes('Баланс 195,55 ₽'), ownerText)
+    assert.ok(partnerText.includes('Расходы 20 ₽') && partnerText.includes('Продукты 20 ₽'), partnerText)
+    const totalExpensesCard = page.locator('.card').filter({ has: page.getByText('Общие расходы', { exact: true }) })
+    assert.ok((await totalExpensesCard.innerText()).replace(/\s+/g, ' ').includes('24,56 ₽'))
     state.transactions = savedTransactions
 
     // Notification icon actions must have useful accessible names and work from the keyboard.

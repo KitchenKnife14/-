@@ -1,55 +1,44 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { googleSheets } from '../lib/googleSheets'
-import { ensureSupplementalCategories } from '../lib/categories'
-import type { Transaction, Category, Profile } from '../lib/types'
+import { usePeriodReport } from '../hooks/usePeriodReport'
+import { getTransactionAttribution } from '../lib/transactionAttribution'
 import { formatRubles } from '../lib/money'
 import { monthRange, monthLabel, currentMoscowMonth } from '../lib/dates'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function AnalysisPage() {
   const { family, members } = useAuth()
-  const [txs, setTxs] = useState<Transaction[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [profiles, setProfiles] = useState<Profile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [cursor, setCursor] = useState(currentMoscowMonth)
 
   const range = useMemo(() => monthRange(cursor.year, cursor.month), [cursor])
 
-  const load = async () => {
-    if (!family) return
-    setLoading(true); setError(null)
-    try {
-      const categoryMigration = ensureSupplementalCategories(family.id)
-      const ids = members.map((m) => m.user_id)
-      const [, tRes, cRes, pRes] = await Promise.all([
-        categoryMigration,
-        googleSheets.from('transactions').select('*').eq('family_id', family.id).eq('planned', false).gte('operation_date', range.start).lte('operation_date', range.end).order('operation_date', { ascending: true }),
-        googleSheets.from('categories').select('*').eq('family_id', family.id),
-        ids.length > 0 ? googleSheets.from('profiles').select('*').in('id', ids) : Promise.resolve({ data: [], error: null }),
-      ])
-      if (tRes.error) throw tRes.error; if (cRes.error) throw cRes.error; if (pRes.error) throw pRes.error
-      setTxs(tRes.data as Transaction[]); setCategories(cRes.data as Category[]); setProfiles((pRes.data ?? []) as Profile[])
-    } catch (e) { setError(e instanceof Error ? e.message : 'Ошибка загрузки') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [family?.id, range.start, range.end])
-  const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
-  const profMap = useMemo(() => new Map(profiles.map((p) => [p.id, p])), [profiles])
+  const { txs, catMap, profMap, loading, error } = usePeriodReport(family?.id, members, range)
 
   const memberData = useMemo(() => {
-    return members.map((m) => {
-      const memberTxs = txs.filter((t) => (t.responsible_user_id || t.created_by) === m.user_id)
-      const income = memberTxs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_kopecks, 0)
-      const expense = memberTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_kopecks, 0)
-      const byCat = new Map<string, number>()
-      for (const t of memberTxs.filter((t) => t.type === 'expense' && t.category_id)) { byCat.set(t.category_id!, (byCat.get(t.category_id!) ?? 0) + t.amount_kopecks) }
-      const topCats = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
-      return { member: m, name: profMap.get(m.user_id)?.display_name ?? 'Участник', income, expense, balance: income - expense, topCats }
-    })
+    const summaries = members.map(member => ({
+      member,
+      name: profMap.get(member.user_id)?.display_name ?? 'Участник',
+      income: 0,
+      expense: 0,
+      byCategory: new Map<string, number>(),
+    }))
+    const byUser = new Map(summaries.map(summary => [summary.member.user_id, summary]))
+    for (const transaction of txs) {
+      const { responsibleId } = getTransactionAttribution(transaction)
+      if (!responsibleId) continue
+      const summary = byUser.get(responsibleId)
+      if (!summary) continue
+      const { type, amount_kopecks: amount, category_id: categoryId } = transaction
+      if (type === 'income') summary.income += amount
+      if (type === 'expense') {
+        summary.expense += amount
+        if (categoryId) summary.byCategory.set(categoryId, (summary.byCategory.get(categoryId) ?? 0) + amount)
+      }
+    }
+    return summaries.map(({ member, name, income, expense, byCategory }) => ({
+      member, name, income, expense, balance: income - expense,
+      topCats: [...byCategory.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5),
+    }))
   }, [txs, members, profMap])
 
   const totalIncome = memberData.reduce((s, d) => s + d.income, 0)
