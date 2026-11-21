@@ -71,6 +71,7 @@ export default function TransactionsPage() {
         || txRes.data.some((row: Transaction) => row.family_id !== familyId)
         || catRes.data.some((row: Category) => row.family_id !== familyId)
         || accountRes.data.some((row: Account) => row.family_id !== familyId)) {
+        googleSheets.invalidateReadCache()
         throw new Error('Ответ сервера содержит некорректные данные или записи другой семьи')
       }
       setTxs(txRes.data as Transaction[])
