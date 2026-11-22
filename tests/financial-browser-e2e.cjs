@@ -1485,7 +1485,7 @@ async function main() {
     await page.getByRole('button', { name: 'Экспорт CSV' }).click()
     const uniqueCsv = await uniqueDownload
     const uniqueCsvText = await require('node:fs/promises').readFile(await uniqueCsv.path(), 'utf8')
-    assert.equal(uniqueCsvText.trim().split(/\\r?\\n/).length, 2, 'recovered CSV must contain one header and one transaction')
+    assert.equal(uniqueCsvText.trim().split(/\r?\n/).length, 2, 'recovered CSV must contain one header and one transaction')
     state.transactions = []
 
     transactionReadDelayMs = 400
