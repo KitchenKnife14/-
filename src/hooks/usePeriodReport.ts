@@ -36,7 +36,17 @@ export function usePeriodReport(familyId: string | undefined, members: FamilyMem
         if (categories.error) throw categories.error
         if (profiles.error) throw profiles.error
         if (!Array.isArray(transactions.data) || !Array.isArray(categories.data) || !Array.isArray(profiles.data)) {
+          googleSheets.invalidateReadCache()
           throw new Error('Сервер вернул неполные данные отчёта')
+        }
+        // Enforce family isolation again before rendering totals or exporting CSV.
+        // Profiles do not have family_id, so restrict them to the requested member IDs.
+        const requestedMemberIds = new Set(memberIds)
+        if (transactions.data.some((row: Transaction) => row.family_id !== familyId)
+          || categories.data.some((row: Category) => row.family_id !== familyId)
+          || profiles.data.some((row: Profile) => !requestedMemberIds.has(row.id))) {
+          googleSheets.invalidateReadCache()
+          throw new Error('Ответ сервера содержит записи другой семьи')
         }
         setReport({
           selection,

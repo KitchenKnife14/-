@@ -1396,6 +1396,42 @@ async function main() {
       state.transactions = []
     }
 
+    // A server returning another family's row must not populate either the report or its CSV.
+    // This is a synthetic, intercepted API; it cannot access any real Google Sheet.
+    const reportOwnRow = {
+      ...savedTransactions[0], id: 'report-family-safe-e2e',
+      family_id: familyId, operation_date: reportMonth, planned: false,
+      description: 'CSV разрешённой семьи',
+    }
+    const reportForeignRow = {
+      ...reportOwnRow, id: 'report-other-family-e2e',
+      family_id: alternateFamilyId, description: 'CSV чужой семьи',
+    }
+    state.transactions = [reportOwnRow, reportForeignRow]
+    injectForeignTransactionRow = true
+    await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Ответ сервера содержит записи другой семьи', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Доходы', { exact: true }).count(), 0, 'mixed-family report must not show totals')
+    assert.equal(await page.getByRole('button', { name: 'Экспорт CSV' }).isDisabled(), true, 'mixed-family report must not allow CSV export')
+    injectForeignTransactionRow = false
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByText('Доходы', { exact: true }).waitFor()
+    const safeExport = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Экспорт CSV' }).click()
+    const safeCsvFile = await safeExport
+    const safeCsvContent = await require('node:fs/promises').readFile(await safeCsvFile.path(), 'utf8')
+    assert.ok(safeCsvContent.includes('CSV разрешённой семьи'), 'recovered report must contain the own-family row')
+    assert.ok(!safeCsvContent.includes('CSV чужой семьи'), 'recovered report must not export a foreign-family row')
+
+    injectForeignTransactionRow = true
+    await page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Ответ сервера содержит записи другой семьи', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общие доходы', { exact: true }).count(), 0, 'mixed-family analysis must not show totals')
+    injectForeignTransactionRow = false
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByText('Общие доходы', { exact: true }).waitFor()
+    state.transactions = []
+
     transactionReadDelayMs = 400
     const analysisNavigation = page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
     await page.getByText('Загрузка…', { exact: true }).waitFor()
