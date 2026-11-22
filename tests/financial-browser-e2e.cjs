@@ -9,6 +9,7 @@ const alternateFamilyId = 'family-isolation-e2e'
 let activeFamilyId = familyId
 let assertActiveFamilyQuery = false
 let injectForeignTransactionRow = false
+let injectInvalidReportRowId = null
 const userId = 'user-e2e'
 const partnerId = 'partner-e2e'
 
@@ -128,6 +129,11 @@ function query(payload) {
     if (Number.isInteger(payload.limit)) result = result.slice(0, payload.limit)
     if (injectForeignTransactionRow && payload.table === 'transactions') {
       result.push(...rows.filter(row => row.family_id !== activeFamilyId))
+    }
+    if (injectInvalidReportRowId && payload.table === 'transactions') {
+      // Simulate a server returning one row despite its period/planned filters.
+      const unexpected = rows.find(row => row.id === injectInvalidReportRowId)
+      if (unexpected && !result.includes(unexpected)) result.push(unexpected)
     }
     return result
   }
@@ -1430,6 +1436,33 @@ async function main() {
     injectForeignTransactionRow = false
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.getByText('Общие доходы', { exact: true }).waitFor()
+
+    // Same-family rows that ignore selected dates or planned=false are also unsafe.
+    // Verify both routes refuse the results and the recovered CSV excludes those rows.
+    const invalidPeriodRows = [
+      { ...reportOwnRow, id: 'report-outside-period-e2e', operation_date: previousReportDate, description: 'CSV вне выбранного периода' },
+      { ...reportOwnRow, id: 'report-planned-e2e', planned: true, description: 'CSV плановый расход' },
+    ]
+    state.transactions = [reportOwnRow, ...invalidPeriodRows]
+    for (const invalidRow of invalidPeriodRows) {
+      injectInvalidReportRowId = invalidRow.id
+      await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+      await page.getByText('Ответ сервера содержит операции, не соответствующие фильтрам отчёта', { exact: true }).waitFor()
+      assert.equal(await page.getByText('Доходы', { exact: true }).count(), 0, 'invalid period report must hide totals')
+      assert.equal(await page.getByRole('button', { name: 'Экспорт CSV' }).isDisabled(), true, 'invalid period report must disable CSV')
+      await page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
+      await page.getByText('Ответ сервера содержит операции, не соответствующие фильтрам отчёта', { exact: true }).waitFor()
+      assert.equal(await page.getByText('Общие доходы', { exact: true }).count(), 0, 'invalid period analysis must hide totals')
+      injectInvalidReportRowId = null
+      await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+      await page.getByText('Доходы', { exact: true }).waitFor()
+      const recoveredDownload = page.waitForEvent('download')
+      await page.getByRole('button', { name: 'Экспорт CSV' }).click()
+      const recoveredCsv = await recoveredDownload
+      const recoveredText = await require('node:fs/promises').readFile(await recoveredCsv.path(), 'utf8')
+      assert.ok(recoveredText.includes('CSV разрешённой семьи'), 'recovered CSV must retain the selected-period row')
+      assert.ok(!recoveredText.includes(invalidRow.description), 'recovered CSV must exclude an invalid report row')
+    }
     state.transactions = []
 
     transactionReadDelayMs = 400

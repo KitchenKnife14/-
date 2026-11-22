@@ -48,6 +48,16 @@ export function usePeriodReport(familyId: string | undefined, members: FamilyMem
           googleSheets.invalidateReadCache()
           throw new Error('Ответ сервера содержит записи другой семьи')
         }
+        // Do not trust a response that ignores the requested period or planned=false filter.
+        // This also protects the CSV export, which consumes the same report data.
+        if (transactions.data.some((row: Transaction) =>
+          typeof row.operation_date !== 'string'
+          || row.operation_date < start
+          || row.operation_date > end
+          || row.planned === true)) {
+          googleSheets.invalidateReadCache()
+          throw new Error('Ответ сервера содержит операции, не соответствующие фильтрам отчёта')
+        }
         setReport({
           selection,
           error: null,
