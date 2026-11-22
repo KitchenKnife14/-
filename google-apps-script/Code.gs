@@ -1382,9 +1382,10 @@ function rpc_(req,user){
   if(name==='get_my_context'){
    const profile=rows_('profiles').find(x=>x.id===user.id);
    const ownMemberships=rows_('family_members').filter(m=>String(m.user_id)===user.id);
-   const familyIds=new Set(ownMemberships.map(m=>String(m.family_id)));
-   const members=rows_('family_members').filter(m=>familyIds.has(String(m.family_id))).map(strip_);
-   const family=ownMemberships.length?rows_('families').find(f=>String(f.id)===String(ownMemberships[0].family_id)):null;
+   // Return only members of the selected family, never a union of historical memberships.
+   const activeFamilyId=ownMemberships.length?String(ownMemberships[0].family_id):null;
+   const members=activeFamilyId?rows_('family_members').filter(m=>String(m.family_id)===activeFamilyId).map(strip_):[];
+   const family=activeFamilyId?rows_('families').find(f=>String(f.id)===activeFamilyId):null;
    const memberIds=new Set(members.map(m=>String(m.user_id)));
    const memberProfiles=rows_('profiles').filter(x=>memberIds.has(String(x.id))).map(strip_);
    return{profile:profile?strip_(profile):null,members,family:family?strip_(family):null,member_profiles:memberProfiles};
