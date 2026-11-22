@@ -19,10 +19,33 @@ async function waitForServer(url, child) {
 
 async function checkMobileRoutes(browser) {
   // Smoke every authenticated page with empty, well-formed test data at narrow iPhone widths.
-  const routesPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  const routesContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  const routesPage = await routesContext.newPage()
   const routePageErrors = []
+  const failedApiRequests = []
+  let mockedApiRequests = 0
   routesPage.on('pageerror', error => routePageErrors.push(error.message))
-  await routesPage.route('https://test-gas.invalid/exec', async route => {
+  routesPage.on('requestfailed', request => {
+    if (request.url().startsWith('https://test-gas.invalid/exec')) {
+      failedApiRequests.push({ url: request.url(), error: request.failure()?.errorText })
+    }
+  })
+  // A context-level route survives full-document navigation across all 14 pages.
+  // Handle WebKit's occasional CORS preflight as well as simple POST requests.
+  await routesContext.route('https://test-gas.invalid/exec', async route => {
+    mockedApiRequests++
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'POST, OPTIONS',
+          'access-control-allow-headers': 'content-type',
+          'access-control-max-age': '0',
+        },
+      })
+      return
+    }
     const payload = route.request().postDataJSON()
     const resolveRequest = request => {
       if (request.action === 'signin') return {
@@ -48,7 +71,12 @@ async function checkMobileRoutes(browser) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      headers: { 'access-control-allow-origin': '*' },
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'POST, OPTIONS',
+        'access-control-allow-headers': 'content-type',
+        'cache-control': 'no-store',
+      },
       body: JSON.stringify({ data, error: null }),
     })
   })
@@ -94,8 +122,9 @@ async function checkMobileRoutes(browser) {
   await entryDialog.getByLabel('Сумма, ₽').fill('1.37')
   await entryDialog.getByRole('button', { name: 'Отмена', exact: true }).tap()
   await entryDialog.waitFor({ state: 'hidden' })
-  assert.deepEqual(routePageErrors, [], 'authenticated pages must render without uncaught browser errors')
-  await routesPage.close()
+  assert.ok(mockedApiRequests > 0, 'all authenticated API reads must use the isolated test fixture')
+  assert.deepEqual(routePageErrors, [], 'authenticated pages must render without uncaught browser errors: ' + JSON.stringify(failedApiRequests))
+  await routesContext.close()
 }
 
 async function main() {
