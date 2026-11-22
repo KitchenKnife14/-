@@ -4702,6 +4702,33 @@ test('family-scoped RPCs reject foreign family IDs and foreign purchase or recur
   assert.notEqual(foreignFamily.id, family.id);
 });
 
+test('get_my_context does not merge separate families after historical multiple memberships', () => {
+  const h = makeHarness();
+  const owner = h.signup('context-multiple-owner@example.com');
+  const partner = h.signup('context-multiple-partner@example.com');
+  const secondOwner = h.signup('context-multiple-other@example.com');
+  const firstFamily = h.call({ action: 'createFamily', token: owner.token, name: 'Первая семья' }).data;
+  const joined = h.call({ action: 'joinFamily', token: partner.token, invite_code: firstFamily.invite_code });
+  assert.equal(joined.error, null, joined.error?.message);
+  const secondFamily = h.call({ action: 'createFamily', token: secondOwner.token, name: 'Другая семья' }).data;
+
+  // A legacy/imported extra membership must not merge two families in the context RPC.
+  h.context.appendRows_('family_members', [{
+    id: 'legacy-cross-family-membership',
+    family_id: secondFamily.id,
+    user_id: owner.user.id,
+    role: 'member',
+    joined_at: '2026-11-22T00:00:00.000Z',
+  }]);
+
+  const context = h.call({ action: 'rpc', token: owner.token, name: 'get_my_context', params: {} });
+  assert.equal(context.error, null, context.error?.message);
+  assert.equal(context.data.family.id, firstFamily.id);
+  assert.deepEqual(context.data.members.map(member => member.family_id), [firstFamily.id, firstFamily.id]);
+  assert.deepEqual(context.data.member_profiles.map(profile => profile.id).sort(), [owner.user.id, partner.user.id].sort());
+  assert.equal(context.data.member_profiles.some(profile => profile.id === secondOwner.user.id), false);
+});
+
 test('get_my_context exposes profiles only for members of the current user family', () => {
   const h = makeHarness();
   const owner = h.signup('context-isolation-owner@example.com');
