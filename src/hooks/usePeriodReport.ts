@@ -58,6 +58,16 @@ export function usePeriodReport(familyId: string | undefined, members: FamilyMem
           googleSheets.invalidateReadCache()
           throw new Error('Ответ сервера содержит операции, не соответствующие фильтрам отчёта')
         }
+        // Duplicate transaction IDs would double-count report totals and duplicate CSV rows.
+        const transactionIds = new Set<string>()
+        if (transactions.data.some((row: Transaction) => {
+          if (typeof row.id !== 'string' || !row.id || transactionIds.has(row.id)) return true
+          transactionIds.add(row.id)
+          return false
+        })) {
+          googleSheets.invalidateReadCache()
+          throw new Error('Ответ сервера содержит повторяющиеся операции')
+        }
         setReport({
           selection,
           error: null,
