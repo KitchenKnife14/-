@@ -68,6 +68,14 @@ export function usePeriodReport(familyId: string | undefined, members: FamilyMem
           googleSheets.invalidateReadCache()
           throw new Error('Ответ сервера содержит повторяющиеся операции')
         }
+        // Monetary totals and CSV must never consume malformed amounts.
+        // Backend validates writes; this guard catches corrupted or mismatched read responses.
+        if (transactions.data.some((row: Transaction) =>
+          !Number.isSafeInteger(row.amount_kopecks) || row.amount_kopecks <= 0
+          || (row.type !== 'income' && row.type !== 'expense' && row.type !== 'transfer'))) {
+          googleSheets.invalidateReadCache()
+          throw new Error('Ответ сервера содержит некорректные финансовые операции')
+        }
         setReport({
           selection,
           error: null,

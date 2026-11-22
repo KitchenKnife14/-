@@ -11,6 +11,7 @@ let assertActiveFamilyQuery = false
 let injectForeignTransactionRow = false
 let injectInvalidReportRowId = null
 let injectDuplicateTransactionRow = false
+let injectMalformedTransactionAmount = false
 const userId = 'user-e2e'
 const partnerId = 'partner-e2e'
 
@@ -139,6 +140,10 @@ function query(payload) {
     if (injectDuplicateTransactionRow && payload.table === 'transactions' && result.length) {
       // Simulate an erroneous duplicate row in a successful server response.
       result.push({ ...result[0] })
+    }
+    if (injectMalformedTransactionAmount && payload.table === 'transactions' && result.length) {
+      // A successful but invalid backend response must not reach money calculations.
+      result[0] = { ...result[0], amount_kopecks: 'malformed-kopecks' }
     }
     return result
   }
@@ -1486,6 +1491,25 @@ async function main() {
     const uniqueCsv = await uniqueDownload
     const uniqueCsvText = await require('node:fs/promises').readFile(await uniqueCsv.path(), 'utf8')
     assert.equal(uniqueCsvText.trim().split(/\r?\n/).length, 2, 'recovered CSV must contain one header and one transaction')
+    // Malformed monetary values must not become NaN totals or exported CSV rows.
+    state.transactions = [reportOwnRow]
+    injectMalformedTransactionAmount = true
+    await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Ответ сервера содержит некорректные финансовые операции', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Доходы', { exact: true }).count(), 0, 'malformed money must hide report totals')
+    assert.equal(await page.getByRole('button', { name: 'Экспорт CSV' }).isDisabled(), true, 'malformed money must disable CSV')
+    await page.goto(baseUrl + '/analysis', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Ответ сервера содержит некорректные финансовые операции', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Общие доходы', { exact: true }).count(), 0, 'malformed money must hide participant totals')
+    injectMalformedTransactionAmount = false
+    await page.goto(baseUrl + '/reports', { waitUntil: 'domcontentloaded' })
+    await page.getByText('Доходы', { exact: true }).waitFor()
+    const validMoneyDownload = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Экспорт CSV' }).click()
+    const validMoneyCsv = await validMoneyDownload
+    const validMoneyText = await require('node:fs/promises').readFile(await validMoneyCsv.path(), 'utf8')
+    assert.equal(validMoneyText.trim().split(/\r?\n/).length, 2, 'restored CSV must contain exactly one transaction')
+    assert.ok(validMoneyText.includes('CSV разрешённой семьи'), 'restored CSV retains valid transaction')
     state.transactions = []
 
     transactionReadDelayMs = 400
