@@ -4711,6 +4711,16 @@ test('get_my_context does not merge separate families after historical multiple 
   const joined = h.call({ action: 'joinFamily', token: partner.token, invite_code: firstFamily.invite_code });
   assert.equal(joined.error, null, joined.error?.message);
   const secondFamily = h.call({ action: 'createFamily', token: secondOwner.token, name: 'Другая семья' }).data;
+  const originalTransaction = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: firstFamily.id, type: 'expense', amount_kopecks: 1200, operation_date: '2026-11-22', description: 'Расход первой семьи' },
+  });
+  const foreignTransaction = h.call({
+    action: 'query', token: secondOwner.token, table: 'transactions', mode: 'insert', returning: true,
+    values: { family_id: secondFamily.id, type: 'expense', amount_kopecks: 3400, operation_date: '2026-11-22', description: 'Расход другой семьи' },
+  });
+  assert.equal(originalTransaction.error, null, originalTransaction.error?.message);
+  assert.equal(foreignTransaction.error, null, foreignTransaction.error?.message);
 
   // A legacy/imported extra membership must not merge two families in the context RPC.
   h.context.appendRows_('family_members', [{
@@ -4727,6 +4737,34 @@ test('get_my_context does not merge separate families after historical multiple 
   assert.deepEqual(context.data.members.map(member => member.family_id), [firstFamily.id, firstFamily.id]);
   assert.deepEqual(context.data.member_profiles.map(profile => profile.id).sort(), [owner.user.id, partner.user.id].sort());
   assert.equal(context.data.member_profiles.some(profile => profile.id === secondOwner.user.id), false);
+
+  // The same active-family rule must apply to all ordinary backend read/write paths,
+  // not just to the context RPC used by the React UI.
+  const visibleTransactions = h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' });
+  assert.equal(visibleTransactions.error, null, visibleTransactions.error?.message);
+  assert.deepEqual(visibleTransactions.data.map(row => row.id), [originalTransaction.data[0].id]);
+  assert.equal(visibleTransactions.data.some(row => row.id === foreignTransaction.data[0].id), false);
+  const visibleProfiles = h.call({ action: 'query', token: owner.token, table: 'profiles', mode: 'select' });
+  assert.equal(visibleProfiles.error, null, visibleProfiles.error?.message);
+  assert.deepEqual(visibleProfiles.data.map(row => row.id).sort(), [owner.user.id, partner.user.id].sort());
+  const visibleFamilies = h.call({ action: 'query', token: owner.token, table: 'families', mode: 'select' });
+  assert.deepEqual(visibleFamilies.data.map(row => row.id), [firstFamily.id]);
+  const visibleMembers = h.call({ action: 'query', token: owner.token, table: 'family_members', mode: 'select' });
+  assert.deepEqual(visibleMembers.data.map(row => row.family_id), [firstFamily.id, firstFamily.id]);
+
+  const foreignWrite = h.call({
+    action: 'query', token: owner.token, table: 'transactions', mode: 'insert',
+    values: { family_id: secondFamily.id, type: 'expense', amount_kopecks: 5600, operation_date: '2026-11-22', description: 'Запрещённая запись' },
+  });
+  assert.match(foreignWrite.error?.message || '', /доступ|семь/i);
+  const foreignRevision = h.call({
+    action: 'rpc', token: owner.token, name: 'get_table_revision',
+    params: { p_table: 'transactions', p_family_id: secondFamily.id },
+  });
+  assert.match(foreignRevision.error?.message || '', /Нет доступа к этой семье/);
+
+  const originalFamilyOwnerRead = h.call({ action: 'query', token: secondOwner.token, table: 'transactions', mode: 'select' });
+  assert.deepEqual(originalFamilyOwnerRead.data.map(row => row.id), [foreignTransaction.data[0].id]);
 });
 
 test('get_my_context exposes profiles only for members of the current user family', () => {

@@ -657,8 +657,10 @@ function accessSnapshot_(user){
   let snapshot=ACCESS_SNAPSHOT_.get(user);
   if(!snapshot){
     const allMembers=rows_('family_members');
-    const members=allMembers.filter(m=>String(m.user_id)===String(user.id));
-    const familyIds=members.map(m=>String(m.family_id));
+    const memberships=allMembers.filter(m=>String(m.user_id)===String(user.id));
+    // The private app has one selected family per account. Match get_my_context:
+    // stale/legacy additional membership rows must not widen query or write access.
+    const familyIds=memberships.length?[String(memberships[0].family_id)]:[];
     const allowedFamilies=new Set(familyIds);
     snapshot={familyIds,membersByFamily:new Map(),goalsById:null};
     allMembers.forEach(m=>{
