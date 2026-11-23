@@ -112,3 +112,8 @@
 - [Коммит `64363f7`](https://github.com/KitchenKnife14/-/commit/64363f7a52f2aa05e70153b116d009543814c1fc) — статус Telegram, `/start`, `/balance`, запись операции и `/link` теперь проверяют первую active membership пользователя, согласованную с `get_my_context`.
 - Добавлен один отрицательный VM-тест для старой link row во второй семье и legacy membership: прочитать или записать финансовые данные через такую привязку нельзя; обычные связи проверяются регрессионным набором.
 - [CI 45182262181](https://github.com/KitchenKnife14/-/actions/runs/45182262181) на этом SHA на момент записи **in_progress**; результат дополнительно сверять. Реальный TEST GAS и M-04 по этому коммиту остаются незавершёнными. Изменений Production нет.
+
+## 11. Поправка тестовых данных категории перед итоговым CI (23.11.2026)
+
+- [Коммит `955cf3a`](https://github.com/KitchenKnife14/-/commit/955cf3aa65538cdcfe166baa1fa2e50f86f98635) исправляет только три тестовые вставки: `kind:'expense'` вместо ошибочного `type:'expense'`.
+- [GitHub Actions 45182828519](https://github.com/KitchenKnife14/-/actions/runs/45182828519) — точный новый SHA, статус на момент записи **in_progress**. Ожидается итог для регрессионных, браузерных, финансовых и GAS syntax checks. Это не TEST GAS runtime. M-04 не закрыт.
