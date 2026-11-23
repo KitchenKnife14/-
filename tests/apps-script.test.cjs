@@ -5558,7 +5558,8 @@ test('one-click TEST GAS runtime batch runs only isolated self-cleaning probes',
   assert.match(source, /runReadConsistencyConcurrencyTest/);
   assert.match(source, /runMonthlyPlanConcurrencyTest/);
   assert.match(source, /runTransactionConcurrencyTest/);
-  assert.match(source, /report\.cleanup==='FAILED'/);
+  assert.match(source, /report\.cleanup!=='PASS'/);
+  assert.match(source, /stoppedForCleanup=true/);
   assert.match(source, /stopped_for_cleanup_failure/);
   assert.match(source, /passedCount/);
   assert.match(source, /failedCount/);
