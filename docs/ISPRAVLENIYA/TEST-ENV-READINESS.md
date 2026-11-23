@@ -122,3 +122,9 @@
 
 - [CI 45182828519](https://github.com/KitchenKnife14/-/actions/runs/45182828519) на SHA `955cf3aa65538cdcfe166baa1fa2e50f86f98635`: **SUCCESS, 324/324 Node tests, 0 FAIL**. Кроме регрессий прошли TypeScript/build, Chromium browser, WebKit mobile, финансовые E2E, Apps Script syntax и manifest.
 - Это последний подтверждённый **кодовый** контрольный SHA; последующие коммиты только документируют результат с `[skip ci]`. TEST GAS ещё не обновлён; M-04 не закрыт. Не менять Production.
+
+## 13. Закрытие обхода generic family insert — проверенный CI (23.11.2026)
+
+- [Коммит `3bc4fc7`](https://github.com/KitchenKnife14/-/commit/3bc4fc75a0be2eac5c148781778af0440081e409) запрещает `query_()` insert в таблицу `families` вне штатного `createFamily`/RPC `create_family`; текущий Onboarding использует RPC. Цель — исключить семейные строки без участника-владельца и без seeded categories.
+- [CI 45185213741](https://github.com/KitchenKnife14/-/actions/runs/45185213741) на этом SHA — **SUCCESS, 325/325 Node regression tests, 0 FAIL**, сборка, Chromium/WebKit browser, финансовые E2E, Apps Script syntax/manifest PASS. Проверена штатная регистрация семьи и приглашение второго участника, а также отказ generic insert напрямую и в batch.
+- Это проверка кода, а не его публикация. Перед TEST M-04 обязательно переносить **именно актуальный Code.gs** и переносимый bundle, без независимых ручных модулей, и соблюдать fail-closed TEST guard. Production не менялся.
