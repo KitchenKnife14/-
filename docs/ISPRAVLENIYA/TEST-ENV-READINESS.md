@@ -100,3 +100,9 @@
 - [Коммит `c419c08`](https://github.com/KitchenKnife14/-/commit/c419c08b32ecf056b7bf8b0842c534f5bc1ce980) — доступ к строкам `families` допускается только по active family membership; тест на несогласованное поле `created_by` добавлен в существующий multi-family regression.
 - [CI 45179005322](https://github.com/KitchenKnife14/-/actions/runs/45179005322) — **SUCCESS**, 323/323 регрессионных тестов, 0 FAIL; сборка, WebKit, Chromium, финансовые E2E и синтаксические проверки пройдены.
 - **M-04 остаётся открытым.** CI не заменяет переноса текущего Code.gs + RuntimeAcceptanceBundle.gs в изолированный TEST GAS и его реальную проверку. Данные TEST и Production не менялись.
+
+## 9. Дополнение по insert категорий в legacy-семьи (23.11.2026)
+
+- [Коммит `fa7fc113`](https://github.com/KitchenKnife14/-/commit/fa7fc113afdd5464762a1bef650ec7c82646d09a): удалено исключение `created_by` в `query_()` для вставки категорий в неактивную семью. Доступ по active family membership унифицирован с остальными путями.
+- Дополнен ранее существующий multi-family VM-тест: отказ для чужой семьи по устаревшей creator metadata, успешная вставка категории в свою и участником второй семьи.
+- [CI 45180767114](https://github.com/KitchenKnife14/-/actions/runs/45180767114) на кодовом коммите запущен, результат на момент записи ещё не подтверждён; проверять актуальный статус. Не считать TEST GAS развёрнутым: M-04 открыт. Production не затрагивался.
