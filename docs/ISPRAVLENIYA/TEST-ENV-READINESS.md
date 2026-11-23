@@ -128,3 +128,31 @@
 - [Коммит `3bc4fc7`](https://github.com/KitchenKnife14/-/commit/3bc4fc75a0be2eac5c148781778af0440081e409) запрещает `query_()` insert в таблицу `families` вне штатного `createFamily`/RPC `create_family`; текущий Onboarding использует RPC. Цель — исключить семейные строки без участника-владельца и без seeded categories.
 - [CI 45185213741](https://github.com/KitchenKnife14/-/actions/runs/45185213741) на этом SHA — **SUCCESS, 325/325 Node regression tests, 0 FAIL**, сборка, Chromium/WebKit browser, финансовые E2E, Apps Script syntax/manifest PASS. Проверена штатная регистрация семьи и приглашение второго участника, а также отказ generic insert напрямую и в batch.
 - Это проверка кода, а не его публикация. Перед TEST M-04 обязательно переносить **именно актуальный Code.gs** и переносимый bundle, без независимых ручных модулей, и соблюдать fail-closed TEST guard. Production не менялся.
+
+## 14. M-04 — проверенный пакет ручной публикации только в TEST GAS (23.11.2026)
+
+**Статус:** подготовка и фиксация пакета завершены; **публикация TEST GAS и live runtime batch не выполнялись**. Описанные ниже действия выполняются отдельно, одним согласованным TEST-only пакетом. Это продолжение существующего M-04, не новый микроэтап и не разрешение на Production.
+
+### Исходники для переноса: закреплённая контрольная точка
+
+Ветка `ispravleniya`, неизменяемый SHA `4c085776618f07a5c1d4dbebebc48dac32ed19ad`. Два переносимых файла и один файл, который **не изменять**:
+
+| Файл | Git blob SHA | Действие |
+|---|---|---|
+| [google-apps-script/Code.gs](https://github.com/KitchenKnife14/-/blob/4c085776618f07a5c1d4dbebebc48dac32ed19ad/google-apps-script/Code.gs) | `907d0099b5921bd694ef8f921727eeea28fb7d93` | Полностью заменить содержимое **существующего** `Code.gs` в TEST-редакторе |
+| [tests/gas/RuntimeAcceptanceBundle.gs](https://github.com/KitchenKnife14/-/blob/4c085776618f07a5c1d4dbebebc48dac32ed19ad/tests/gas/RuntimeAcceptanceBundle.gs) | `623ef052d969f3bd2244bf07da80b4e4c2fbc74a` | Полностью заменить содержимое **существующего** `RuntimeAcceptanceBundle.gs` в TEST-редакторе |
+| [tests/gas/IsolatedTestGuard.gs](https://github.com/KitchenKnife14/-/blob/4c085776618f07a5c1d4dbebebc48dac32ed19ad/tests/gas/IsolatedTestGuard.gs) | `1d7bf7b9598fdebc45e78a813f4c38f16e2e4c56` | **Оставить как есть**, не пересоздавать и не править |
+
+Новые независимые .gs модули или `RuntimeAcceptanceBatch.gs` в редактор не добавлять: они объединены в bundle; возможны совпадающие глобальные имена. Полные ID, URL и секреты не копировать в журнал или чат.
+
+### Последовательность — только после подтверждения TEST-проекта
+
+1. Открыть существующий **TEST Apps Script project**, НЕ Production. В настройках проекта проверить Script ID с окончанием `KMTZTF`; у связанной **TEST** таблицы — ID с окончанием `bqT8qQ` и явное слово «TEST»/«тест» в названии. Если хоть одно несовпадение — **СТОП без изменения файлов**.
+2. Проверить в настройках TEST Script Properties наличие `BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID`, `GAS_TEST_ALLOWED_SPREADSHEET_ID`, `CONCURRENT_ROW_TEST_CONFIRM` и `CONCURRENT_ROW_TEST_WEB_APP_URL`. Значения не отправлять. Проверить, что первые два содержат **полные идентификаторы именно открытых TEST** Script и Spreadsheet, confirmation — `ISOLATED_TEST_ONLY`. Не создавать новые настройки, если они уже есть.
+3. В **Deploy → Manage deployments** открыть **существующий TEST Web App deployment** и независимо сравнить его `/exec` URL со значением `CONCURRENT_ROW_TEST_WEB_APP_URL` в TEST Script Properties. Это обязательная положительная проверка идентичности: `IsolatedTestGuard.gs` сам по себе проверяет формат URL и исключает один известный Production deployment ID, но **не удостоверяет принадлежность любого другого URL этому TEST-проекту**. Если URL отличаются или нужного deployment нет — **СТОП**, не менять URL наугад.
+4. Только после проверок выше в редакторе TEST Apps Script сохранить предыдущий TEST-код для отката (например, существующая версия в истории). Полностью заменить **два** переносимых файла ровно содержимым из ссылок на закреплённый SHA, сохранить изменения. `IsolatedTestGuard.gs` оставить неизменным. Не менять схемы/данные TEST или Production Sheet.
+5. В **том же существующем TEST deployment** выбрать **Edit → Version: New version → Deploy**. Не использовать создание нового deployment и не менять параметры доступа / execute-as без отдельной необходимости. Проверить, что URL `/exec` остался прежним и совпадает с TEST property. Production deployment не открывать.
+6. В редакторе **только TEST** выбрать `runIsolatedRuntimeAcceptanceBatch` и запустить один раз. Проверить сводку: `result=PASS`, `completed=4`, `passed=4`, `failed=0`, `stopped_for_cleanup_failure=false`; у каждого из четырёх сценариев `cleanup=PASS`. При любом FAIL, отсутствии cleanup или несоответствии идентификаторов — **СТОП**, ничего не удалять вручную, сохранить журнал и использовать rollback существующей TEST версии.
+7. В отчёт передать **только обезличенную сводку** полей результата и статусы cleanup; не передавать токены, session IDs, полные Script/Spreadsheet IDs, Telegram update payload и секреты. После успешного полного TEST acceptance отметить M-04 в журнале отдельным фактическим доказательством.
+
+**Предварительная автоматическая проверка:** [CI 45207703165](https://github.com/KitchenKnife14/-/actions/runs/45207703165) на кодовом SHA `968421c3322681fddedfb94179a693296e31540f`: **SUCCESS, 326/326 tests, 0 FAIL**, включая синтаксис Apps Script, guard/bundle проверки и финансовые/браузерные сценарии. Последующие коммиты до зафиксированной контрольной точки — только тесты и документы; переносимые файлы сверены по Git blob SHA. CI не является разрешением на deploy.
