@@ -5650,6 +5650,36 @@ test('isolated GAS runtime probes have no duplicate global function declarations
   ]) assert.ok(declarations.has(name), 'missing isolated helper ' + name);
 });
 
+test('current TEST GAS deployment files declare unique global functions', () => {
+  // These are the three files copied together into the isolated Apps Script
+  // project for M-04. Check the deployed combination, not just its modules.
+  const paths = [
+    'google-apps-script/Code.gs',
+    'tests/gas/RuntimeAcceptanceBundle.gs',
+    'tests/gas/IsolatedTestGuard.gs',
+  ];
+  const declared = new Map();
+  for (const path of paths) {
+    const source = fs.readFileSync(path, 'utf8');
+    for (const match of source.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm)) {
+      const locations = declared.get(match[1]) || [];
+      locations.push(path);
+      declared.set(match[1], locations);
+    }
+  }
+  const duplicates = [...declared.entries()].filter(([, locations]) => locations.length > 1);
+  assert.deepEqual(duplicates, [], 'TEST GAS deployment must have no clashing top-level functions');
+  for (const required of [
+    'doPost',
+    'assertIsolatedGasTestEnvironment_',
+    'runIsolatedRuntimeAcceptanceBatch',
+    'runTelegramUpdateConcurrencyTest',
+    'runReadConsistencyConcurrencyTest',
+    'runMonthlyPlanConcurrencyTest',
+    'runTransactionConcurrencyTest',
+  ]) assert.ok(declared.has(required), 'Missing function in current TEST package: ' + required);
+});
+
 test('single-file TEST GAS runtime bundle stays byte-for-byte synchronized with source modules', () => {
   const paths = [
     'tests/gas/TelegramUpdateConcurrencyTest.gs',
