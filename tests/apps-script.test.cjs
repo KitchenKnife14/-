@@ -3360,6 +3360,51 @@ test('request lock classifier keeps mutations and unknown actions fail-closed', 
   }
 });
 
+test('SEC-02 all mutating RPCs and mixed batches acquire ScriptLock before authorization', () => {
+  const h = makeHarness();
+  const source = fs.readFileSync('google-apps-script/Code.gs', 'utf8');
+  const rpcStart = source.indexOf('function rpc_(req,user){');
+  const rpcEnd = source.indexOf('function nextDate_(', rpcStart);
+  assert.ok(rpcStart >= 0 && rpcEnd > rpcStart, 'RPC dispatcher must be locatable');
+  const rpcNames = [...source.slice(rpcStart, rpcEnd).matchAll(/if\(name==='([^']+)'\)/g)].map(match => match[1]);
+  assert.equal(new Set(rpcNames).size, rpcNames.length, 'RPC names must be unique');
+  const readRpcs = new Set(['get_table_revision', 'get_telegram_link_status', 'get_my_context']);
+  assert.deepEqual(rpcNames.filter(name => readRpcs.has(name)).sort(), [...readRpcs].sort());
+  const mutatingRpcs = rpcNames.filter(name => !readRpcs.has(name));
+  assert.ok(mutatingRpcs.length >= 8, 'check the full list of write RPC handlers');
+
+  function expectSerialized(request) {
+    h.resetLockStats();
+    const response = h.call({ ...request, token: 'invalid-session-sec02' });
+    assert.ok(response.error, 'unauthorized request must fail');
+    assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 },
+      'request must acquire and release ScriptLock: ' + JSON.stringify(request));
+  }
+  for (const name of mutatingRpcs) {
+    expectSerialized({ action: 'rpc', name });
+    expectSerialized({ action: 'batch', requests: [
+      { action: 'rpc', name: 'get_my_context' },
+      { action: 'rpc', name },
+    ] });
+  }
+  for (const mode of ['insert', 'update', 'delete', 'upsert']) {
+    for (const table of ['transactions', 'accounts', 'categories', 'families']) {
+      expectSerialized({ action: 'query', table, mode });
+    }
+  }
+  for (const action of ['signup', 'signin', 'signout', 'telegramWebhook', 'createFamily', 'joinFamily', 'ensureProfile']) {
+    expectSerialized({ action });
+  }
+  expectSerialized({ action: 'batch', requests: [
+    { action: 'query', table: 'transactions', mode: 'select' },
+    { action: 'query', table: 'transactions', mode: 'insert' },
+  ] });
+  expectSerialized({ action: 'batch', requests: [
+    { action: 'query', table: 'transactions', mode: 'select' },
+    { action: 'batch', requests: [{ action: 'query', table: 'transactions', mode: 'select' }] },
+  ] });
+});
+
 test('request lock classifier rejects nested batches from the optimistic read lane', () => {
   const h = makeHarness();
   const classify = h.context.requestLockMode_;
