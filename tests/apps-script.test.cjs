@@ -4731,6 +4731,10 @@ test('get_my_context does not merge separate families after historical multiple 
     joined_at: '2026-11-22T00:00:00.000Z',
   }]);
 
+  // Simulate legacy inconsistent ownership: creator metadata must not bypass
+  // the first/active family membership and expose a different family's details.
+  h.context.updateRows_('families', [{ ...secondFamily, created_by: owner.user.id }]);
+
   const context = h.call({ action: 'rpc', token: owner.token, name: 'get_my_context', params: {} });
   assert.equal(context.error, null, context.error?.message);
   assert.equal(context.data.family.id, firstFamily.id);

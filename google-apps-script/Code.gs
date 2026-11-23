@@ -683,7 +683,8 @@ function canAccessRow_(table,row,user){
   if(table==='telegram_links'||table==='telegram_link_codes')return String(row.user_id||'')===user.id&&fams.includes(String(row.family_id));
   if(row.family_id!==undefined && row.family_id!=='') return fams.includes(String(row.family_id));
   if(table==='profiles') return String(row.id)===String(user.id) || fams.some(fid=>(snapshot.membersByFamily.get(fid)||new Set()).has(String(row.id)));
-  if(table==='families') return String(row.created_by)===user.id || fams.includes(String(row.id));
+  // A stale created_by value must not expose a family outside the active membership.
+  if(table==='families') return fams.includes(String(row.id));
   if(table==='family_members') return fams.includes(String(row.family_id));
   if(table==='goal_contributions'){if(!snapshot.goalsById)snapshot.goalsById=new Map(rows_('goals').map(g=>[String(g.id),g]));const g=snapshot.goalsById.get(String(row.goal_id));return !!g&&fams.includes(String(g.family_id));}
   return false;
