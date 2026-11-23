@@ -26,11 +26,14 @@ function runIsolatedRuntimeAcceptanceBatch() {
       var report=test.run();
       var passed=!!report&&report.result==='PASS'&&report.cleanup==='PASS';
       results.push({test:test.name,result:passed?'PASS':'FAIL',report:report||null});
-      if(!passed&&report&&report.cleanup==='FAILED')stoppedForCleanup=true;
+      // A probe may fail before its cleanup block runs; only explicit PASS proves
+      // that it is safe to continue with the next synthetic fixture.
+      if(!report||report.cleanup!=='PASS')stoppedForCleanup=true;
     } catch(error) {
       var message=String(error&&error.message||error);
       results.push({test:test.name,result:'FAIL',error:message});
-      if(/cleanup|очистк/i.test(message))stoppedForCleanup=true;
+      // Exceptions never prove cleanup. Stop even for unrelated error messages.
+      stoppedForCleanup=true;
     } finally {
       resetRuntimeAcceptanceCaches_();
     }
