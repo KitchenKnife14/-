@@ -117,3 +117,8 @@
 
 - [Коммит `955cf3a`](https://github.com/KitchenKnife14/-/commit/955cf3aa65538cdcfe166baa1fa2e50f86f98635) исправляет только три тестовые вставки: `kind:'expense'` вместо ошибочного `type:'expense'`.
 - [GitHub Actions 45182828519](https://github.com/KitchenKnife14/-/actions/runs/45182828519) — точный новый SHA, статус на момент записи **in_progress**. Ожидается итог для регрессионных, браузерных, финансовых и GAS syntax checks. Это не TEST GAS runtime. M-04 не закрыт.
+
+## 12. Завершённый контрольный CI 324/324 (23.11.2026)
+
+- [CI 45182828519](https://github.com/KitchenKnife14/-/actions/runs/45182828519) на SHA `955cf3aa65538cdcfe166baa1fa2e50f86f98635`: **SUCCESS, 324/324 Node tests, 0 FAIL**. Кроме регрессий прошли TypeScript/build, Chromium browser, WebKit mobile, финансовые E2E, Apps Script syntax и manifest.
+- Это последний подтверждённый **кодовый** контрольный SHA; последующие коммиты только документируют результат с `[skip ci]`. TEST GAS ещё не обновлён; M-04 не закрыт. Не менять Production.
