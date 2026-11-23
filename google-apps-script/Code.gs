@@ -1011,6 +1011,9 @@ function query_(req,user){
     return all.map(({__row,...r})=>r);
   }
   if(mode==='insert'){
+    // Family creation must provision the owner membership and seed categories
+    // together. The generic table insert skips that rollback-capable workflow.
+    if(table==='families')throw new Error('Создание семьи доступно только через create_family');
     const input=Array.isArray(req.values)?req.values:[req.values];
     const explicitIds=input.filter(raw=>raw&&raw.id).map(raw=>raw.id);
     // For duplicate-ID checks, fetch only matching rows. Full-table reads remain
@@ -1049,7 +1052,6 @@ function query_(req,user){
       if(TABLES[table].includes('updated_by'))r.updated_by=user.id;
       if((table==='transactions'||table==='goals'||table==='planned_purchases'||table==='recurring_payments')&&!r.responsible_user_id)r.responsible_user_id=user.id;
       if(table==='goals')r.saved_kopecks=rows_('goal_contributions').filter(c=>String(c.goal_id)===String(r.id)).reduce((sum,c)=>sum+Number(c.amount_kopecks||0),0);
-      if(table==='families'){if(rows_('family_members').some(m=>String(m.user_id)===user.id))throw new Error('Пользователь уже состоит в семье');r.invite_code=r.invite_code||code_();r.currency='RUB';r.created_by=user.id;}
       validateRelations_(table,r,user);
       if(existingById){
         const same=table==='transactions'?sameTransactionInsert_(existingById,r,user):sameIdempotentInsert_(table,existingById,r,user);

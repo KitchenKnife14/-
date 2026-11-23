@@ -1513,6 +1513,49 @@ test('health endpoint hides spreadsheet name unless DEBUG_INFO is enabled', () =
 });
 
 
+test('generic families insertion cannot bypass owner membership and default-category setup', () => {
+  const h = makeHarness();
+  const owner = h.signup('family-generic-insert-owner@example.com');
+  const partner = h.signup('family-generic-insert-partner@example.com');
+
+  const direct = h.call({
+    action: 'query', token: owner.token, table: 'families', mode: 'insert', returning: true,
+    values: { id: 'orphan-family-direct', name: 'Семья без владельца', invite_code: 'DIRECT123456' },
+  });
+  assert.match(direct.error?.message || '', /create_family/);
+  const batch = h.call({
+    action: 'batch', token: owner.token, requests: [
+      { action: 'query', table: 'families', mode: 'insert', values: { id: 'orphan-family-batch', name: 'Вторая попытка' } },
+    ],
+  });
+  assert.equal(batch.error, null, batch.error?.message);
+  assert.match(batch.data[0].error?.message || '', /create_family/);
+  assert.equal(h.context.rows_('families').length, 0, 'direct and batch inserts must not create orphan family rows');
+  assert.equal(h.context.rows_('family_members').length, 0);
+  assert.equal(h.context.rows_('categories').length, 0);
+
+  // The supported onboarding flow still creates a complete family and can be joined.
+  const created = h.call({
+    action: 'rpc', token: owner.token, name: 'create_family',
+    params: { p_name: 'Правильная семья', p_display_name: 'Владелец' },
+  });
+  assert.equal(created.error, null, created.error?.message);
+  const family = created.data;
+  assert.equal(h.context.rows_('families').length, 1);
+  const memberships = h.context.rows_('family_members');
+  assert.equal(memberships.length, 1);
+  assert.equal(memberships[0].user_id, owner.user.id);
+  assert.equal(memberships[0].family_id, family.id);
+  assert.ok(h.context.rows_('categories').some(row => String(row.family_id) === String(family.id)));
+
+  const joined = h.call({
+    action: 'rpc', token: partner.token, name: 'join_family_by_invite',
+    params: { p_invite_code: family.invite_code, p_display_name: 'Участник' },
+  });
+  assert.equal(joined.error, null, joined.error?.message);
+  assert.equal(h.context.rows_('family_members').filter(row => row.family_id === family.id).length, 2);
+});
+
 test('family creation rolls back earlier writes if default category creation fails', () => {
   const h = makeHarness();
   const user = h.signup('family-rollback@example.com');
