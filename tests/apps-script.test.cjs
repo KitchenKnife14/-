@@ -4760,17 +4760,17 @@ test('get_my_context does not merge separate families after historical multiple 
   // including on category insertion (which historically had an exception).
   const foreignCategoryWrite = h.call({
     action: 'query', token: owner.token, table: 'categories', mode: 'insert',
-    values: { family_id: secondFamily.id, name: 'Запрещённая категория', type: 'expense' },
+    values: { family_id: secondFamily.id, name: 'Запрещённая категория', kind: 'expense' },
   });
   assert.match(foreignCategoryWrite.error?.message || '', /доступ|семь/i);
   const ownCategoryWrite = h.call({
     action: 'query', token: owner.token, table: 'categories', mode: 'insert', returning: true,
-    values: { family_id: firstFamily.id, name: 'Моя новая категория', type: 'expense' },
+    values: { family_id: firstFamily.id, name: 'Моя новая категория', kind: 'expense' },
   });
   assert.equal(ownCategoryWrite.error, null, ownCategoryWrite.error?.message);
   const realMemberCategoryWrite = h.call({
     action: 'query', token: secondOwner.token, table: 'categories', mode: 'insert', returning: true,
-    values: { family_id: secondFamily.id, name: 'Категория второй семьи', type: 'expense' },
+    values: { family_id: secondFamily.id, name: 'Категория второй семьи', kind: 'expense' },
   });
   assert.equal(realMemberCategoryWrite.error, null, realMemberCategoryWrite.error?.message);
 
