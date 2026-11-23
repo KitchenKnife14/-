@@ -4789,6 +4789,55 @@ test('get_my_context does not merge separate families after historical multiple 
   assert.deepEqual(originalFamilyOwnerRead.data.map(row => row.id), [foreignTransaction.data[0].id]);
 });
 
+test('legacy second-family Telegram link cannot bypass active-family isolation', () => {
+  const h = makeHarness();
+  const owner = h.signup('legacy-telegram-first@example.com');
+  const secondOwner = h.signup('legacy-telegram-second@example.com');
+  const first = h.call({ action: 'createFamily', token: owner.token, name: 'Первая семья' }).data;
+  const second = h.call({ action: 'createFamily', token: secondOwner.token, name: 'Другая семья' }).data;
+  h.context.appendRows_('family_members', [{
+    id: 'legacy-telegram-extra-member', family_id: second.id, user_id: owner.user.id,
+    role: 'member', joined_at: '2026-11-22T00:00:00.000Z',
+  }]);
+  h.context.appendRows_('telegram_links', [{
+    id: 'legacy-telegram-stale-link', user_id: owner.user.id, family_id: second.id,
+    telegram_user_id: '8200', telegram_chat_id: '8200', linked_at: '2026-11-22T00:00:00.000Z',
+  }]);
+  const status = h.call({ action: 'rpc', token: owner.token, name: 'get_telegram_link_status' });
+  assert.equal(status.error, null, status.error?.message);
+  assert.deepEqual(status.data, { linked: false });
+
+  const secret = 'legacy-telegram-active-family-secret-0123456789';
+  h.context.PropertiesService.getScriptProperties().setProperty('TELEGRAM_BACKEND_SECRET', secret);
+  const send = (update_id, telegramId, text) => h.call({
+    action: 'telegramWebhook', telegramSecret: secret,
+    update: { update_id, message: {
+      chat: { id: telegramId, type: 'private' }, from: { id: telegramId }, text,
+    }},
+  });
+  const start = send(8201, 8200, '/start');
+  assert.equal(start.error, null, start.error?.message);
+  assert.match(start.data.text, /Чтобы подключить бота/);
+  assert.match(send(8202, 8200, '/balance').error?.message || '', /Привязка больше не действительна/);
+  assert.match(send(8203, 8200, 'Проезд 45 рублей').error?.message || '', /Привязка больше не действительна/);
+
+  // Imported/old one-time codes must not re-activate an inactive family.
+  const code = 'ABCD1234EF56';
+  h.context.appendRows_('telegram_link_codes', [{
+    id: 'legacy-telegram-code', user_id: owner.user.id, family_id: second.id,
+    code_hash: h.context.telegramCodeHash_(code),
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    used_at: '', created_at: new Date().toISOString(),
+  }]);
+  const stale = send(8204, 8201, '/link ' + code);
+  assert.match(stale.error?.message || '', /активной семье/);
+  assert.equal(h.context.rows_('telegram_link_codes').find(row => row.id === 'legacy-telegram-code').used_at, '');
+  assert.equal(h.context.rows_('transactions').length, 0);
+  assert.equal(h.context.rows_('telegram_links').length, 1);
+  assert.equal(h.call({ action: 'rpc', token: owner.token, name: 'get_my_context' }).data.family.id, first.id);
+  assert.equal(h.call({ action: 'query', token: secondOwner.token, table: 'families', mode: 'select' }).data[0].id, second.id);
+});
+
 test('get_my_context exposes profiles only for members of the current user family', () => {
   const h = makeHarness();
   const owner = h.signup('context-isolation-owner@example.com');

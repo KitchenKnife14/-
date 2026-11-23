@@ -674,6 +674,12 @@ function accessSnapshot_(user){
   return snapshot;
 }
 function allowedFamilyIds_(user){return accessSnapshot_(user).familyIds;}
+// Keep Telegram authorization consistent with the first (active) membership
+// selected by get_my_context; legacy extra memberships are not active.
+function isActiveFamilyForUser_(userId,familyId){
+  const first=rows_('family_members').find(row=>String(row.user_id)===String(userId));
+  return !!first&&String(first.family_id)===String(familyId);
+}
 function canAccessRow_(table,row,user){
   const snapshot=accessSnapshot_(user),fams=snapshot.familyIds;
   if(table==='notifications'){
@@ -1369,7 +1375,7 @@ function rpc_(req,user){
     return {code,expires_at:expires};
   }
   if(name==='get_telegram_link_status'){
-    const link=rows_('telegram_links').find(x=>String(x.user_id)===user.id);
+    const link=rows_('telegram_links').find(x=>String(x.user_id)===user.id&&isActiveFamilyForUser_(x.user_id,x.family_id));
     return link?{linked:true,linked_at:link.linked_at,telegram_chat_id:link.telegram_chat_id}:{linked:false};
   }
   if(name==='unlink_telegram'){
@@ -1567,7 +1573,7 @@ function telegramWebhook_(req){
   let reply;
   const linkCommand=text.match(/^\/link(?:@\w+)?\s+([A-Z0-9]{6,16})$/i);
   if(/^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)){
-    const linked=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
+    const linked=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId&&isActiveFamilyForUser_(x.user_id,x.family_id));
     reply={chat_id:chatId,text:linked?'Бот подключён к вашему семейному бюджету.\n\nПример записи: Проезд 45 рублей\nКоманды: /help, /balance, /unlink':'Чтобы подключить бота, откройте приложение «Бюджет для двоих», создайте код привязки и отправьте сюда команду:\n/link ВАШ_КОД\n\nКод действует 15 минут.'};
   }else if(/^\/help(?:@\w+)?$/i.test(text)){
     reply={chat_id:chatId,text:'Команды:\n/link КОД — привязать аккаунт приложения\n/balance — сводка за текущий месяц\n/unlink — отвязать Telegram\n/help — помощь\n\nДобавление операции: «Проезд 45 рублей» или «Доход 5000 рублей зарплата».'};
@@ -1577,7 +1583,8 @@ function telegramWebhook_(req){
     const existingTelegramLink=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
     const alreadyCompleted=!!(codeRow&&codeRow.used_at&&existingTelegramLink&&
       String(existingTelegramLink.user_id)===String(codeRow.user_id)&&
-      String(existingTelegramLink.family_id)===String(codeRow.family_id));
+      String(existingTelegramLink.family_id)===String(codeRow.family_id)&&
+       isActiveFamilyForUser_(codeRow.user_id,codeRow.family_id));
     if(alreadyCompleted){
             // Telegram may retry after link + used_at persisted but before update_id cache was written.
       // The same code and same Telegram/account link are a completed replay.
@@ -1586,7 +1593,7 @@ function telegramWebhook_(req){
       const candidate=codeRow&&!codeRow.used_at&&String(codeRow.expires_at)>now?codeRow:null;
       if(!candidate)throw new Error('Код не найден, уже использован или истёк. Создайте новый код в приложении.');
       const membership=rows_('family_members').find(x=>String(x.user_id)===String(candidate.user_id)&&String(x.family_id)===String(candidate.family_id));
-      if(!membership)throw new Error('Пользователь больше не состоит в этой семье.');
+      if(!membership||!isActiveFamilyForUser_(candidate.user_id,candidate.family_id))throw new Error('Пользователь больше не состоит в этой активной семье.');
       const links=rows_('telegram_links');
       const byTelegram=links.find(x=>String(x.telegram_user_id)===telegramUserId);
       const byUser=links.find(x=>String(x.user_id)===String(candidate.user_id));
@@ -1615,7 +1622,7 @@ function telegramWebhook_(req){
     const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
     if(!link)throw new Error('Сначала привяжите аккаунт командой /link КОД.');
     const members=rows_('family_members').filter(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
-    if(!members.length)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
+    if(!members.length||!isActiveFamilyForUser_(link.user_id,link.family_id))throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
     const month=Utilities.formatDate(new Date(),'Europe/Moscow','yyyy-MM');
     const txs=rows_('transactions').filter(x=>String(x.family_id)===String(link.family_id)&&String(x.operation_date||'').slice(0,7)===month&&!x.planned);
     const income=txs.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount_kopecks||0),0);
@@ -1626,7 +1633,7 @@ function telegramWebhook_(req){
     const link=rows_('telegram_links').find(x=>String(x.telegram_user_id)===telegramUserId);
     if(!link)throw new Error('Сначала привяжите аккаунт в приложении и отправьте /link КОД.');
     const member=rows_('family_members').find(x=>String(x.user_id)===String(link.user_id)&&String(x.family_id)===String(link.family_id));
-    if(!member)throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
+    if(!member||!isActiveFamilyForUser_(link.user_id,link.family_id))throw new Error('Привязка больше не действительна. Подключите Telegram заново.');
     if(/(?:^|\s)(?:перевод|перевести|перевёл|перевел|перевела|перекинул|перекинула)(?=$|[\s,.:;!?])/i.test(text))throw new Error('Переводы через Telegram пока не поддерживаются. Создайте перевод в приложении, указав оба счёта.');
     const amountMatch=text.match(/(?:^|\s)(\d+(?:[.,]\d{1,2})?)(?:\s*(?:₽|руб(?:лей|ля|ль|\.?)?|р\.?))?(?=\s|$)/i);
     if(!amountMatch)throw new Error('Не нашёл сумму. Пример: Проезд 45 рублей.');
