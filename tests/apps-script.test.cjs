@@ -4756,6 +4756,24 @@ test('get_my_context does not merge separate families after historical multiple 
   const visibleMembers = h.call({ action: 'query', token: owner.token, table: 'family_members', mode: 'select' });
   assert.deepEqual(visibleMembers.data.map(row => row.family_id), [firstFamily.id, firstFamily.id]);
 
+  // Legacy creator metadata must never bypass family_members authorization,
+  // including on category insertion (which historically had an exception).
+  const foreignCategoryWrite = h.call({
+    action: 'query', token: owner.token, table: 'categories', mode: 'insert',
+    values: { family_id: secondFamily.id, name: 'Запрещённая категория', type: 'expense' },
+  });
+  assert.match(foreignCategoryWrite.error?.message || '', /доступ|семь/i);
+  const ownCategoryWrite = h.call({
+    action: 'query', token: owner.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: firstFamily.id, name: 'Моя новая категория', type: 'expense' },
+  });
+  assert.equal(ownCategoryWrite.error, null, ownCategoryWrite.error?.message);
+  const realMemberCategoryWrite = h.call({
+    action: 'query', token: secondOwner.token, table: 'categories', mode: 'insert', returning: true,
+    values: { family_id: secondFamily.id, name: 'Категория второй семьи', type: 'expense' },
+  });
+  assert.equal(realMemberCategoryWrite.error, null, realMemberCategoryWrite.error?.message);
+
   const foreignWrite = h.call({
     action: 'query', token: owner.token, table: 'transactions', mode: 'insert',
     values: { family_id: secondFamily.id, type: 'expense', amount_kopecks: 5600, operation_date: '2026-11-22', description: 'Запрещённая запись' },

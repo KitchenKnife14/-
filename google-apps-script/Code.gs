@@ -1034,7 +1034,7 @@ function query_(req,user){
       } else if(table==='goal_contributions'){
         const goal=rows_('goals').find(g=>String(g.id)===String(r.goal_id));
         if(!goal || !allowedFamilyIds_(user).includes(String(goal.family_id)))throw new Error('Нет доступа к этой цели');
-      } else if(table!=='profiles'&&table!=='families'&&(!r.family_id||(!allowedFamilyIds_(user).includes(String(r.family_id)) && !(table==='categories' && rows_('families').some(f=>String(f.id)===String(r.family_id)&&String(f.created_by)===user.id))))) throw new Error('Не указана семья или нет доступа к ней');
+      } else if(table!=='profiles'&&table!=='families'&&(!r.family_id||!allowedFamilyIds_(user).includes(String(r.family_id)))) throw new Error('Не указана семья или нет доступа к ней');
       if(table==='notifications'){
         if(r.user_id && String(r.user_id)!==user.id)throw new Error('Нельзя создавать уведомления для другого пользователя');
         r.user_id=user.id;
