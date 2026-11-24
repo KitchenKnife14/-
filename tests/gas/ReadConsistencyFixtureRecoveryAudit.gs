@@ -3,7 +3,7 @@
  *
  * Standalone, temporary TEST-only tool. This file is NOT part of
  * RuntimeAcceptanceBundle.gs, and must NEVER be added to Production.
- * No calls to deleteRow(s), setValue(s), remove*, or deleteProperty.
+ * Never mutates a spreadsheet, changes a Script Property, or invokes a test.
  */
 function auditCancelledReadConsistencyFixture() {
   var props = PropertiesService.getScriptProperties();
