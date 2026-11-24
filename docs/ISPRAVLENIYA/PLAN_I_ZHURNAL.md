@@ -4864,3 +4864,8 @@ HEAD до:
 ### 2026-11-24 — M-04: владелец подтвердил read-only audit, подготовлен отдельный атомарный cleanup
 
 - Реальный JSON владельца: READY_FOR_SEPARATE_CLEANUP, 93 fixture rows, 87 категорий, 1 из 7 сессий, unreadable 0, extraFamilyRefs 0. Подготовлен `tests/gas/ReadConsistencyFixtureCleanup.gs` и VM tests; точный TEST guard, полный повторный preflight, ScriptLock, один атомарный Sheets batch с резервной скрытой вкладкой только для 93 fixture rows, проверка остальных строк, затем отзыв одной сессии. Подробности и ограничения — TEST-ENV-READINESS.md, §21. CI и live выполнение ещё не подтверждены. TinyFish больше не использовать платно; переход на clasp/прямые коннекторы без новых Apps Script проектов. 216/227 (95,2%), 11 открыто. Production/main/Web App v12/данные не изменены.
+
+### 2026-11-24 — M-04: CI отдельного TEST cleanup подтверждён, без платных сервисов
+
+- CI [45387341201](https://github.com/KitchenKnife14/-/actions/runs/45387341201) на `d171dd54` завершён SUCCESS: 330/330 тестов, все три новых recovery VM tests PASS (№274–276). Подтверждены ограничения области, отказ при расхождениях и отсутствие fallback удаления при HTTP 403. Live очистка ещё не запущена. В TEST-ENV-READINESS.md §22 внесены точная immutable инструкция и ожидаемый отчёт.
+- Пользователь не хочет пополнять TinyFish, не рассчитываем на clasp/Google Cloud регистрацию; остаёмся на бесплатных доступных GitHub/Google Sheets/Vercel и при необходимости минимальных ручных действиях в существующем Apps Script. Не создавать новых GAS проектов или deployment. TEST v12, main, Production не менялись. 216/227 (95,2%), 11 открыто, M-04 остаётся открыт.
