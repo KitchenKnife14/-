@@ -70,7 +70,6 @@ let recurringReadDelayMs = 0
 let recurringReadError = null
 let categoryReadDelayMs = 0
 let categoryReadError = null
-let telegramStatusDelayMs = 0
 let telegramStatusError = null
 let transactionReadRequests = 0
 let tableRevisions = { transactions: 1, accounts: 1, budgets: 1 }
@@ -471,8 +470,6 @@ async function main() {
           ? (payload.requests || []).some(request => request.action === 'query' && request.table === 'categories' && request.mode === 'select')
           : payload.action === 'query' && payload.table === 'categories' && payload.mode === 'select'
         if (categoryReads && categoryReadDelayMs > 0) await new Promise(resolve => setTimeout(resolve, categoryReadDelayMs))
-        const telegramStatusReads = payload.action === 'rpc' && payload.name === 'get_telegram_link_status'
-        if (telegramStatusReads && telegramStatusDelayMs > 0) await new Promise(resolve => setTimeout(resolve, telegramStatusDelayMs))
         for (const [table, delay] of [
           ['budgets', budgetReadDelayMs],
           ['planned_purchases', purchaseReadDelayMs],
@@ -1601,13 +1598,18 @@ async function main() {
     state.notifications = []
 
     // Telegram: a delayed or failed status lookup must not be mistaken for an unlinked account.
-    telegramStatusDelayMs = 400
-    const telegramNavigation = page.goto(baseUrl + '/telegram', { waitUntil: 'domcontentloaded' })
-    await page.getByText('Проверяем статус подключения…', { exact: true }).waitFor()
-    assert.equal(await page.getByRole('button', { name: 'Создать код привязки' }).count(), 0, 'Telegram link flow must stay hidden while status is loading')
-    await telegramNavigation
+    // Keep the intercepted status response pending until the loading assertion
+    // completes; a 400 ms timer can expire before Playwright observes the DOM.
+    await deliverLateResponse(page, req => {
+      if (req.url() !== apiUrl || req.method() !== 'POST') return false
+      const payload = req.postDataJSON()
+      const requests = payload.action === 'batch' ? payload.requests || [] : [payload]
+      return requests.some(request => request.action === 'rpc' && request.name === 'get_telegram_link_status')
+    }, () => page.goto(baseUrl + '/telegram', { waitUntil: 'domcontentloaded' }), async () => {
+      await page.getByText('Проверяем статус подключения…', { exact: true }).waitFor()
+      assert.equal(await page.getByRole('button', { name: 'Создать код привязки' }).count(), 0, 'Telegram link flow must stay hidden while status is loading')
+    })
     await page.getByRole('button', { name: 'Создать код привязки' }).waitFor()
-    telegramStatusDelayMs = 0
     telegramStatusError = 'Тестовая ошибка статуса Telegram'
     await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' })
     await page.goto(baseUrl + '/telegram', { waitUntil: 'domcontentloaded' })
