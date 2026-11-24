@@ -27,61 +27,76 @@ function setup(options={}) {
  const props={'CONCURRENT_ROW_TEST_CONFIRM':'ISOLATED_TEST_ONLY','CONCURRENT_ROW_TEST_WEB_APP_URL':'https://script.google.com/macros/s/TESTWsbCe/exec'}
  for(let i=0;i<7;i++)props['session:'+i]=JSON.stringify({userId:i===0?uid:'other-'+i})
  if(options.extraSession)props['session:extra']=JSON.stringify({userId:'other'})
- let requests=[],calls=0,deleted=[],locked=false,finished=false,markerStarted=false
+ let deletions=[],deleted=[],locked=false,finished=false,markerStarted=false,backupCreates=0
+ function range(n,r,c,nr,nc){
+   return {
+     getDisplayValues:()=>Array.from({length:nr},(_,i)=>Array.from({length:nc},(_,j)=>String(tabs[n].data[r-1+i]?.[c-1+j]??''))),
+     getFormulas:()=>Array.from({length:nr},()=>Array(nc).fill(options.formula?'=1':'') ),
+     setValues:values=>{
+       assert.equal(locked,true);assert.equal(markerStarted,true)
+       values.forEach((row,i)=>row.forEach((value,j)=>{
+         tabs[n].data[r-1+i] ||= []
+         tabs[n].data[r-1+i][c-1+j]=String(value)
+       }))
+     },
+     copyTo:dest=>{
+       if(options.backupFail)throw Error('simulated backup failure')
+       dest.setValues(range(n,r,c,nr,nc).getDisplayValues())
+     }
+   }
+ }
  const mockSheet=n=>tabs[n]&&({getSheetId:()=>tabs[n].id,getLastRow:()=>tabs[n].data.length,
-  getLastColumn:()=>tabs[n].data[0]?.length||0,isSheetHidden:()=>tabs[n].hidden,
-  getRange:(r,c,nr,nc)=>({getDisplayValues:()=>Array.from({length:nr},(_,i)=>Array.from({length:nc},(_,j)=>String(tabs[n].data[r-1+i]?.[c-1+j]??'')))})})
+   getLastColumn:()=>tabs[n].data[0]?.length||0,isSheetHidden:()=>tabs[n].hidden,
+   hideSheet:()=>{tabs[n].hidden=true},getRange:(...a)=>range(n,...a),
+   deleteRows:(start,count)=>{
+     assert.equal(locked,true);assert.equal(markerStarted,true)
+     assert.equal(tabs._m04_fixture_backup_20261124.data.length,93)
+     if(options.deleteFail&&deletions.length===1)throw Error('simulated deletion failure')
+     deletions.push({n,start,count});tabs[n].data.splice(start-1,count)
+   }})
  const ss={getSpreadsheetTimeZone:()=> 'Europe/Moscow',getId:()=> 'TESTbqT8qQ',getName:()=> 'Семейный бюджет Тестирование',
-  getSheetByName:mockSheet,getSheets:()=>Object.keys(tabs).map(mockSheet)}
- const byId=id=>Object.values(tabs).find(s=>s.id===id)
- const context={TABLES,ScriptApp:{getScriptId:()=>options.wrongProject?'WRONG':'TESTKMTZTF',getOAuthToken:()=> 'not-real'},
+  getSheetByName:mockSheet,insertSheet:n=>{
+    assert.equal(locked,true);assert.equal(markerStarted,true);backupCreates++
+    tabs[n]={id:1000,data:[],hidden:false};return mockSheet(n)
+  }}
+ const context={TABLES,ScriptApp:{getScriptId:()=>options.wrongProject?'WRONG':'TESTKMTZTF'},
   PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]??null,getProperties:()=>({...props}),
     deleteProperty:k=>{deleted.push(k);delete props[k]}})},
-  assertIsolatedGasTestEnvironment_:()=>ss,SpreadsheetApp:{flush(){},openById:()=>ss},
-  LockService:{getScriptLock:()=>({tryLock:()=>{locked=true;return !options.lockBusy},releaseLock:()=>{locked=false}})},
+  assertIsolatedGasTestEnvironment_:()=>ss,SpreadsheetApp:{flush(){}},
+  LockService:{getScriptLock:()=>({tryLock:()=>{if(options.lockBusy)return false;locked=true;return true},releaseLock:()=>{locked=false}})},
   beginWriteConsistency_:()=>{assert.equal(locked,true);markerStarted=true;return 'stable:new'},
-  finishWriteConsistency_:()=>{finished=true},Logger:{log(){}},
-  UrlFetchApp:{fetch:(url,req)=>{
-    calls++;assert.equal(locked,true);assert.equal(markerStarted,true)
-    assert.equal(url,'https://sheets.googleapis.com/v4/spreadsheets/TESTbqT8qQ:batchUpdate')
-    requests=JSON.parse(req.payload).requests
-    if(options.httpFail)return {getResponseCode:()=>403}
-    for(const r of requests){
-      if(r.addSheet){const p=r.addSheet.properties;tabs[p.title]={id:p.sheetId,data:[],hidden:p.hidden}}
-      if(r.copyPaste){const {source:s,destination:d}=r.copyPaste;const from=byId(s.sheetId),to=byId(d.sheetId)
-        for(let i=0;i<s.endRowIndex-s.startRowIndex;i++){
-          to.data[d.startRowIndex+i] ||= []
-          for(let j=s.startColumnIndex;j<s.endColumnIndex;j++)to.data[d.startRowIndex+i][d.startColumnIndex+j-s.startColumnIndex]=from.data[s.startRowIndex+i][j]
-        }}
-      if(r.updateCells){const {start,rows}=r.updateCells;const to=byId(start.sheetId)
-        rows.forEach((r,i)=>r.values.forEach((v,j)=>{to.data[start.rowIndex+i][start.columnIndex+j]=String(v.userEnteredValue.stringValue??v.userEnteredValue.numberValue)}))}
-      if(r.deleteDimension){const x=r.deleteDimension.range;byId(x.sheetId).data.splice(x.startIndex,x.endIndex-x.startIndex)}
-    }
-    return {getResponseCode:()=>200}
-  }}}
+  finishWriteConsistency_:()=>{finished=true},Logger:{log(){}}
+ }
  vm.createContext(context);vm.runInContext(code,context)
- return {context,tabs,props,stats:()=>({calls,requests,deleted,locked,finished})}
+ return {context,tabs,props,stats:()=>({backupCreates,deletions,deleted,locked,finished})}
 }
-test('atomic TEST recovery quarantines 93 rows and revokes only the abandoned session',()=>{
- const x=setup(),out=x.context.cleanupCancelledReadConsistencyFixture()
- assert.equal(out.status,'PASS');assert.equal(out.removedRows,93);assert.equal(out.verifiedApplicationSheets,16)
+test('native TEST recovery verifies backup first, removes 93 rows and only one session',()=>{
+ const x=setup(),out=x.context.cleanupCancelledReadConsistencyFixtureNative()
+ assert.equal(out.status,'PASS');assert.equal(out.mode,'NATIVE_SPREADSHEET_APP');assert.equal(out.removedRows,93);assert.equal(out.verifiedApplicationSheets,16)
  assert.equal(x.tabs.categories.data.length,2);assert.equal(x.tabs.categories.data[1][0],'old-category')
  assert.equal(x.tabs._auth.data[1][0],'old');assert.equal(x.tabs._m04_fixture_backup_20261124.data.length,93)
  assert.equal(x.tabs._m04_fixture_backup_20261124.hidden,true)
- assert.equal(x.stats().calls,1);assert.deepEqual(x.stats().deleted,['session:0']);assert.equal(x.stats().finished,true)
+ assert.equal(x.stats().backupCreates,1);assert.deepEqual(x.stats().deleted,['session:0']);assert.equal(x.stats().finished,true)
  assert.equal(Object.keys(x.props).filter(k=>k.startsWith('session:')).length,6)
- assert.equal(x.stats().requests.filter(r=>r.deleteDimension).length,7)
- assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixture(),/STOP/)
- assert.equal(x.stats().calls,1)
+ assert.equal(x.stats().deletions.length,7)
+ assert.equal(x.stats().deletions.reduce((n,r)=>n+r.count,0),93)
+ assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixtureNative(),/STOP/)
+ assert.equal(x.stats().backupCreates,1)
 })
-test('recovery stops before mutation when fixture, references, sessions or target differ',()=>{
- for(const options of [{extraRef:true},{badCategory:true},{extraSession:true},{wrongProject:true}]){
-   const x=setup(options);assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixture(),/STOP/)
-   assert.equal(x.stats().calls,0);assert.deepEqual(x.stats().deleted,[]);assert.equal(x.stats().locked,false)
+test('native recovery stops before mutation when fixture, references, sessions, formula or target differ',()=>{
+ for(const options of [{extraRef:true},{badCategory:true},{extraSession:true},{wrongProject:true},{formula:true}]){
+   const x=setup(options);assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixtureNative(),/STOP/)
+   assert.equal(x.stats().backupCreates,0);assert.deepEqual(x.stats().deletions,[]);assert.deepEqual(x.stats().deleted,[]);assert.equal(x.stats().locked,false)
  }
 })
-test('API refusal does not revoke sessions or fall back to partial deletion',()=>{
- const x=setup({httpFail:true});assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixture(),/HTTP 403/)
- assert.equal(x.stats().calls,1);assert.deepEqual(x.stats().deleted,[]);assert.equal(x.tabs.categories.data.length,89)
+test('native backup failure prevents all deletion and session revocation',()=>{
+ const x=setup({backupFail:true});assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixtureNative(),/backup failure/)
+ assert.equal(x.stats().backupCreates,1);assert.deepEqual(x.stats().deletions,[]);assert.deepEqual(x.stats().deleted,[]);assert.equal(x.tabs.categories.data.length,89)
  assert.equal(x.stats().finished,true);assert.equal(x.stats().locked,false)
+})
+test('partial native deletion preserves complete backup and does not revoke session',()=>{
+ const x=setup({deleteFail:true});assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixtureNative(),/deletion failure/)
+ assert.equal(x.stats().deletions.length,1);assert.equal(x.tabs._m04_fixture_backup_20261124.data.length,93)
+ assert.deepEqual(x.stats().deleted,[]);assert.throws(()=>x.context.cleanupCancelledReadConsistencyFixtureNative(),/STOP/)
+ assert.equal(x.stats().deletions.length,1);assert.equal(x.stats().backupCreates,1)
 })

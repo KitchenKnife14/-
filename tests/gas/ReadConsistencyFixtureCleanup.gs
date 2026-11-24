@@ -196,12 +196,11 @@ function planCancelledReadConsistencyCleanup_() {
 }
 
 /**
- * Only entry point for the separate, owner-approved cleanup.
- * Backup + deleteDimension are one atomic Sheets API batch. Script Properties
- * are a separate store: the session is revoked only after verifying the sheets.
- * A failure/uncertain response must be investigated, never blindly retried.
+ * Native SpreadsheetApp recovery after HTTP 403. No external Sheets API.
+ * Not atomic across sheets: create and verify the complete backup before
+ * deleting anything, retain it after any failure, and never blindly retry.
  */
-function cleanupCancelledReadConsistencyFixture() {
+function cleanupCancelledReadConsistencyFixtureNative() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) throw new Error('STOP: TEST writer still active');
   var stable = null;
@@ -210,16 +209,19 @@ function cleanupCancelledReadConsistencyFixture() {
     var ss = plan.ss, props = plan.props;
     var backupName = '_m04_fixture_backup_20261124';
     if (ss.getSheetByName(backupName)) throw new Error('STOP: recovery backup already exists; inspect before retry');
-    var used = new Set(ss.getSheets().map(function(sheet){return sheet.getSheetId();}));
-    var backupId = 1000000000;
-    while (used.has(backupId)) backupId++;
-    var requests = [{addSheet:{properties:{sheetId:backupId,title:backupName,hidden:true,
-      gridProperties:{rowCount:100,columnCount:24}}}}];
-    var labels = [], expectedBackup = [], expected = {};
+    var labels = [], expectedBackup = [], expected = {}, groups = [];
     function normalized(rows) {
       var copy = rows.slice();
       while (copy.length > 1 && copy[copy.length-1].every(function(v){return v === '';})) copy.pop();
       return copy;
+    }
+    function verifyTable(name, values) {
+      var snap = plan.snapshots[name], sh = ss.getSheetByName(name);
+      if(!sh || sh.getSheetId()!==snap.sheetId || sh.getLastRow()<1 ||
+          sh.getLastColumn()!==snap.columns.length ||
+          JSON.stringify(normalized(sh.getRange(1,1,sh.getLastRow(),snap.columns.length).getDisplayValues()))!==JSON.stringify(values)) {
+        throw new Error('STOP: TEST rows differ: '+name);
+      }
     }
     Object.keys(plan.snapshots).forEach(function(name) {
       var snap = plan.snapshots[name], rows = (plan.targets[name] || []).slice().sort(function(a,b){return a-b;});
@@ -229,60 +231,55 @@ function cleanupCancelledReadConsistencyFixture() {
       while(i<rows.length) {
         var low=rows[i], high=low;
         while(i+1<rows.length && rows[i+1]===high+1){i++;high++;}
-        var dest=expectedBackup.length;
+        var src=ss.getSheetByName(name).getRange(low,1,high-low+1,snap.columns.length);
+        if(src.getFormulas().some(function(row){return row.some(function(formula){return !!formula;});})) {
+          throw new Error('STOP: unexpected formula in fixture');
+        }
+        groups.push({name:name,low:low,high:high,dest:expectedBackup.length+1,width:snap.columns.length});
         for(var r=low;r<=high;r++){
-          labels.push({values:[{userEnteredValue:{stringValue:name}},{userEnteredValue:{numberValue:r}}]});
+          labels.push([name,r]);
           expectedBackup.push([name,String(r)].concat(snap.data[r-1]));
         }
-        requests.push({copyPaste:{source:{sheetId:snap.sheetId,startRowIndex:low-1,endRowIndex:high,
-          startColumnIndex:0,endColumnIndex:snap.columns.length},destination:{sheetId:backupId,startRowIndex:dest,
-          endRowIndex:dest+high-low+1,startColumnIndex:2,endColumnIndex:2+snap.columns.length},
-          pasteType:'PASTE_NORMAL',pasteOrientation:'NORMAL'}});
         i++;
       }
     });
-    if(expectedBackup.length!==93) throw new Error('STOP: wrong backup scope');
-    requests.push({updateCells:{start:{sheetId:backupId,rowIndex:0,columnIndex:0},rows:labels,fields:'userEnteredValue'}});
-    Object.keys(plan.targets).forEach(function(name) {
-      var rows=plan.targets[name].slice().sort(function(a,b){return b-a;});
-      var i=0;
-      while(i<rows.length){
-        var high=rows[i],low=high;
-        while(i+1<rows.length && rows[i+1]===low-1){i++;low--;}
-        requests.push({deleteDimension:{range:{sheetId:plan.snapshots[name].sheetId,dimension:'ROWS',
-          startIndex:low-1,endIndex:high}}});i++;
-      }
-    });
-    // Preserve optimistic-read protocol while the backend's ScriptLock is held.
+    if(expectedBackup.length!==93 || groups.length!==7) throw new Error('STOP: wrong backup scope');
+    Object.keys(plan.snapshots).forEach(function(name){verifyTable(name,normalized(plan.snapshots[name].data));});
     stable=beginWriteConsistency_();
-    var response;
-    try {
-      response=UrlFetchApp.fetch('https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(ss.getId())+':batchUpdate',{
-        method:'post',contentType:'application/json',headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},
-        payload:JSON.stringify({requests:requests,includeSpreadsheetInResponse:false}),muteHttpExceptions:true
-      });
-    } catch (_) { throw new Error('STOP: Sheets batch outcome uncertain; inspect backup and rows before retry'); }
-    if(response.getResponseCode()!==200) {
-      throw new Error('STOP: Sheets API HTTP '+response.getResponseCode()+'; no fallback, verify state before retry');
-    }
+    // No application-row deletion until the backup is complete and verified.
+    var backup=ss.insertSheet(backupName);
+    backup.hideSheet();
+    groups.forEach(function(g){
+      ss.getSheetByName(g.name).getRange(g.low,1,g.high-g.low+1,g.width)
+        .copyTo(backup.getRange(g.dest,3,g.high-g.low+1,g.width));
+    });
+    backup.getRange(1,1,93,2).setValues(labels);
     SpreadsheetApp.flush();
-    var fresh=SpreadsheetApp.openById(ss.getId());
-    if(fresh.getId()!==ss.getId()) throw new Error('STOP: verification target mismatch');
-    Object.keys(expected).forEach(function(name){
-      var sh=fresh.getSheetByName(name);
-      if(!sh || sh.getLastRow()<1 || sh.getLastColumn()!==plan.snapshots[name].columns.length ||
-          JSON.stringify(normalized(sh.getRange(1,1,sh.getLastRow(),plan.snapshots[name].columns.length).getDisplayValues()))!==JSON.stringify(expected[name])) {
-        throw new Error('STOP: post-cleanup rows differ: '+name);
+    function verifyBackup() {
+      if(!backup.isSheetHidden() || backup.getLastRow()!==93) {
+        throw new Error('STOP: backup verification failed; inspect before retry');
       }
-    });
-    var backup=fresh.getSheetByName(backupName);
-    if(!backup || !backup.isSheetHidden() || backup.getLastRow()!==93) {
-      throw new Error('STOP: backup verification failed; inspect before retry');
+      var backupValues=backup.getRange(1,1,93,24).getDisplayValues();
+      expectedBackup.forEach(function(row,index){
+        if(JSON.stringify(backupValues[index].slice(0,row.length))!==JSON.stringify(row)) {
+          throw new Error('STOP: backup contents differ; no retry');
+        }
+      });
     }
-    var backupValues=backup.getRange(1,1,93,24).getDisplayValues();
-    expectedBackup.forEach(function(row,index){
-      if(JSON.stringify(backupValues[index].slice(0,row.length))!==JSON.stringify(row)) throw new Error('STOP: backup contents differ');
+    verifyBackup();
+    // Recheck all application rows after the backup was made.
+    Object.keys(plan.snapshots).forEach(function(name){verifyTable(name,normalized(plan.snapshots[name].data));});
+    // One contiguous range per target table; delete dependent rows first.
+    Object.keys(plan.targets).forEach(function(name) {
+      var g=groups.find(function(group){return group.name===name;});
+      if(!g) throw new Error('STOP: missing validated deletion group');
+      verifyTable(name,normalized(plan.snapshots[name].data));
+      ss.getSheetByName(name).deleteRows(g.low,g.high-g.low+1);
+      SpreadsheetApp.flush();
+      verifyTable(name,expected[name]);
     });
+    Object.keys(expected).forEach(function(name){verifyTable(name,expected[name]);});
+    verifyBackup();
     // Do not delete unrelated sessions or expose their tokens.
     function sessionSnapshot() {
       var all=props.getProperties(), result={};
@@ -297,7 +294,7 @@ function cleanupCancelledReadConsistencyFixture() {
     props.deleteProperty(plan.sessionKey);
     delete plan.sessionValues[plan.sessionKey];
     if(!equalSessions(sessionSnapshot(),plan.sessionValues)) throw new Error('STOP: session cleanup unverified');
-    var result={test:'cancelled read-consistency TEST fixture cleanup',status:'PASS',
+    var result={test:'cancelled read-consistency TEST fixture cleanup',mode:'NATIVE_SPREADSHEET_APP',status:'PASS',
       removedRows:93,removedSessions:1,preservedSessions:6,backupRows:93,
       verifiedApplicationSheets:Object.keys(expected).length,backupRetained:true};
     Logger.log(JSON.stringify(result));return result;
