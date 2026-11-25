@@ -883,6 +883,7 @@ async function main() {
     assert.equal(state.transactions[0].amount_kopecks, 12345, 'stale edit must leave the amount intact')
     await page.getByRole('dialog').getByRole('button', { name: 'Отмена' }).click()
     await page.reload()
+    await page.setViewportSize({ width: 320, height: 640 })
     await expenseCard.getByRole('button', { name: 'Изменить' }).click()
     await page.getByLabel('Сумма, ₽').fill('200.00')
     await page.getByRole('textbox', { name: 'Описание' }).fill('E2E расход изменён')
@@ -891,6 +892,7 @@ async function main() {
     assert.equal(state.transactions[0].amount_kopecks, 20000)
     assert.equal(state.transactions.length, 1, 'editing must not create another transaction')
     assert.equal(state.transactions[0].operation_time, '09:15', 'uneditable server fields must survive the edit')
+    await page.setViewportSize({ width: 1280, height: 900 })
 
     await page.getByRole('button', { name: 'Добавить' }).click()
     await page.getByRole('button', { name: 'Перевод' }).click()

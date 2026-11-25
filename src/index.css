@@ -116,8 +116,24 @@ button, input, select, textarea {
 
 /* Mobile Safari: avoid focus zoom on controls and use the dynamic viewport. */
 @media (max-width: 767px) {
+  html, body {
+    overscroll-behavior-y: none;
+  }
+
   input.input, select.input, textarea.input {
     font-size: 16px;
+  }
+
+  .modal-viewport {
+    --modal-top: max(0px, var(--modal-viewport-top, 0px));
+    --modal-left: max(0px, var(--modal-viewport-left, 0px));
+    inset: var(--modal-top) auto auto var(--modal-left);
+    width: min(var(--modal-viewport-width, 100%), calc(100% - var(--modal-left)));
+    height: min(var(--modal-viewport-height, 100%), calc(100% - var(--modal-top)));
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      max(8px, env(safe-area-inset-right, 0px))
+      max(8px, env(safe-area-inset-bottom, 0px))
+      max(8px, env(safe-area-inset-left, 0px));
   }
 }
 

@@ -120,6 +120,41 @@ async function checkMobileRoutes(browser) {
   await routesPage.getByRole('button', { name: 'Добавить', exact: true }).tap()
   const entryDialog = routesPage.getByRole('dialog')
   await entryDialog.getByLabel('Сумма, ₽').fill('1.37')
+  const mobileMenu = routesPage.getByRole('navigation', { name: 'Нижняя навигация' })
+  assert.ok(await mobileMenu.isVisible(), 'mobile bottom navigation must be visible')
+  for (const width of [320, 390]) {
+    await routesPage.setViewportSize({ width, height: 640 })
+    for (const type of ['Расход', 'Доход']) {
+      await entryDialog.getByRole('button', { name: type, exact: true }).tap()
+      const size = await entryDialog.evaluate(dialog => ({
+        left: dialog.getBoundingClientRect().left,
+        right: dialog.getBoundingClientRect().right,
+        clientWidth: dialog.clientWidth,
+        scrollWidth: dialog.scrollWidth,
+      }))
+      assert.ok(size.left >= 0 && size.right <= width + 1 && size.scrollWidth <= size.clientWidth + 1,
+        `${type} form must fit at ${width}px: ${JSON.stringify(size)}`)
+    }
+  }
+
+  // Emulate the visual viewport reported when a virtual keyboard covers the
+  // lower portion of the screen without changing the CSS layout viewport.
+  await routesPage.evaluate(() => {
+    Object.defineProperties(window.visualViewport, {
+      height: { configurable: true, value: 320 },
+      offsetTop: { configurable: true, value: 40 },
+    })
+    window.visualViewport.dispatchEvent(new Event('resize'))
+  })
+  const keyboardLayout = await entryDialog.evaluate(dialog => ({
+    top: dialog.getBoundingClientRect().top,
+    bottom: dialog.getBoundingClientRect().bottom,
+    scrollable: dialog.scrollHeight > dialog.clientHeight,
+    inputFontSize: getComputedStyle(dialog.querySelector('input')).fontSize,
+  }))
+  assert.ok(keyboardLayout.top >= 40 && keyboardLayout.bottom <= 360, JSON.stringify(keyboardLayout))
+  assert.equal(keyboardLayout.scrollable, true, 'the form must scroll inside the visible area')
+  assert.ok(parseFloat(keyboardLayout.inputFontSize) >= 16, 'form inputs must avoid mobile focus zoom')
   await entryDialog.getByRole('button', { name: 'Отмена', exact: true }).tap()
   await entryDialog.waitFor({ state: 'hidden' })
   assert.ok(mockedApiRequests > 0, 'all authenticated API reads must use the isolated test fixture')

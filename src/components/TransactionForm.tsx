@@ -153,19 +153,21 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
         <div role="group" aria-label="Тип операции" className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {(['expense', 'income', 'transfer'] as TxType[]).map((t) => (
             <button key={t} type="button" onClick={() => setType(t)} aria-pressed={type === t}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${type === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+              className={`min-h-11 min-w-0 flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${type === t ? 'bg-white text-slate-900 shadow-sm' : 'text-muted'}`}>
               {t === 'expense' ? 'Расход' : t === 'income' ? 'Доход' : 'Перевод'}
             </button>
           ))}
         </div>
 
-        <div>
-          <label className="label" htmlFor={`${fieldId}-amount`}>Сумма, ₽</label>
-          <input id={`${fieldId}-amount`} className="input" type="number" step="0.01" min="0" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" data-modal-autofocus />
-        </div>
-        <div>
-          <label className="label" htmlFor={`${fieldId}-date`}>Дата</label>
-          <input id={`${fieldId}-date`} className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="grid gap-3 min-[375px]:grid-cols-2">
+          <div className="min-w-0">
+            <label className="label" htmlFor={`${fieldId}-amount`}>Сумма, ₽</label>
+            <input id={`${fieldId}-amount`} className="input min-w-0" type="number" step="0.01" min="0" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" data-modal-autofocus />
+          </div>
+          <div className="min-w-0">
+            <label className="label" htmlFor={`${fieldId}-date`}>Дата</label>
+            <input id={`${fieldId}-date`} className="input min-w-0" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
         </div>
 
         {members.length > 1 && (
@@ -193,7 +195,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
               <option value="">Не учитывать в остатках счетов</option>
               {accounts.filter(a => !a.archived || a.id === accountId).map(a => <option key={a.id} value={a.id}>{a.name}{a.archived ? ' (архив)' : ''}</option>)}
             </select>
-            <p className="mt-1 text-xs text-slate-400">Без счёта операция попадёт в общую статистику, но не изменит остаток отдельного счёта.</p>
+            <p className="mt-1 text-xs text-muted">Без счёта операция попадёт в общую статистику, но не изменит остаток отдельного счёта.</p>
           </div>
         )}
 
@@ -209,7 +211,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
             <option value="">Без категории</option>
             {visibleCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
           </select>
-          <p className="mt-1 text-xs text-slate-400">Список по алфавиту. Начните вводить русскую букву, чтобы перейти к первой подходящей категории.</p>
+          <p className="mt-1 text-xs text-muted">Список по алфавиту. Начните вводить русскую букву, чтобы перейти к первой подходящей категории.</p>
         </div>}
         <div>
           <label className="label" htmlFor={`${fieldId}-description`}>Описание</label>
