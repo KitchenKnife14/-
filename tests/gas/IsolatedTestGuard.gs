@@ -1,8 +1,6 @@
 /**
  * Shared fail-closed guard for live concurrency probes.
- * The allowed Script ID reuses the value already verified by
- * BackendSecurityDiagnostics.gs in the isolated TEST Apps Script project.
- * Set this property and the TEST spreadsheet allowlist once:
+ * The existing Script Properties must agree with the approved TEST project:
  * BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID=<ScriptApp.getScriptId()>
  * GAS_TEST_ALLOWED_SPREADSHEET_ID=<test spreadsheet ID>
  */
@@ -12,18 +10,19 @@ function assertIsolatedGasTestEnvironment_(props, confirmation, webAppUrl) {
   }
   var scriptId = ScriptApp.getScriptId();
   var allowedScriptId = String(props.getProperty('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID') || '').trim();
-  if (!allowedScriptId || scriptId !== allowedScriptId) {
+  var testScriptId = '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF';
+  if (scriptId !== testScriptId || allowedScriptId !== testScriptId) {
     throw new Error('Тест остановлен: Script ID не совпадает с разрешённым TEST-проектом.');
   }
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var allowedSpreadsheetId = String(props.getProperty('GAS_TEST_ALLOWED_SPREADSHEET_ID') || '').trim();
+  var testSpreadsheetId = '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ';
   if (!spreadsheet || !/test|тест/i.test(spreadsheet.getName()) ||
-      !allowedSpreadsheetId || spreadsheet.getId() !== allowedSpreadsheetId) {
+      spreadsheet.getId() !== testSpreadsheetId || allowedSpreadsheetId !== testSpreadsheetId) {
     throw new Error('Тест остановлен: активная таблица не совпадает с разрешённой TEST-таблицей.');
   }
-  var match = String(webAppUrl || '').trim().match(/^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/);
-  var productionDeploymentId = 'AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg';
-  if (!match || match[1] === productionDeploymentId) {
+  var testWebAppUrl = 'https://script.google.com/macros/s/AKfycbyfEQe7t5YTDHfH5SwYDwe7oiQKMPViU3ZNmoo4X5HruDpBwqPAeMMMUbIbFsyWsbCe/exec';
+  if (webAppUrl !== testWebAppUrl) {
     throw new Error('Тест остановлен: нужен отдельный TEST Web App deployment URL.');
   }
   return spreadsheet;

@@ -878,29 +878,49 @@ test('PBKDF2 benchmark runtime guard rejects wrong project and spreadsheet befor
   assert.equal(logs.length, 1);
 });
 
-test('shared GAS concurrency guard rejects missing and mismatched TEST allowlists', () => {
+test('shared GAS concurrency guard requires the exact approved TEST environment', () => {
   const source = fs.readFileSync('tests/gas/IsolatedTestGuard.gs', 'utf8');
-  const properties = new Map();
-  const spreadsheet = { getName: () => 'TEST Семейный бюджет', getId: () => 'TEST_SHEET' };
+  const testScriptId = '1lTzvWps76sbMFYdkcaDSz7QuRRF4zXzOwQyBzjasC-jrssOaJAKMTZTF';
+  const testSpreadsheetId = '17S6SptviXszBA4tMNgSWqVv3crktxIdY6BdS6bqT8qQ';
+  const testUrl = 'https://script.google.com/macros/s/AKfycbyfEQe7t5YTDHfH5SwYDwe7oiQKMPViU3ZNmoo4X5HruDpBwqPAeMMMUbIbFsyWsbCe/exec';
+  let scriptId = testScriptId;
+  let spreadsheetId = testSpreadsheetId;
+  let spreadsheetName = 'TEST Семейный бюджет';
+  const spreadsheet = { getName: () => spreadsheetName, getId: () => spreadsheetId };
   const context = {
-    ScriptApp: { getScriptId: () => 'TEST_SCRIPT' },
+    ScriptApp: { getScriptId: () => scriptId },
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet },
   };
-  context.PropertiesService = { getScriptProperties: () => ({ getProperty: key => properties.get(key) ?? null }) };
+  const scriptProperty = 'BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID';
+  const sheetProperty = 'GAS_TEST_ALLOWED_SPREADSHEET_ID';
+  const properties = new Map([[scriptProperty, testScriptId], [sheetProperty, testSpreadsheetId]]);
+  const props = { getProperty: key => properties.get(key) ?? null };
   vm.createContext(context);
   vm.runInContext(source, context);
-  const url = 'https://script.google.com/macros/s/TEST_DEPLOYMENT/exec';
+  const check = (url = testUrl, confirmation = 'ISOLATED_TEST_ONLY') =>
+    context.assertIsolatedGasTestEnvironment_(props, confirmation, url);
 
-  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), '', url), /ISOLATED_TEST_ONLY/);
-  properties.set('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'WRONG_SCRIPT');
-  properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SHEET');
-  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url), /Script ID/);
-  properties.set('BACKEND_DIAGNOSTICS_ALLOWED_SCRIPT_ID', 'TEST_SCRIPT');
-  properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'WRONG_SHEET');
-  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url), /TEST-таблицей/);
-  properties.set('GAS_TEST_ALLOWED_SPREADSHEET_ID', 'TEST_SHEET');
-  assert.throws(() => context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', 'https://script.google.com/macros/s/AKfycbxQLSZXG-R_AGZG5clVDGnMqd4_cwvwsPsf3_9mJ79Rnas7CZVeuIhtSi7FM5MMagkqqg/exec'), /TEST Web App/);
-  assert.equal(context.assertIsolatedGasTestEnvironment_(context.PropertiesService.getScriptProperties(), 'ISOLATED_TEST_ONLY', url).getId(), 'TEST_SHEET');
+  assert.throws(() => check(testUrl, ''), /ISOLATED_TEST_ONLY/);
+  properties.delete(scriptProperty);
+  assert.throws(() => check(), /Script ID/);
+  scriptId = 'OTHER_SCRIPT';
+  properties.set(scriptProperty, scriptId);
+  assert.throws(() => check(), /Script ID/);
+  scriptId = testScriptId;
+  properties.set(scriptProperty, testScriptId);
+  properties.delete(sheetProperty);
+  assert.throws(() => check(), /TEST-таблицей/);
+  spreadsheetId = 'OTHER_TEST_SHEET';
+  properties.set(sheetProperty, spreadsheetId);
+  assert.throws(() => check(), /TEST-таблицей/);
+  spreadsheetId = testSpreadsheetId;
+  properties.set(sheetProperty, testSpreadsheetId);
+  spreadsheetName = 'Семейный бюджет';
+  assert.throws(() => check(), /TEST-таблицей/);
+  spreadsheetName = 'TEST Семейный бюджет';
+  assert.throws(() => check('https://script.google.com/macros/s/OTHER_DEPLOYMENT/exec'), /TEST Web App/);
+  assert.throws(() => check(testUrl + '?test=1'), /TEST Web App/);
+  assert.equal(check(), spreadsheet);
 });
 
 test('isolated GAS Telegram replay probe self-provisions fixtures and verifies concurrent delivery, lost-cache retry and cleanup', () => {
