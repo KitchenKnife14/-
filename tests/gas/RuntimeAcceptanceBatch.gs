@@ -5,6 +5,15 @@
  * Every probe creates and cleans its own synthetic fixtures.
  */
 function runIsolatedRuntimeAcceptanceBatch() {
+  return runIsolatedRuntimeAcceptanceProbes_(true);
+}
+
+// Telegram already passed on TEST v12 before the previous batch was cancelled.
+function runRemainingIsolatedRuntimeAcceptanceBatch() {
+  return runIsolatedRuntimeAcceptanceProbes_(false);
+}
+
+function runIsolatedRuntimeAcceptanceProbes_(includeTelegram) {
   var props=PropertiesService.getScriptProperties();
   var url=String(props.getProperty('CONCURRENT_ROW_TEST_WEB_APP_URL')||'').trim();
   var confirmation=String(props.getProperty('CONCURRENT_ROW_TEST_CONFIRM')||'');
@@ -16,6 +25,7 @@ function runIsolatedRuntimeAcceptanceBatch() {
     {name:'Monthly-plan concurrent stale update',run:function(){return runMonthlyPlanConcurrencyTest();}},
     {name:'Two-member transaction insert concurrency',run:function(){return runTransactionConcurrencyTest();}}
   ];
+  if(!includeTelegram)tests.shift();
   var results=[];
   var stoppedForCleanup=false;
 
@@ -42,7 +52,7 @@ function runIsolatedRuntimeAcceptanceBatch() {
   var passedCount=results.filter(function(item){return item.result==='PASS';}).length;
   var failedCount=results.length-passedCount;
   var output={
-    test:'isolated TEST runtime acceptance batch',
+    test:includeTelegram?'isolated TEST runtime acceptance batch':'remaining isolated TEST runtime acceptance probes',
     completed:results.length,
     passed:passedCount,
     failed:failedCount,

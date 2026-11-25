@@ -16,7 +16,7 @@ const probeNames = [
   'runTransactionConcurrencyTest',
 ]
 
-function simulateBatch(path, responses) {
+function simulateBatch(path, responses, entryPoint = 'runIsolatedRuntimeAcceptanceBatch') {
   const calls = []
   const logged = []
   let index = 0
@@ -46,7 +46,7 @@ function simulateBatch(path, responses) {
       return reply
     }
   }
-  const output = vm.runInContext('runIsolatedRuntimeAcceptanceBatch()', context)
+  const output = vm.runInContext(entryPoint + '()', context)
   return { output: JSON.parse(JSON.stringify(output)), calls, logged }
 }
 
@@ -60,6 +60,25 @@ for (const path of sources) {
     assert.equal(output.stopped_for_cleanup_failure, false)
     assert.deepEqual(calls, probeNames)
     assert.deepEqual(logged, [output])
+  })
+
+  test(`${path}: remaining batch runs only the three unconfirmed probes`, () => {
+    const reports = probeNames.slice(1).map(() => ({ result: 'PASS', cleanup: 'PASS' }))
+    const { output, calls, logged } = simulateBatch(path, reports, 'runRemainingIsolatedRuntimeAcceptanceBatch')
+    assert.equal(output.test, 'remaining isolated TEST runtime acceptance probes')
+    assert.equal(output.result, 'PASS')
+    assert.equal(output.completed, 3)
+    assert.equal(output.passed, 3)
+    assert.deepEqual(calls, probeNames.slice(1))
+    assert.deepEqual(logged, [output])
+  })
+
+  test(`${path}: remaining batch stops before the next probe if cleanup is unconfirmed`, () => {
+    const { output, calls } = simulateBatch(path, [{ result: 'PASS' }], 'runRemainingIsolatedRuntimeAcceptanceBatch')
+    assert.equal(output.result, 'FAIL')
+    assert.equal(output.completed, 1)
+    assert.equal(output.stopped_for_cleanup_failure, true)
+    assert.deepEqual(calls, [probeNames[1]])
   })
 
   test(`${path}: ordinary failure may continue only when cleanup is verified`, () => {
