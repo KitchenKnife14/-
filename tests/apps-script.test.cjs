@@ -80,7 +80,7 @@ function makeHarness() {
     console,
     Date,
     ScriptApp: { getScriptId: () => scriptId },
-    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, },
+    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, flush() {} },
     CacheService: { getScriptCache: () => ({ get: key => scriptCache.get(key) ?? null, put: (key, value) => scriptCache.set(key, value), remove: key => scriptCache.delete(key) }) },
     ContentService: {
       MimeType: { JSON: 'application/json' },
@@ -3556,6 +3556,30 @@ test('mixed read/write batch retains ScriptLock and publishes a write marker', (
   assert.equal(response.data[1].error, null);
   assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
   assert.match(h.context.PropertiesService.getScriptProperties().getProperty('api_read_consistency_v1'), /^stable:/);
+});
+
+test('doPost flushes pending Sheets writes before publishing a stable marker or releasing ScriptLock', () => {
+  const h = makeHarness();
+  const props = h.context.PropertiesService.getScriptProperties();
+  const states = [];
+  const request = { action: 'signout' };
+  h.context.SpreadsheetApp.flush = () => {
+    states.push(props.getProperty('api_read_consistency_v1'));
+    assert.deepEqual(h.lockStats(), { acquires: 1, releases: 0 });
+  };
+  assert.equal(h.call(request).error, null);
+  assert.equal(states.length, 1);
+  assert.match(states[0], /^writing:/);
+  assert.match(props.getProperty('api_read_consistency_v1'), /^stable:/);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
+
+  h.resetLockStats();
+  h.context.SpreadsheetApp.flush = () => { throw new Error('Injected flush failure'); };
+  const response = h.call(request);
+  assert.equal(response.data, null);
+  assert.match(response.error.message, /Не удалось подтвердить сохранение/);
+  assert.match(props.getProperty('api_read_consistency_v1'), /^writing:/);
+  assert.deepEqual(h.lockStats(), { acquires: 1, releases: 1 });
 });
 
 test('optimistic read discards cached rows and retries under ScriptLock when a writer overlaps', () => {

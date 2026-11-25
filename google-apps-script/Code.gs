@@ -153,8 +153,15 @@ function doPost(e) {
         writeState=beginWriteConsistency_();
         responseBody=postResult_(req);
       }finally{
-        finishWriteConsistency_(writeState);
-        lock.releaseLock();
+        try{
+          if(writeState){
+            // Sheets may buffer writes beyond setValues. Keep readers out until
+            // pending writes are applied, even if the request handler failed.
+            try{timedSheetWrite_(()=>SpreadsheetApp.flush());}
+            catch(_){throw new Error('Не удалось подтвердить сохранение данных. Обновите страницу и проверьте результат.');}
+            finishWriteConsistency_(writeState);
+          }
+        }finally{lock.releaseLock();}
       }
     }
   }catch(err){

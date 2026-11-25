@@ -252,6 +252,10 @@ function runReadConsistencyConcurrencyTest() {
         report.manual_cleanup_transaction_id=transactionId;
       }
     } else report.cleanup='NOT_NEEDED';
+    if (report.result !== 'PASS') {
+      report.result='FAIL';
+      Logger.log(JSON.stringify(report));
+    }
   }
   if (cleanupErrors.length) {
     throw new Error('Очистка TEST read-consistency fixtures не подтверждена: '+
