@@ -691,6 +691,7 @@ test('recurring payment confirmation replay returns success after the full commi
 
 test('recurring confirmation rejects a stale snapshot after another family member edits the payment', () => {
   const h = makeHarness();
+  seedTable(h, 'transactions');
   const owner = h.signup('recurring-stale-owner@example.com');
   const partner = h.signup('recurring-stale-partner@example.com');
   const family = h.call({ action: 'createFamily', token: owner.token, name: 'Устаревший регулярный платёж' }).data;
@@ -700,6 +701,12 @@ test('recurring confirmation rejects a stale snapshot after another family membe
     values: { family_id: family.id, type: 'expense', amount_kopecks: 12500, description: 'Интернет', start_date: '2026-11-01', next_due_date: '2026-11-11', frequency: 'monthly', active: true }
   }).data[0];
   const recurring = h.call({ action: 'query', token: owner.token, table: 'recurring_payments', mode: 'select', filters: [{ column: 'id', op: 'eq', value: recurringSeed2.id }] }).data[0];
+  const legacy = h.call({
+    action: 'rpc', token: owner.token, name: 'confirm_recurring_payment',
+    params: { p_recurring_id: recurring.id, p_expected_due_date: recurring.next_due_date, p_operation_date: '2026-11-11' }
+  });
+  assert.match(legacy.error?.message || '', /Требуется полный снимок/i);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data.length, 0);
   const changed = h.call({
     action: 'query', token: partner.token, table: 'recurring_payments', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: recurring.id }], values: { amount_kopecks: 15000 }
@@ -1833,6 +1840,12 @@ test('planned purchase confirmation rejects a stale UI snapshot before creating 
     values: { family_id: family.id, name: 'Телевизор', estimated_kopecks: 5500000, status: 'planned' }
   }).data[0];
   const purchase = h.call({ action: 'query', token: owner.token, table: 'planned_purchases', mode: 'select', filters: [{ column: 'id', op: 'eq', value: purchaseSeed4.id }] }).data[0];
+  const legacy = h.call({
+    action: 'rpc', token: owner.token, name: 'confirm_planned_purchase',
+    params: { p_purchase_id: purchase.id, p_operation_date: '2026-11-11', p_account_id: null }
+  });
+  assert.match(legacy.error?.message || '', /Требуется полный снимок/i);
+  assert.equal(h.call({ action: 'query', token: owner.token, table: 'transactions', mode: 'select' }).data.length, 0);
   const changed = h.call({
     action: 'query', token: partner.token, table: 'planned_purchases', mode: 'update',
     filters: [{ column: 'id', op: 'eq', value: purchase.id }],
