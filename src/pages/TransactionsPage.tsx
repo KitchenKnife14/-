@@ -188,8 +188,8 @@ export default function TransactionsPage() {
         <select aria-label="Фильтр по статусу операции" className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}><option value="all">Все статусы</option><option value="actual">Фактические</option><option value="planned">Плановые</option></select>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <label className="text-xs text-slate-500">С даты<input className="input mt-1" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
-        <label className="text-xs text-slate-500">По дату<input className="input mt-1" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
+        <label className="min-w-0 text-xs text-slate-500">С даты<input className="input mt-1 block min-w-0 max-w-full appearance-none" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
+        <label className="min-w-0 text-xs text-slate-500">По дату<input className="input mt-1 block min-w-0 max-w-full appearance-none" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
         <label className="text-xs text-slate-500">Сумма от, ₽<input className="input mt-1" type="number" min="0" step="0.01" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="Любая" /></label>
         <label className="text-xs text-slate-500">Сумма до, ₽<input className="input mt-1" type="number" min="0" step="0.01" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Любая" /></label>
       </div>

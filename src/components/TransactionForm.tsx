@@ -166,7 +166,7 @@ export default function TransactionForm({ open, onClose, onSaved, categories, ac
           </div>
           <div className="min-w-0">
             <label className="label" htmlFor={`${fieldId}-date`}>Дата</label>
-            <input id={`${fieldId}-date`} className="input min-w-0" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+            <input id={`${fieldId}-date`} className="input block min-w-0 max-w-full appearance-none" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
 
