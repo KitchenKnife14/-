@@ -230,7 +230,7 @@ function PurchaseForm({ open, onClose, onSaved, categories, goals, familyId, use
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label" htmlFor="purchase-desired-month">Желаемый месяц</label><input id="purchase-desired-month" className="input" type="month" value={desiredMonth} onChange={(e) => setDesiredMonth(e.target.value)} /></div>
-          <div><label className="label" htmlFor="purchase-desired-date">Желаемая дата</label><input id="purchase-desired-date" className="input" type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} /></div>
+          <div><label className="label" htmlFor="purchase-desired-date">Желаемая дата</label><input id="purchase-desired-date" className="input block min-w-0 max-w-full appearance-none" type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} /></div>
         </div>
         <div><label className="label" htmlFor="purchase-url">Ссылка на товар</label><input id="purchase-url" className="input" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" /></div>
         <div><label className="label" htmlFor="purchase-goal">Связанная финансовая цель</label><select id="purchase-goal" className="input" value={goalId} onChange={(e) => setGoalId(e.target.value)}><option value="">Нет</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>

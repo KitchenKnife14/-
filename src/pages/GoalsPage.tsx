@@ -253,7 +253,7 @@ function ContributionModal({ goal, onClose, onSaved }: { goal: Goal | null; onCl
   return (
     <Modal open={!!goal} onClose={onClose} title={`Пополнить: ${goal?.name ?? ''}`}>
       <form onSubmit={submit} className="space-y-3">
-        <div><label className="label" htmlFor="goal-contribution-amount">Сумма, ₽ (минус для снятия)</label><input id="goal-contribution-amount" className="input" type="number" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" data-modal-autofocus /></div>
+        <div><label className="label" htmlFor="goal-contribution-amount">Сумма пополнения, ₽</label><input id="goal-contribution-amount" className="input" type="number" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" data-modal-autofocus /></div>
         <div><label className="label" htmlFor="goal-contribution-date">Дата</label><input id="goal-contribution-date" className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <div><label className="label" htmlFor="goal-contribution-note">Комментарий</label><input id="goal-contribution-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} /></div>
         {error && <div className="text-sm text-danger-600 bg-danger-50 rounded-lg px-3 py-2">{error}</div>}
