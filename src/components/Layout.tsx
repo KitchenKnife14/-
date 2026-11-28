@@ -96,7 +96,7 @@ export default function Layout() {
         <Navigation />
 
         <div className="mt-5 rounded-2xl border border-primary-100 bg-primary-50/70 p-3.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary-700/70">Ваше пространство</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary-700">Ваше пространство</div>
           <div className="mt-1.5 truncate text-sm font-semibold text-ink">{family?.name || 'Семейный бюджет'}</div>
           {family?.invite_code && (
             <div className="mt-2 text-xs text-muted">

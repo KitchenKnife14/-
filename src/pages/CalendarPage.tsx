@@ -166,11 +166,11 @@ export default function CalendarPage() {
     const isToday = isSameDay(day, currentMoscowDate())
     return (
       <button type="button" key={dateStr} aria-label={`День ${format(day, 'd MMMM yyyy', { locale: ru })}`} onClick={() => { setSelectedDay(day); setView('day') }}
-        className={`min-h-[72px] p-1.5 rounded-lg border text-left transition-colors ${isToday ? 'border-primary-400 bg-primary-50/50' : 'border-slate-100 hover:bg-slate-50'} ${!inMonth ? 'opacity-40' : ''}`}>
-        <div className="text-xs font-medium text-slate-600">{format(day, 'd')}</div>
+        className={`min-h-[72px] p-1.5 rounded-lg border text-left transition-colors ${isToday ? 'border-primary-400 bg-primary-50/50' : 'border-slate-100 hover:bg-slate-50'}`}>
+        <div className={`text-xs font-medium ${inMonth ? 'text-ink' : 'text-slate-400'}`}>{format(day, 'd')}</div>
         {sum.net !== 0 && <div className={`text-[10px] font-medium ${sum.net > 0 ? 'text-accent-600' : 'text-danger-600'}`}>{formatRublesShort(sum.net)}</div>}
         {dayTxs.length > 0 && <div className="flex gap-0.5 mt-0.5">{dayTxs.slice(0, 3).map((t) => <span key={t.id} className={`w-1.5 h-1.5 rounded-full ${t.type === 'income' ? 'bg-accent-500' : t.type === 'transfer' ? 'bg-primary-500' : 'bg-danger-500'}`} />)}</div>}
-        {dayRecs.length > 0 && <div className="text-[10px] text-warn-500 mt-0.5">⟳</div>}
+        {dayRecs.length > 0 && <div className="text-[10px] text-warn-600 mt-0.5">⟳</div>}
       </button>
     )
   }
